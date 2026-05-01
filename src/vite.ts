@@ -1,10 +1,12 @@
-import type { HotUpdateOptions, Plugin } from 'vite';
+import type { OutputOptions } from 'rolldown';
+import type { ConfigEnv, HotUpdateOptions, Plugin, UserConfig } from 'vite';
 import { hmrBridgeCode } from './client/hmr-bridge';
 import {
 	createPlugin,
 	TRANSFORM_ID_FILTER,
 	type BuildEnvironment,
 	type PluginOptions,
+	withQwikOutputDefaults,
 } from './plugin';
 
 const HMR_BRIDGE_ID = '@qwik-hmr-bridge';
@@ -20,6 +22,9 @@ export function qwik(options: VitePluginOptions = {}): Plugin {
 		name: 'vite-plugin-qwik',
 		api: {
 			getManifest: () => null,
+		},
+		config(config, env) {
+			setQwikConfigDefaults(config, env);
 		},
 		configResolved(resolvedConfig) {
 			isServe = resolvedConfig.command === 'serve';
@@ -64,10 +69,33 @@ export function qwik(options: VitePluginOptions = {}): Plugin {
 				});
 			},
 		},
+		outputOptions(outputOptions) {
+			return withQwikOutputDefaults(outputOptions, getBuildEnvironment(this));
+		},
 		hotUpdate(ctx) {
 			return hotUpdate(this, ctx);
 		},
 	};
+}
+
+function setQwikConfigDefaults(config: UserConfig, env: ConfigEnv) {
+	if (config.build?.lib || config.build?.ssr || env.mode === 'ssr') {
+		return;
+	}
+
+	const build = (config.build ??= {});
+	build.modulePreload ??= false;
+
+	const rolldownOptions = (build.rolldownOptions ??= {});
+	rolldownOptions.output = withQwikViteOutputDefaults(rolldownOptions.output);
+}
+
+function withQwikViteOutputDefaults(output: OutputOptions | OutputOptions[] | undefined) {
+	if (Array.isArray(output)) {
+		return output.map((item) => withQwikOutputDefaults(item, 'client'));
+	}
+
+	return withQwikOutputDefaults(output ?? {}, 'client');
 }
 
 type ViteHookContext = {
@@ -79,7 +107,7 @@ type ViteHookContext = {
 	};
 };
 
-function getBuildEnvironment(pluginContext: ViteHookContext): BuildEnvironment | undefined {
+function getBuildEnvironment(pluginContext: ViteHookContext): BuildEnvironment {
 	if (pluginContext.environment.config.build?.lib) {
 		return 'lib';
 	}
@@ -88,7 +116,7 @@ function getBuildEnvironment(pluginContext: ViteHookContext): BuildEnvironment |
 		return 'server';
 	}
 
-	return undefined;
+	return 'client';
 }
 
 function hotUpdate(pluginContext: ViteHookContext, ctx: HotUpdateOptions) {

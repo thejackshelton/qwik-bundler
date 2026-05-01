@@ -1,6 +1,6 @@
 import { createOptimizer } from '@qwik.dev/optimizer';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
-import type { Plugin, ResolvedConfig } from 'vite';
+import type { Plugin, ResolvedConfig, UserConfig } from 'vite';
 import { qwik } from './vite';
 
 const optimizerMock = vi.hoisted(() => ({
@@ -73,6 +73,73 @@ describe('Vite plugin', () => {
 			}),
 		);
 		expect(result).toEqual({ code: 'optimized', map: null });
+	});
+
+	test('sets Vite config defaults for app builds', () => {
+		const plugin = qwik();
+		const config: UserConfig = {
+			build: {
+				rolldownOptions: {
+					external: ['external-dependency'],
+				},
+			},
+		};
+
+		callConfig(plugin, config, { command: 'build', mode: 'production' });
+
+		expect(config.build!.rolldownOptions).toEqual({
+			external: ['external-dependency'],
+			output: {
+				assetFileNames: 'assets/[hash]-[name].[ext]',
+				entryFileNames: 'build/q-[hash].js',
+				chunkFileNames: 'build/q-[hash].js',
+				hoistTransitiveImports: false,
+			},
+		});
+		expect(config.build!.modulePreload).toBe(false);
+	});
+
+	test('sets Qwik output defaults through the shared output hook', () => {
+		const plugin = qwik();
+
+		expect(callOutputOptions(plugin, { dir: 'dist' })).toEqual({
+			dir: 'dist',
+			assetFileNames: 'assets/[hash]-[name].[ext]',
+			entryFileNames: 'build/q-[hash].js',
+			chunkFileNames: 'build/q-[hash].js',
+			hoistTransitiveImports: false,
+		});
+		expect(callOutputOptions(plugin, { entryFileNames: '[name].js' })).toEqual({
+			assetFileNames: 'assets/[hash]-[name].[ext]',
+			entryFileNames: '[name].js',
+			chunkFileNames: 'build/q-[hash].js',
+			hoistTransitiveImports: false,
+		});
+		expect(callOutputOptions(plugin, { dir: 'server' }, { consumer: 'server' })).toEqual({
+			dir: 'server',
+			assetFileNames: 'assets/[hash]-[name].[ext]',
+			chunkFileNames: 'q-[hash].js',
+			hoistTransitiveImports: false,
+		});
+	});
+
+	test('keeps Vite library output under host control', () => {
+		const plugin = qwik();
+		const config: UserConfig = {
+			build: {
+				lib: { entry: 'src/index.tsx' },
+				rolldownOptions: {},
+			},
+		};
+
+		callConfig(plugin, config, { command: 'build', mode: 'production' });
+
+		expect(config.build!.rolldownOptions!.output).toBeUndefined();
+		expect(
+			callOutputOptions(plugin, { entryFileNames: '[name].js' }, { build: { lib: true } }),
+		).toEqual({
+			entryFileNames: '[name].js',
+		});
 	});
 
 	test('uses Vite SSR transform context for server transforms', async () => {
@@ -238,12 +305,43 @@ describe('Vite plugin', () => {
 	});
 });
 
+function callConfig(
+	plugin: Plugin,
+	config: unknown,
+	env: { command: 'build' | 'serve'; mode: string },
+) {
+	const configHook = plugin.config;
+	if (typeof configHook === 'function') {
+		return configHook.call({} as never, config as never, env as never);
+	}
+	throw new Error('Expected function config hook');
+}
+
 function callConfigResolved(plugin: Plugin, config: unknown) {
 	const configResolved = plugin.configResolved;
 	if (typeof configResolved === 'function') {
 		return configResolved.call({} as never, config as ResolvedConfig);
 	}
 	throw new Error('Expected function configResolved hook');
+}
+
+function callOutputOptions(
+	plugin: Plugin,
+	outputOptions: unknown,
+	options: {
+		consumer?: 'client' | 'server';
+		build?: { lib?: unknown };
+	} = {},
+) {
+	const outputOptionsHook = plugin.outputOptions;
+	const { consumer = 'client', build = {} } = options;
+	const context = {
+		environment: { config: { consumer, build } },
+	};
+	if (typeof outputOptionsHook === 'function') {
+		return outputOptionsHook.call(context as never, outputOptions as never);
+	}
+	throw new Error('Expected function outputOptions hook');
 }
 
 async function callTransform(

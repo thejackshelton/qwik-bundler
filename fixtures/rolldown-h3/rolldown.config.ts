@@ -5,7 +5,7 @@ export default defineConfig([
 	{
 		input: 'src/client.tsx',
 		output: {
-			dir: 'dist/build',
+			dir: 'dist',
 			format: 'esm',
 		},
 		plugins: [qwik()],

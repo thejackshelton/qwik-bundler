@@ -63,6 +63,60 @@ describe('Rolldown plugin', () => {
 		expect(result).toEqual({ code: 'optimized', map: null });
 	});
 
+	test('sets Qwik runtime defines without replacing host defines', () => {
+		const plugin = qwik();
+		const options = {
+			transform: {
+				define: {
+					'globalThis.qDev': 'true',
+				},
+			},
+		};
+
+		callOptions(plugin, options);
+
+		expect(options.transform.define).toEqual({
+			'globalThis.qDev': 'true',
+			'import.meta.env.BASE_URL': '"/"',
+			'import.meta.env.DEV': 'false',
+			'import.meta.env.TEST': 'false',
+		});
+	});
+
+	test('sets Qwik output defaults in the Rolldown plugin', () => {
+		const plugin = qwik();
+
+		expect(callOutputOptions(plugin, { dir: 'dist' })).toEqual({
+			dir: 'dist',
+			assetFileNames: 'assets/[hash]-[name].[ext]',
+			entryFileNames: 'build/q-[hash].js',
+			chunkFileNames: 'build/q-[hash].js',
+			hoistTransitiveImports: false,
+		});
+		expect(
+			callOutputOptions(plugin, {
+				entryFileNames: '[name].js',
+				chunkFileNames: 'chunks/[name].js',
+			}),
+		).toEqual({
+			assetFileNames: 'assets/[hash]-[name].[ext]',
+			entryFileNames: '[name].js',
+			chunkFileNames: 'chunks/[name].js',
+			hoistTransitiveImports: false,
+		});
+	});
+
+	test('sets server output defaults for the common server output directory', () => {
+		const plugin = qwik();
+
+		expect(callOutputOptions(plugin, { dir: 'server' })).toEqual({
+			dir: 'server',
+			assetFileNames: 'assets/[hash]-[name].[ext]',
+			chunkFileNames: 'q-[hash].js',
+			hoistTransitiveImports: false,
+		});
+	});
+
 	test('uses tsdown library builds for Qwik library transforms', async () => {
 		const plugin = qwik();
 		const tsdownPlugin = plugin as Plugin & {
@@ -97,6 +151,27 @@ describe('Rolldown plugin', () => {
 		expect(optimizerMock.transformModules).toHaveBeenCalledWith(
 			expect.objectContaining({
 				isServer: false,
+			}),
+		);
+	});
+
+	test('infers server transforms from Qwik server entry imports', async () => {
+		const plugin = qwik();
+
+		callBuildStart(plugin, {
+			cwd: '/workspace/app',
+			input: ['src/server.ts'],
+		});
+		await callTransform(
+			plugin,
+			"import { renderToString } from '@qwik.dev/core/server';",
+			'/workspace/app/src/server.ts',
+		);
+		await callTransform(plugin, 'export default 1;', '/workspace/app/src/root.tsx');
+
+		expect(optimizerMock.transformModules).toHaveBeenLastCalledWith(
+			expect.objectContaining({
+				isServer: true,
 			}),
 		);
 	});
@@ -167,6 +242,22 @@ describe('Rolldown plugin', () => {
 		});
 	});
 });
+
+function callOptions(plugin: Plugin, options: unknown) {
+	const optionsHook = plugin.options;
+	if (typeof optionsHook === 'function') {
+		return optionsHook.call({} as never, options as never);
+	}
+	throw new Error('Expected function options hook');
+}
+
+function callOutputOptions(plugin: Plugin, options: unknown) {
+	const outputOptionsHook = plugin.outputOptions;
+	if (typeof outputOptionsHook === 'function') {
+		return outputOptionsHook.call({} as never, options as never);
+	}
+	throw new Error('Expected function outputOptions hook');
+}
 
 function callBuildStart(
 	plugin: Plugin,

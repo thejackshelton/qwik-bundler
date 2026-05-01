@@ -2,7 +2,12 @@ import { createOptimizer, type EntryStrategy, type OptimizerOptions } from '@qwi
 import type { TransformModule } from '@qwik.dev/optimizer';
 import { anyOf, createRegExp, exactly } from 'magic-regexp';
 import { dirname, resolve } from 'node:path';
-import type { Plugin as RolldownPlugin, ResolveIdResult } from 'rolldown';
+import type {
+	InputOptions,
+	OutputOptions,
+	Plugin as RolldownPlugin,
+	ResolveIdResult,
+} from 'rolldown';
 
 export type BuildEnvironment = 'client' | 'server' | 'lib';
 
@@ -51,6 +56,10 @@ interface ResolveOptions {
 }
 
 const VIRTUAL_SEGMENT_PREFIX = '\0qwik:segment:';
+const QWIK_SERVER_ID = '@qwik.dev/core/server';
+const QWIK_ASSET_FILE_NAME = 'assets/[hash]-[name].[ext]';
+const QWIK_CLIENT_CHUNK_FILE_NAME = 'build/q-[hash].js';
+const QWIK_SERVER_CHUNK_FILE_NAME = 'q-[hash].js';
 
 export function createPlugin(options: PluginOptions = {}): Plugin {
 	let rootDir: string | undefined;
@@ -67,6 +76,9 @@ export function createPlugin(options: PluginOptions = {}): Plugin {
 		id: string,
 		transformOptions: { environment?: BuildEnvironment } = {},
 	) => {
+		if (code.includes(QWIK_SERVER_ID)) {
+			bundlerEnvironment = 'server';
+		}
 		const environment = getEnvironment(transformOptions.environment);
 		const optimizer = await getOptimizer();
 		const output = await optimizer.transformModules({
@@ -97,6 +109,12 @@ export function createPlugin(options: PluginOptions = {}): Plugin {
 
 	const plugin: RolldownPlugin & { tsdownConfigResolved?: () => void } = {
 		name: 'qwik:optimizer',
+		options(inputOptions) {
+			return withQwikDefines(inputOptions);
+		},
+		outputOptions(outputOptions) {
+			return withQwikOutputDefaults(outputOptions, bundlerEnvironment);
+		},
 		tsdownConfigResolved() {
 			bundlerEnvironment = 'lib';
 		},
@@ -104,6 +122,9 @@ export function createPlugin(options: PluginOptions = {}): Plugin {
 			setOptimizerRoot(options.cwd);
 		},
 		resolveId(source, importer) {
+			if (source === QWIK_SERVER_ID) {
+				bundlerEnvironment = 'server';
+			}
 			return resolveId(source, importer, { resolve: this.resolve.bind(this) });
 		},
 		load(id) {
@@ -180,6 +201,52 @@ export function createPlugin(options: PluginOptions = {}): Plugin {
 		const module = segments.get(id);
 		return module ? { code: module.code, map: module.map } : null;
 	}
+}
+
+function withQwikDefines(inputOptions: InputOptions) {
+	const transform = (inputOptions.transform ??= {});
+	const define = (transform.define ??= {});
+	define['globalThis.qDev'] ??= 'false';
+	define['import.meta.env.BASE_URL'] ??= '"/"';
+	define['import.meta.env.DEV'] ??= 'false';
+	define['import.meta.env.TEST'] ??= 'false';
+	return inputOptions;
+}
+
+export function withQwikOutputDefaults(output: OutputOptions, environment?: BuildEnvironment) {
+	const outputEnvironment = getOutputEnvironment(output, environment);
+	if (outputEnvironment === 'lib') {
+		return output;
+	}
+
+	const nextOutput = { ...output };
+	nextOutput.assetFileNames ??= QWIK_ASSET_FILE_NAME;
+	if (outputEnvironment === 'client') {
+		nextOutput.entryFileNames ??= QWIK_CLIENT_CHUNK_FILE_NAME;
+	}
+	nextOutput.chunkFileNames ??=
+		outputEnvironment === 'server' ? QWIK_SERVER_CHUNK_FILE_NAME : QWIK_CLIENT_CHUNK_FILE_NAME;
+	nextOutput.hoistTransitiveImports = false;
+	return nextOutput satisfies OutputOptions;
+}
+
+function getOutputEnvironment(
+	output: OutputOptions,
+	environment: BuildEnvironment | undefined,
+): BuildEnvironment {
+	if (environment) {
+		return environment;
+	}
+
+	return isServerOutput(output.dir) ? 'server' : 'client';
+}
+
+function isServerOutput(dir: OutputOptions['dir']) {
+	if (typeof dir !== 'string') {
+		return false;
+	}
+
+	return dir.replace(/\\/g, '/').split('/').filter(Boolean).at(-1) === 'server';
 }
 
 function getPrimaryModule(modules: TransformModule[]): TransformModule | undefined {
