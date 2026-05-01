@@ -69,16 +69,34 @@ describe('Rolldown plugin', () => {
 			tsdownConfigResolved?: (config: unknown) => void;
 		};
 
+		tsdownPlugin.tsdownConfigResolved?.({});
 		callBuildStart(plugin, {
 			cwd: '/workspace/app',
 			input: ['src/index.tsx'],
+			platform: 'node',
 		});
-		tsdownPlugin.tsdownConfigResolved?.({});
 		await callTransform(plugin, 'export default 1;', '/workspace/app/src/index.tsx');
 
 		expect(optimizerMock.transformModules).toHaveBeenCalledWith(
 			expect.objectContaining({
 				mode: 'lib',
+			}),
+		);
+	});
+
+	test('does not infer server transforms from Rolldown platform', async () => {
+		const plugin = qwik();
+
+		callBuildStart(plugin, {
+			cwd: '/workspace/app',
+			input: ['src/server.ts'],
+			platform: 'node',
+		});
+		await callTransform(plugin, 'export default 1;', '/workspace/app/src/server.ts');
+
+		expect(optimizerMock.transformModules).toHaveBeenCalledWith(
+			expect.objectContaining({
+				isServer: false,
 			}),
 		);
 	});
@@ -150,7 +168,14 @@ describe('Rolldown plugin', () => {
 	});
 });
 
-function callBuildStart(plugin: Plugin, options: { cwd: string; input: RolldownOptions['input'] }) {
+function callBuildStart(
+	plugin: Plugin,
+	options: {
+		cwd: string;
+		input: RolldownOptions['input'];
+		platform?: RolldownOptions['platform'];
+	},
+) {
 	const buildStart = plugin.buildStart;
 	if (typeof buildStart === 'function') {
 		return buildStart.call({} as never, options as never);

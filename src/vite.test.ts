@@ -85,7 +85,9 @@ describe('Vite plugin', () => {
 				rollupOptions: {},
 			},
 		});
-		await callTransform(plugin, 'export default 1;', '/workspace/app/src/root.tsx', 'server');
+		await callTransform(plugin, 'export default 1;', '/workspace/app/src/root.tsx', {
+			consumer: 'server',
+		});
 
 		expect(optimizerMock.transformModules).toHaveBeenCalledWith(
 			expect.objectContaining({
@@ -100,12 +102,13 @@ describe('Vite plugin', () => {
 		callConfigResolved(plugin, {
 			root: '/workspace/app',
 			build: {
-				lib: { entry: 'src/index.tsx' },
 				rolldownOptions: { input: 'src/root.tsx' },
 				rollupOptions: {},
 			},
 		});
-		await callTransform(plugin, 'export default 1;', '/workspace/app/src/root.tsx', 'client');
+		await callTransform(plugin, 'export default 1;', '/workspace/app/src/root.tsx', {
+			build: { lib: { entry: 'src/index.tsx' } },
+		});
 
 		expect(optimizerMock.transformModules).toHaveBeenCalledWith(
 			expect.objectContaining({
@@ -247,11 +250,15 @@ async function callTransform(
 	plugin: Plugin,
 	code: string,
 	id: string,
-	consumer: 'client' | 'server' = 'client',
+	options: {
+		consumer?: 'client' | 'server';
+		build?: { lib?: unknown };
+	} = {},
 ) {
 	const transform = plugin.transform;
+	const { consumer = 'client', build = {} } = options;
 	const context = {
-		environment: { config: { consumer } },
+		environment: { config: { consumer, build } },
 	};
 	if (typeof transform === 'function') {
 		return transform.call(context as never, code, id, undefined as never);

@@ -22,7 +22,6 @@ export const TRANSFORM_ID_FILTER = createRegExp(
 
 export interface PluginOptions {
 	entryStrategy?: EntryStrategy;
-	environment?: BuildEnvironment;
 	optimizerOptions?: OptimizerOptions;
 }
 
@@ -55,9 +54,9 @@ const VIRTUAL_SEGMENT_PREFIX = '\0qwik:segment:';
 
 export function createPlugin(options: PluginOptions = {}): Plugin {
 	let rootDir: string | undefined;
-	let inferredEnvironment: BuildEnvironment | undefined;
+	let bundlerEnvironment: BuildEnvironment | undefined;
 	let optimizerPromise: ReturnType<typeof createOptimizer> | undefined;
-	const segments = new Map<BuildEnvironment, Map<string, TransformModule>>();
+	const segments = new Map<string, TransformModule>();
 
 	const setOptimizerRoot = (value: string | undefined) => {
 		rootDir = value;
@@ -68,8 +67,7 @@ export function createPlugin(options: PluginOptions = {}): Plugin {
 		id: string,
 		transformOptions: { environment?: BuildEnvironment } = {},
 	) => {
-		const environment =
-			transformOptions.environment ?? options.environment ?? inferredEnvironment ?? 'client';
+		const environment = getEnvironment(transformOptions.environment);
 		const optimizer = await getOptimizer();
 		const output = await optimizer.transformModules({
 			input: [{ code, path: id }],
@@ -100,7 +98,7 @@ export function createPlugin(options: PluginOptions = {}): Plugin {
 	const plugin: RolldownPlugin & { tsdownConfigResolved?: () => void } = {
 		name: 'qwik:optimizer',
 		tsdownConfigResolved() {
-			inferredEnvironment = 'lib';
+			bundlerEnvironment = 'lib';
 		},
 		buildStart(options) {
 			setOptimizerRoot(options.cwd);
@@ -128,14 +126,16 @@ export function createPlugin(options: PluginOptions = {}): Plugin {
 		return optimizerPromise;
 	}
 
+	function getEnvironment(environment?: BuildEnvironment) {
+		return environment ?? bundlerEnvironment ?? 'client';
+	}
+
 	function cacheSegments(modules: TransformModule[], environment: BuildEnvironment) {
-		const environmentSegments = segments.get(environment) ?? new Map<string, TransformModule>();
 		for (const module of modules) {
 			if (module.segment) {
-				environmentSegments.set(module.path, module);
+				segments.set(encodeSegmentId(environment, module.path), module);
 			}
 		}
-		segments.set(environment, environmentSegments);
 	}
 
 	async function resolveId(
@@ -145,25 +145,21 @@ export function createPlugin(options: PluginOptions = {}): Plugin {
 	) {
 		const decodedImporter = importer ? decodeSegmentId(importer) : null;
 		const environment =
-			resolveOptions.environment ??
-			decodedImporter?.environment ??
-			options.environment ??
-			inferredEnvironment ??
-			'client';
+			decodedImporter?.environment ?? getEnvironment(resolveOptions.environment);
 		const importerPath = decodedImporter?.path ?? importer;
 		if (!importerPath || !source.startsWith('.')) {
 			return null;
 		}
 
-		const module = segments
-			.get(environment)
-			?.get(resolve(dirname(stripQuery(importerPath)), source));
+		const module = segments.get(
+			encodeSegmentId(environment, resolve(dirname(stripQuery(importerPath)), source)),
+		);
 		if (module) {
 			return encodeSegmentId(environment, module.path);
 		}
 
 		if (decodedImporter && resolveOptions.resolve) {
-			const importerModule = segments.get(environment)?.get(decodedImporter.path);
+			const importerModule = segments.get(encodeSegmentId(environment, decodedImporter.path));
 			return resolveOptions.resolve(
 				source,
 				importerModule?.segment?.origin ?? decodedImporter.path,
@@ -177,12 +173,11 @@ export function createPlugin(options: PluginOptions = {}): Plugin {
 	}
 
 	function load(id: string) {
-		const segmentId = decodeSegmentId(id);
-		if (!segmentId) {
+		if (!id.startsWith(VIRTUAL_SEGMENT_PREFIX)) {
 			return null;
 		}
 
-		const module = segments.get(segmentId.environment)?.get(segmentId.path);
+		const module = segments.get(id);
 		return module ? { code: module.code, map: module.map } : null;
 	}
 }

@@ -18,6 +18,6 @@ export default defineConfig([
 		},
 		platform: 'node',
 		external: [/^node:/, '@hono/node-server', '@hono/node-server/serve-static', 'hono'],
-		plugins: [qwik({ environment: 'server' })],
+		plugins: [qwik()],
 	},
 ]);

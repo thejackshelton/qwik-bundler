@@ -15,7 +15,6 @@ export interface VitePluginOptions extends PluginOptions {}
 export function qwik(options: VitePluginOptions = {}): Plugin {
 	const plugin = createPlugin(options);
 	let isServe = false;
-	let isLibraryBuild = false;
 
 	return {
 		name: 'vite-plugin-qwik',
@@ -24,7 +23,6 @@ export function qwik(options: VitePluginOptions = {}): Plugin {
 		},
 		configResolved(resolvedConfig) {
 			isServe = resolvedConfig.command === 'serve';
-			isLibraryBuild = Boolean(resolvedConfig.build.lib);
 			plugin.setOptimizerRoot(resolvedConfig.root);
 		},
 		transformIndexHtml() {
@@ -46,7 +44,7 @@ export function qwik(options: VitePluginOptions = {}): Plugin {
 				return RESOLVED_HMR_BRIDGE_ID;
 			}
 			return plugin.resolveId(id, importer, {
-				environment: getBuildEnvironment(this, options, isLibraryBuild),
+				environment: getBuildEnvironment(this),
 				resolve: this.resolve.bind(this),
 			});
 		},
@@ -62,7 +60,7 @@ export function qwik(options: VitePluginOptions = {}): Plugin {
 			},
 			handler(code, id) {
 				return plugin.transform(code, id, {
-					environment: getBuildEnvironment(this, options, isLibraryBuild),
+					environment: getBuildEnvironment(this),
 				});
 			},
 		},
@@ -72,16 +70,17 @@ export function qwik(options: VitePluginOptions = {}): Plugin {
 	};
 }
 
-function getBuildEnvironment(
-	pluginContext: { environment: { config: { consumer: 'client' | 'server' } } },
-	options: VitePluginOptions,
-	isLibraryBuild: boolean,
-): BuildEnvironment | undefined {
-	if (options.environment) {
-		return options.environment;
-	}
+type ViteHookContext = {
+	environment: {
+		config: {
+			consumer: 'client' | 'server';
+			build?: { lib?: unknown };
+		};
+	};
+};
 
-	if (isLibraryBuild) {
+function getBuildEnvironment(pluginContext: ViteHookContext): BuildEnvironment | undefined {
+	if (pluginContext.environment.config.build?.lib) {
 		return 'lib';
 	}
 
@@ -92,10 +91,7 @@ function getBuildEnvironment(
 	return undefined;
 }
 
-function hotUpdate(
-	pluginContext: { environment: { config: { consumer: 'client' | 'server' } } },
-	ctx: HotUpdateOptions,
-) {
+function hotUpdate(pluginContext: ViteHookContext, ctx: HotUpdateOptions) {
 	if (pluginContext.environment.config.consumer !== 'server' || ctx.modules.length === 0) {
 		return;
 	}
