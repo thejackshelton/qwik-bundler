@@ -30,38 +30,15 @@ export interface PluginOptions {
 	optimizerOptions?: OptimizerOptions;
 }
 
-export interface Plugin {
-	plugin: RolldownPlugin;
-	setOptimizerRoot: (rootDir: string | undefined) => void;
-	resolveId: (
-		id: string,
-		importer?: string,
-		options?: ResolveOptions,
-	) => Promise<ResolveIdResult> | ResolveIdResult;
-	load: (id: string) => { code: string; map: string | null } | null;
-	transform: (
-		code: string,
-		id: string,
-		options?: { environment?: BuildEnvironment },
-	) => Promise<{ code: string; map: string | null } | null>;
-}
-
-interface ResolveOptions {
-	environment?: BuildEnvironment;
-	resolve?: (
-		source: string,
-		importer?: string,
-		options?: { skipSelf?: boolean },
-	) => Promise<ResolveIdResult> | ResolveIdResult;
-}
-
 const VIRTUAL_SEGMENT_PREFIX = '\0qwik:segment:';
 const QWIK_SERVER_ID = '@qwik.dev/core/server';
-const QWIK_ASSET_FILE_NAME = 'assets/[hash]-[name].[ext]';
 const QWIK_CLIENT_CHUNK_FILE_NAME = 'build/q-[hash].js';
 const QWIK_SERVER_CHUNK_FILE_NAME = 'q-[hash].js';
 
-export function createPlugin(options: PluginOptions = {}): Plugin {
+export function createPlugin(
+	options: PluginOptions = {},
+	getEnvironmentFromContext?: (context: unknown) => BuildEnvironment | undefined,
+) {
 	let rootDir: string | undefined;
 	let bundlerEnvironment: BuildEnvironment | undefined;
 	let optimizerPromise: ReturnType<typeof createOptimizer> | undefined;
@@ -71,15 +48,10 @@ export function createPlugin(options: PluginOptions = {}): Plugin {
 		rootDir = value;
 	};
 
-	const transform = async (
-		code: string,
-		id: string,
-		transformOptions: { environment?: BuildEnvironment } = {},
-	) => {
+	const transform = async (code: string, id: string, environment = getEnvironment()) => {
 		if (code.includes(QWIK_SERVER_ID)) {
 			bundlerEnvironment = 'server';
 		}
-		const environment = getEnvironment(transformOptions.environment);
 		const optimizer = await getOptimizer();
 		const output = await optimizer.transformModules({
 			input: [{ code, path: id }],
@@ -113,7 +85,7 @@ export function createPlugin(options: PluginOptions = {}): Plugin {
 			return withQwikDefines(inputOptions);
 		},
 		outputOptions(outputOptions) {
-			return withQwikOutputDefaults(outputOptions, bundlerEnvironment);
+			return withQwikOutputObjectDefaults(outputOptions, getHookEnvironment(this));
 		},
 		tsdownConfigResolved() {
 			bundlerEnvironment = 'lib';
@@ -125,7 +97,7 @@ export function createPlugin(options: PluginOptions = {}): Plugin {
 			if (source === QWIK_SERVER_ID) {
 				bundlerEnvironment = 'server';
 			}
-			return resolveId(source, importer, { resolve: this.resolve.bind(this) });
+			return resolveId(source, importer, getHookEnvironment(this), this.resolve.bind(this));
 		},
 		load(id) {
 			return load(id);
@@ -135,12 +107,12 @@ export function createPlugin(options: PluginOptions = {}): Plugin {
 				id: { include: TRANSFORM_ID_FILTER },
 			},
 			handler(code, id) {
-				return transform(code, id);
+				return transform(code, id, getEnvironment(getHookEnvironment(this)));
 			},
 		},
 	};
 
-	return { plugin, setOptimizerRoot, resolveId, load, transform };
+	return { plugin, setOptimizerRoot };
 
 	function getOptimizer() {
 		optimizerPromise ??= createOptimizer(options.optimizerOptions ?? {});
@@ -149,6 +121,10 @@ export function createPlugin(options: PluginOptions = {}): Plugin {
 
 	function getEnvironment(environment?: BuildEnvironment) {
 		return environment ?? bundlerEnvironment ?? 'client';
+	}
+
+	function getHookEnvironment(context: unknown) {
+		return getEnvironmentFromContext?.(context) ?? bundlerEnvironment;
 	}
 
 	function cacheSegments(modules: TransformModule[], environment: BuildEnvironment) {
@@ -162,11 +138,15 @@ export function createPlugin(options: PluginOptions = {}): Plugin {
 	async function resolveId(
 		source: string,
 		importer?: string,
-		resolveOptions: ResolveOptions = {},
+		environment = getEnvironment(),
+		resolver?: (
+			source: string,
+			importer?: string,
+			options?: { skipSelf?: boolean },
+		) => Promise<ResolveIdResult> | ResolveIdResult,
 	) {
 		const decodedImporter = importer ? decodeSegmentId(importer) : null;
-		const environment =
-			decodedImporter?.environment ?? getEnvironment(resolveOptions.environment);
+		environment = decodedImporter?.environment ?? getEnvironment(environment);
 		const importerPath = decodedImporter?.path ?? importer;
 		if (!importerPath || !source.startsWith('.')) {
 			return null;
@@ -179,15 +159,11 @@ export function createPlugin(options: PluginOptions = {}): Plugin {
 			return encodeSegmentId(environment, module.path);
 		}
 
-		if (decodedImporter && resolveOptions.resolve) {
+		if (decodedImporter && resolver) {
 			const importerModule = segments.get(encodeSegmentId(environment, decodedImporter.path));
-			return resolveOptions.resolve(
-				source,
-				importerModule?.segment?.origin ?? decodedImporter.path,
-				{
-					skipSelf: true,
-				},
-			);
+			return resolver(source, importerModule?.segment?.origin ?? decodedImporter.path, {
+				skipSelf: true,
+			});
 		}
 
 		return null;
@@ -213,14 +189,23 @@ function withQwikDefines(inputOptions: InputOptions) {
 	return inputOptions;
 }
 
-export function withQwikOutputDefaults(output: OutputOptions, environment?: BuildEnvironment) {
+export type QwikOutputOptions = OutputOptions | OutputOptions[] | undefined;
+
+export function withQwikOutputDefaults(output: QwikOutputOptions, environment?: BuildEnvironment) {
+	if (Array.isArray(output)) {
+		return output.map((item) => withQwikOutputObjectDefaults(item, environment));
+	}
+
+	return withQwikOutputObjectDefaults(output ?? {}, environment);
+}
+
+function withQwikOutputObjectDefaults(output: OutputOptions, environment?: BuildEnvironment) {
 	const outputEnvironment = getOutputEnvironment(output, environment);
 	if (outputEnvironment === 'lib') {
 		return output;
 	}
 
 	const nextOutput = { ...output };
-	nextOutput.assetFileNames ??= QWIK_ASSET_FILE_NAME;
 	if (outputEnvironment === 'client') {
 		nextOutput.entryFileNames ??= QWIK_CLIENT_CHUNK_FILE_NAME;
 	}

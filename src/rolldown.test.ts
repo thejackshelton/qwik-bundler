@@ -88,7 +88,6 @@ describe('Rolldown plugin', () => {
 
 		expect(callOutputOptions(plugin, { dir: 'dist' })).toEqual({
 			dir: 'dist',
-			assetFileNames: 'assets/[hash]-[name].[ext]',
 			entryFileNames: 'build/q-[hash].js',
 			chunkFileNames: 'build/q-[hash].js',
 			hoistTransitiveImports: false,
@@ -99,7 +98,6 @@ describe('Rolldown plugin', () => {
 				chunkFileNames: 'chunks/[name].js',
 			}),
 		).toEqual({
-			assetFileNames: 'assets/[hash]-[name].[ext]',
 			entryFileNames: '[name].js',
 			chunkFileNames: 'chunks/[name].js',
 			hoistTransitiveImports: false,
@@ -111,7 +109,6 @@ describe('Rolldown plugin', () => {
 
 		expect(callOutputOptions(plugin, { dir: 'server' })).toEqual({
 			dir: 'server',
-			assetFileNames: 'assets/[hash]-[name].[ext]',
 			chunkFileNames: 'q-[hash].js',
 			hoistTransitiveImports: false,
 		});

@@ -38,7 +38,7 @@ beforeEach(() => {
 
 describe('Vite plugin', () => {
 	test('exposes the Vite plugin identity expected by Qwik Router', () => {
-		const plugin = qwik() as Plugin & {
+		const plugin = getQwikPlugin() as Plugin & {
 			api?: {
 				getManifest?: () => null;
 			};
@@ -49,7 +49,7 @@ describe('Vite plugin', () => {
 	});
 
 	test('infers root and source directories from Vite config', async () => {
-		const plugin = qwik();
+		const plugin = getQwikPlugin();
 
 		callConfigResolved(plugin, {
 			root: '/workspace/app',
@@ -76,7 +76,7 @@ describe('Vite plugin', () => {
 	});
 
 	test('sets Vite config defaults for app builds', () => {
-		const plugin = qwik();
+		const plugin = getQwikPlugin();
 		const config: UserConfig = {
 			build: {
 				rolldownOptions: {
@@ -90,7 +90,6 @@ describe('Vite plugin', () => {
 		expect(config.build!.rolldownOptions).toEqual({
 			external: ['external-dependency'],
 			output: {
-				assetFileNames: 'assets/[hash]-[name].[ext]',
 				entryFileNames: 'build/q-[hash].js',
 				chunkFileNames: 'build/q-[hash].js',
 				hoistTransitiveImports: false,
@@ -100,31 +99,28 @@ describe('Vite plugin', () => {
 	});
 
 	test('sets Qwik output defaults through the shared output hook', () => {
-		const plugin = qwik();
+		const plugin = getQwikPlugin();
 
 		expect(callOutputOptions(plugin, { dir: 'dist' })).toEqual({
 			dir: 'dist',
-			assetFileNames: 'assets/[hash]-[name].[ext]',
 			entryFileNames: 'build/q-[hash].js',
 			chunkFileNames: 'build/q-[hash].js',
 			hoistTransitiveImports: false,
 		});
 		expect(callOutputOptions(plugin, { entryFileNames: '[name].js' })).toEqual({
-			assetFileNames: 'assets/[hash]-[name].[ext]',
 			entryFileNames: '[name].js',
 			chunkFileNames: 'build/q-[hash].js',
 			hoistTransitiveImports: false,
 		});
 		expect(callOutputOptions(plugin, { dir: 'server' }, { consumer: 'server' })).toEqual({
 			dir: 'server',
-			assetFileNames: 'assets/[hash]-[name].[ext]',
 			chunkFileNames: 'q-[hash].js',
 			hoistTransitiveImports: false,
 		});
 	});
 
 	test('keeps Vite library output under host control', () => {
-		const plugin = qwik();
+		const plugin = getQwikPlugin();
 		const config: UserConfig = {
 			build: {
 				lib: { entry: 'src/index.tsx' },
@@ -143,7 +139,7 @@ describe('Vite plugin', () => {
 	});
 
 	test('uses Vite SSR transform context for server transforms', async () => {
-		const plugin = qwik();
+		const plugin = getQwikPlugin();
 
 		callConfigResolved(plugin, {
 			root: '/workspace/app',
@@ -164,7 +160,7 @@ describe('Vite plugin', () => {
 	});
 
 	test('uses Vite library mode for Qwik library transforms', async () => {
-		const plugin = qwik();
+		const plugin = getQwikPlugin();
 
 		callConfigResolved(plugin, {
 			root: '/workspace/app',
@@ -222,7 +218,7 @@ describe('Vite plugin', () => {
 			isJsx: true,
 		});
 
-		const plugin = qwik();
+		const plugin = getQwikPlugin();
 		callConfigResolved(plugin, {
 			root: '/workspace/app',
 			build: {
@@ -254,7 +250,9 @@ describe('Vite plugin', () => {
 	});
 
 	test('injects and serves the Vite HMR bridge in dev', async () => {
-		const plugin = qwik();
+		const plugins = getVitePlugins();
+		const plugin = getPlugin(plugins, 'vite-plugin-qwik');
+		const hmrPlugin = getPlugin(plugins, 'vite-plugin-qwik-hmr');
 
 		callConfigResolved(plugin, {
 			command: 'serve',
@@ -265,18 +263,18 @@ describe('Vite plugin', () => {
 			},
 		});
 
-		expect(callTransformIndexHtml(plugin)).toEqual([
+		expect(callTransformIndexHtml(hmrPlugin)).toEqual([
 			expect.objectContaining({
 				tag: 'script',
 				children: expect.stringContaining('@qwik-hmr-bridge'),
 			}),
 		]);
-		expect(await callResolveId(plugin, '@qwik-hmr-bridge')).toBe('\0@qwik-hmr-bridge');
-		expect(await callLoad(plugin, '\0@qwik-hmr-bridge')).toContain('qwik:hmr');
+		expect(await callResolveId(hmrPlugin, '@qwik-hmr-bridge')).toBe('\0@qwik-hmr-bridge');
+		expect(await callLoad(hmrPlugin, '\0@qwik-hmr-bridge')).toContain('qwik:hmr');
 	});
 
 	test('forwards SSR module updates to the client HMR bridge', () => {
-		const plugin = qwik();
+		const plugin = getPlugin(getVitePlugins(), 'vite-plugin-qwik-hmr');
 		const send = vi.fn();
 
 		callHotUpdate(
@@ -304,6 +302,22 @@ describe('Vite plugin', () => {
 		});
 	});
 });
+
+function getVitePlugins() {
+	return qwik() as Plugin[];
+}
+
+function getQwikPlugin() {
+	return getPlugin(getVitePlugins(), 'vite-plugin-qwik');
+}
+
+function getPlugin(plugins: Plugin[], name: string) {
+	const plugin = plugins.find((item) => item.name === name);
+	if (!plugin) {
+		throw new Error(`Expected ${name} plugin`);
+	}
+	return plugin;
+}
 
 function callConfig(
 	plugin: Plugin,
