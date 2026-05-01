@@ -1,0 +1,17 @@
+body {
+	color: #171717;
+	font-family: ui-sans-serif, system-ui, sans-serif;
+	margin: 0;
+}
+
+main {
+	display: grid;
+	gap: 1rem;
+	margin: 4rem auto;
+	max-width: 48rem;
+	padding: 0 1.5rem;
+}
+
+button {
+	width: max-content;
+}

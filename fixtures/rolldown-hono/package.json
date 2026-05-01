@@ -1,0 +1,20 @@
+{
+	"name": "@fixtures/rolldown-hono",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"build": "rolldown -c",
+		"start": "node server/server.js"
+	},
+	"dependencies": {
+		"@hono/node-server": "^2.0.1",
+		"@qwik.dev/core": "https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@dc9a8e8",
+		"hono": "^4.12.16"
+	},
+	"devDependencies": {
+		"@types/node": "^24.10.1",
+		"qwik-bundler": "workspace:*",
+		"rolldown": "^1.0.0-rc.18",
+		"typescript": "^5.9.3"
+	}
+}

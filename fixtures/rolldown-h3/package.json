@@ -1,0 +1,19 @@
+{
+	"name": "@fixtures/rolldown-h3",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"build": "rolldown -c",
+		"start": "node server/server.js"
+	},
+	"dependencies": {
+		"@qwik.dev/core": "https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@dc9a8e8",
+		"h3": "^2.0.1-rc.21"
+	},
+	"devDependencies": {
+		"@types/node": "^24.10.1",
+		"qwik-bundler": "workspace:*",
+		"rolldown": "^1.0.0-rc.18",
+		"typescript": "^5.9.3"
+	}
+}

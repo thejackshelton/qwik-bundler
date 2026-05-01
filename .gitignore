@@ -3,3 +3,5 @@ dist/
 .vite/
 .vite-hooks/_/
 coverage/
+fixtures/*/lib/
+fixtures/*/server/

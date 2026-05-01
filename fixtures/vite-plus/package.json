@@ -1,0 +1,18 @@
+{
+	"name": "@fixtures/vite-plus",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "vp dev",
+		"build": "vp build"
+	},
+	"dependencies": {
+		"@qwik.dev/core": "https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@dc9a8e8"
+	},
+	"devDependencies": {
+		"@types/node": "^24.10.1",
+		"qwik-bundler": "workspace:*",
+		"typescript": "^5.9.3",
+		"vite-plus": "^0.1.20"
+	}
+}

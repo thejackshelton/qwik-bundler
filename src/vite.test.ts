@@ -37,6 +37,17 @@ beforeEach(() => {
 });
 
 describe('Vite plugin', () => {
+	test('exposes the Vite plugin identity expected by Qwik Router', () => {
+		const plugin = qwik() as Plugin & {
+			api?: {
+				getManifest?: () => null;
+			};
+		};
+
+		expect(plugin.name).toBe('vite-plugin-qwik');
+		expect(plugin.api?.getManifest?.()).toBe(null);
+	});
+
 	test('infers root and source directories from Vite config', async () => {
 		const plugin = qwik();
 
@@ -83,12 +94,13 @@ describe('Vite plugin', () => {
 		);
 	});
 
-	test('does not force non-server environments to client', async () => {
-		const plugin = qwik({ environment: 'lib' });
+	test('uses Vite library mode for Qwik library transforms', async () => {
+		const plugin = qwik();
 
 		callConfigResolved(plugin, {
 			root: '/workspace/app',
 			build: {
+				lib: { entry: 'src/index.tsx' },
 				rolldownOptions: { input: 'src/root.tsx' },
 				rollupOptions: {},
 			},
@@ -100,6 +112,75 @@ describe('Vite plugin', () => {
 				mode: 'lib',
 			}),
 		);
+	});
+
+	test('resolves and loads QRL segment modules emitted by the optimizer', async () => {
+		optimizerMock.transformModules.mockResolvedValueOnce({
+			modules: [
+				{
+					path: '/workspace/app/src/root.tsx',
+					isEntry: false,
+					code: 'import { qrl } from "@qwik.dev/core"; qrl(() => import("./root.tsx_root_component_abc.js"), "s_abc");',
+					map: null,
+					segment: null,
+					origPath: null,
+				},
+				{
+					path: '/workspace/app/src/root.tsx_root_component_abc.js',
+					isEntry: false,
+					code: 'export const s_abc = () => "Hello";',
+					map: null,
+					segment: {
+						origin: '/workspace/app/src/root.tsx',
+						name: 's_abc',
+						entry: null,
+						displayName: 'root.tsx_root_component',
+						hash: 'abc',
+						canonicalFilename: 'root.tsx_root_component_abc',
+						extension: 'js',
+						parent: null,
+						ctxKind: 'function',
+						ctxName: 'component',
+						captures: false,
+						loc: [0, 0],
+					},
+					origPath: null,
+				},
+			],
+			diagnostics: [],
+			isTypeScript: true,
+			isJsx: true,
+		});
+
+		const plugin = qwik();
+		callConfigResolved(plugin, {
+			root: '/workspace/app',
+			build: {
+				rolldownOptions: { input: 'src/root.tsx' },
+				rollupOptions: {},
+			},
+		});
+		await callTransform(plugin, 'source', '/workspace/app/src/root.tsx');
+
+		const resolvedId = await callResolveId(
+			plugin,
+			'./root.tsx_root_component_abc.js',
+			'/workspace/app/src/root.tsx',
+		);
+
+		expect(typeof resolvedId).toBe('string');
+		expect(await callLoad(plugin, resolvedId as string)).toEqual({
+			code: 'export const s_abc = () => "Hello";',
+			map: null,
+		});
+
+		const resolve = vi.fn().mockResolvedValue({ id: '/workspace/app/src/home.tsx' });
+		expect(await callResolveId(plugin, './home', resolvedId as string, resolve)).toEqual({
+			id: '/workspace/app/src/home.tsx',
+		});
+		expect(resolve).toHaveBeenCalledWith('./home', '/workspace/app/src/root.tsx', {
+			skipSelf: true,
+		});
 	});
 
 	test('injects and serves the Vite HMR bridge in dev', async () => {
@@ -189,10 +270,14 @@ function callTransformIndexHtml(plugin: Plugin) {
 	throw new Error('Expected function transformIndexHtml hook');
 }
 
-async function callResolveId(plugin: Plugin, id: string) {
+async function callResolveId(plugin: Plugin, id: string, importer?: string, resolve = vi.fn()) {
 	const resolveId = plugin.resolveId;
+	const context = {
+		environment: { config: { consumer: 'client' } },
+		resolve,
+	};
 	if (typeof resolveId === 'function') {
-		return resolveId.call({} as never, id, undefined, { isEntry: false } as never);
+		return resolveId.call(context as never, id, importer, { isEntry: false } as never);
 	}
 	throw new Error('Expected function resolveId hook');
 }

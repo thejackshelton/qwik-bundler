@@ -1,0 +1,17 @@
+{
+	"name": "@fixtures/tsdown-library",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"build": "tsdown"
+	},
+	"dependencies": {
+		"@qwik.dev/core": "https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@dc9a8e8"
+	},
+	"devDependencies": {
+		"@types/node": "^24.10.1",
+		"qwik-bundler": "workspace:*",
+		"tsdown": "^0.21.10",
+		"typescript": "^5.9.3"
+	}
+}

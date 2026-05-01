@@ -1,6 +1,11 @@
 import type { HotUpdateOptions, Plugin } from 'vite';
 import { hmrBridgeCode } from './client/hmr-bridge';
-import { createPlugin, TRANSFORM_ID_FILTER, type PluginOptions } from './plugin';
+import {
+	createPlugin,
+	TRANSFORM_ID_FILTER,
+	type BuildEnvironment,
+	type PluginOptions,
+} from './plugin';
 
 const HMR_BRIDGE_ID = '@qwik-hmr-bridge';
 const RESOLVED_HMR_BRIDGE_ID = `\0${HMR_BRIDGE_ID}`;
@@ -10,11 +15,16 @@ export interface VitePluginOptions extends PluginOptions {}
 export function qwik(options: VitePluginOptions = {}): Plugin {
 	const plugin = createPlugin(options);
 	let isServe = false;
+	let isLibraryBuild = false;
 
 	return {
-		name: plugin.plugin.name,
+		name: 'vite-plugin-qwik',
+		api: {
+			getManifest: () => null,
+		},
 		configResolved(resolvedConfig) {
 			isServe = resolvedConfig.command === 'serve';
+			isLibraryBuild = Boolean(resolvedConfig.build.lib);
 			plugin.setOptimizerRoot(resolvedConfig.root);
 		},
 		transformIndexHtml() {
@@ -31,17 +41,20 @@ export function qwik(options: VitePluginOptions = {}): Plugin {
 				},
 			];
 		},
-		resolveId(id) {
+		resolveId(id, importer) {
 			if (id === HMR_BRIDGE_ID) {
 				return RESOLVED_HMR_BRIDGE_ID;
 			}
-			return null;
+			return plugin.resolveId(id, importer, {
+				environment: getBuildEnvironment(this, options, isLibraryBuild),
+				resolve: this.resolve.bind(this),
+			});
 		},
 		load(id) {
 			if (id === RESOLVED_HMR_BRIDGE_ID) {
 				return hmrBridgeCode;
 			}
-			return null;
+			return plugin.load(id);
 		},
 		transform: {
 			filter: {
@@ -49,9 +62,7 @@ export function qwik(options: VitePluginOptions = {}): Plugin {
 			},
 			handler(code, id) {
 				return plugin.transform(code, id, {
-					environment:
-						options.environment ??
-						(this.environment.config.consumer === 'server' ? 'server' : undefined),
+					environment: getBuildEnvironment(this, options, isLibraryBuild),
 				});
 			},
 		},
@@ -59,6 +70,26 @@ export function qwik(options: VitePluginOptions = {}): Plugin {
 			return hotUpdate(this, ctx);
 		},
 	};
+}
+
+function getBuildEnvironment(
+	pluginContext: { environment: { config: { consumer: 'client' | 'server' } } },
+	options: VitePluginOptions,
+	isLibraryBuild: boolean,
+): BuildEnvironment | undefined {
+	if (options.environment) {
+		return options.environment;
+	}
+
+	if (isLibraryBuild) {
+		return 'lib';
+	}
+
+	if (pluginContext.environment.config.consumer === 'server') {
+		return 'server';
+	}
+
+	return undefined;
 }
 
 function hotUpdate(
