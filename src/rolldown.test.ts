@@ -1,106 +1,84 @@
+import { createOptimizer } from '@qwik.dev/optimizer';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import type { Plugin, RolldownOptions } from 'rolldown';
-import type { Optimizer } from '@qwik.dev/optimizer';
-import { buildQwik } from './build-qwik';
-import { qwikRolldownPlugin, rolldown, type RolldownApi } from './rolldown';
-import type { BuildRequest } from './types';
+import { qwik } from './rolldown';
 
-const mockCreateOptimizer = vi.hoisted(() => vi.fn());
+const optimizerMock = vi.hoisted(() => ({
+	createOptimizer: vi.fn(),
+	transformModules: vi.fn(),
+}));
 
 vi.mock('@qwik.dev/optimizer', () => ({
-	createOptimizer: mockCreateOptimizer,
+	createOptimizer: optimizerMock.createOptimizer,
 }));
 
 beforeEach(() => {
-	mockCreateOptimizer.mockReset();
+	optimizerMock.createOptimizer.mockReset();
+	optimizerMock.transformModules.mockReset();
+	optimizerMock.transformModules.mockResolvedValue({
+		modules: [
+			{
+				path: './src/root.tsx',
+				isEntry: false,
+				code: 'optimized',
+				map: null,
+				segment: null,
+				origPath: null,
+			},
+		],
+		diagnostics: [],
+		isTypeScript: true,
+		isJsx: true,
+	});
+	optimizerMock.createOptimizer.mockResolvedValue({
+		transformModules: optimizerMock.transformModules,
+		sys: {} as never,
+	});
 });
 
-describe('qwikRolldownPlugin', () => {
-	test('transforms source through the Qwik build request optimizer', async () => {
-		const request = createRequest();
-		const plugin = qwikRolldownPlugin(request, { srcDir: 'src' });
-		const result = await callTransform(plugin, 'export const answer = 42;', './src/root.tsx');
+describe('Rolldown plugin', () => {
+	test('infers root and source directories from Rolldown build options', async () => {
+		const plugin = qwik();
 
-		expect(request.transformModules).toHaveBeenCalledWith(
+		callBuildStart(plugin, {
+			cwd: '/workspace/app',
+			input: ['src/root.tsx'],
+		});
+		const result = await callTransform(
+			plugin,
+			'export const answer = 42;',
+			'/workspace/app/src/root.tsx',
+		);
+
+		expect(createOptimizer).toHaveBeenCalledWith({});
+		expect(optimizerMock.transformModules).toHaveBeenCalledWith(
 			expect.objectContaining({
-				input: [{ code: 'export const answer = 42;', path: './src/root.tsx' }],
-				srcDir: 'src',
+				input: [{ code: 'export const answer = 42;', path: '/workspace/app/src/root.tsx' }],
+				rootDir: '/workspace/app',
+				srcDir: '/workspace/app',
+				isServer: false,
+				mode: 'prod',
 			}),
 		);
 		expect(result).toEqual({ code: 'optimized', map: null });
 	});
 });
 
-describe('rolldown bundler', () => {
-	test('is consumed by buildQwik and installs the Qwik plugin', async () => {
-		mockCreateOptimizer.mockResolvedValue(createOptimizer());
-		let capturedConfig: RolldownOptions | undefined;
-		const fakeRolldown: RolldownApi = {
-			rolldown: vi.fn(async (config) => {
-				capturedConfig = config;
-				const transformResult = await callTransform(
-					config.plugins![0] as Plugin,
-					'export default 1;',
-					'./src/root.tsx',
-				);
-
-				return {
-					write: vi.fn(async (output) => ({ output, transformResult })),
-				};
-			}),
-		};
-
-		const result = await buildQwik({
-			entry: './src/root.tsx',
-			bundler: rolldown({
-				rolldown: fakeRolldown,
-				output: { dir: 'dist' },
-			}),
-		});
-
-		expect(capturedConfig?.input).toBe('./src/root.tsx');
-		expect(capturedConfig?.plugins).toHaveLength(1);
-		expect(result.output).toEqual({
-			output: { dir: 'dist' },
-			transformResult: { code: 'optimized', map: null },
-		});
-	});
-});
-
-function createRequest(): BuildRequest {
-	const optimizer = createOptimizer();
-	return {
-		entries: { client: ['./src/root.tsx'] },
-		environment: 'client',
-		transformModules: optimizer.transformModules,
-	};
-}
-
-function createOptimizer(): Optimizer {
-	return {
-		transformModules: vi.fn(async () => ({
-			modules: [
-				{
-					path: './src/root.tsx',
-					isEntry: false,
-					code: 'optimized',
-					map: null,
-					segment: null,
-					origPath: null,
-				},
-			],
-			diagnostics: [],
-			isTypeScript: true,
-			isJsx: true,
-		})),
-		sys: {} as never,
-	};
+function callBuildStart(plugin: Plugin, options: { cwd: string; input: RolldownOptions['input'] }) {
+	const buildStart = plugin.buildStart;
+	if (typeof buildStart === 'function') {
+		return buildStart.call({} as never, options as never);
+	}
+	throw new Error('Expected function buildStart hook');
 }
 
 async function callTransform(plugin: Plugin, code: string, id: string) {
 	const transform = plugin.transform;
 	if (typeof transform === 'function') {
-		return transform.call({} as never, code, id, {} as never);
+		return transform.call({} as never, code, id, undefined as never);
+	}
+	if (transform && typeof transform === 'object' && 'handler' in transform) {
+		return transform.handler.call({} as never, code, id, undefined as never);
 	}
 	throw new Error('Expected function transform hook');
 }

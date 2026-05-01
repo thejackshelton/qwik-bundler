@@ -5,7 +5,7 @@ export default defineConfig({
 		'*': 'vp check --fix',
 	},
 	pack: {
-		entry: ['./src/index.ts', './src/rolldown.ts'],
+		entry: ['./src/rolldown.ts', './src/vite.ts'],
 		format: ['esm'],
 		dts: true,
 		clean: true,
