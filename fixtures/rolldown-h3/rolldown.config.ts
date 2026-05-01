@@ -18,6 +18,6 @@ export default defineConfig([
 		},
 		platform: 'node',
 		external: [/^node:/, 'h3'],
-		plugins: [qwik({ environment: 'server' })],
+		plugins: [qwik()],
 	},
 ]);
