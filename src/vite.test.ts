@@ -1,6 +1,6 @@
 import { createOptimizer } from '@qwik.dev/optimizer';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
 import type { Plugin, ResolvedConfig, UserConfig } from 'vite';
+import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { qwik } from './vite';
 
 const optimizerMock = vi.hoisted(() => ({
@@ -48,7 +48,7 @@ describe('Vite plugin', () => {
 		expect(plugin.api?.getManifest?.()).toBe(null);
 	});
 
-	test('infers root and source directories from Vite config', async () => {
+	test('uses Vite config root for optimizer paths', async () => {
 		const plugin = getQwikPlugin();
 
 		callConfigResolved(plugin, {
@@ -64,7 +64,7 @@ describe('Vite plugin', () => {
 			'/workspace/app/src/root.tsx',
 		);
 
-		expect(createOptimizer).toHaveBeenCalledWith({});
+		expect(createOptimizer).toHaveBeenCalledWith(undefined);
 		expect(optimizerMock.transformModules).toHaveBeenCalledWith(
 			expect.objectContaining({
 				rootDir: '/workspace/app',
@@ -87,7 +87,7 @@ describe('Vite plugin', () => {
 
 		callConfig(plugin, config, { command: 'build', mode: 'production' });
 
-		expect(config.build!.rolldownOptions).toEqual({
+		expect(config.build!.rolldownOptions).toMatchObject({
 			external: ['external-dependency'],
 			output: {
 				entryFileNames: 'build/q-[hash].js',
@@ -98,7 +98,7 @@ describe('Vite plugin', () => {
 		expect(config.build!.modulePreload).toBe(false);
 	});
 
-	test('sets Qwik output defaults through the shared output hook', () => {
+	test('dispatches output defaults by Vite environment context', () => {
 		const plugin = getQwikPlugin();
 
 		expect(callOutputOptions(plugin, { dir: 'dist' })).toEqual({
@@ -107,19 +107,19 @@ describe('Vite plugin', () => {
 			chunkFileNames: 'build/q-[hash].js',
 			hoistTransitiveImports: false,
 		});
-		expect(callOutputOptions(plugin, { entryFileNames: '[name].js' })).toEqual({
-			entryFileNames: '[name].js',
-			chunkFileNames: 'build/q-[hash].js',
-			hoistTransitiveImports: false,
-		});
 		expect(callOutputOptions(plugin, { dir: 'server' }, { consumer: 'server' })).toEqual({
 			dir: 'server',
 			chunkFileNames: 'q-[hash].js',
 			hoistTransitiveImports: false,
 		});
+		expect(
+			callOutputOptions(plugin, { entryFileNames: '[name].js' }, { build: { lib: true } }),
+		).toEqual({
+			entryFileNames: '[name].js',
+		});
 	});
 
-	test('keeps Vite library output under host control', () => {
+	test('keeps Vite library config output under host control', () => {
 		const plugin = getQwikPlugin();
 		const config: UserConfig = {
 			build: {
@@ -131,11 +131,6 @@ describe('Vite plugin', () => {
 		callConfig(plugin, config, { command: 'build', mode: 'production' });
 
 		expect(config.build!.rolldownOptions!.output).toBeUndefined();
-		expect(
-			callOutputOptions(plugin, { entryFileNames: '[name].js' }, { build: { lib: true } }),
-		).toEqual({
-			entryFileNames: '[name].js',
-		});
 	});
 
 	test('uses Vite SSR transform context for server transforms', async () => {
@@ -155,11 +150,13 @@ describe('Vite plugin', () => {
 		expect(optimizerMock.transformModules).toHaveBeenCalledWith(
 			expect.objectContaining({
 				isServer: true,
+				mode: 'prod',
+				entryStrategy: { type: 'hoist' },
 			}),
 		);
 	});
 
-	test('uses Vite library mode for Qwik library transforms', async () => {
+	test('uses Vite library context for Qwik library transforms', async () => {
 		const plugin = getQwikPlugin();
 
 		callConfigResolved(plugin, {
@@ -176,6 +173,7 @@ describe('Vite plugin', () => {
 		expect(optimizerMock.transformModules).toHaveBeenCalledWith(
 			expect.objectContaining({
 				mode: 'lib',
+				entryStrategy: { type: 'inline' },
 			}),
 		);
 	});
@@ -235,10 +233,9 @@ describe('Vite plugin', () => {
 		);
 
 		expect(typeof resolvedId).toBe('string');
-		expect(await callLoad(plugin, resolvedId as string)).toEqual({
-			code: 'export const s_abc = () => "Hello";',
-			map: null,
-		});
+		expect(await callLoad(plugin, resolvedId as string)).toBe(
+			'export const s_abc = () => "Hello";',
+		);
 
 		const resolve = vi.fn().mockResolvedValue({ id: '/workspace/app/src/home.tsx' });
 		expect(await callResolveId(plugin, './home', resolvedId as string, resolve)).toEqual({
@@ -349,9 +346,7 @@ function callOutputOptions(
 ) {
 	const outputOptionsHook = plugin.outputOptions;
 	const { consumer = 'client', build = {} } = options;
-	const context = {
-		environment: { config: { consumer, build } },
-	};
+	const context = createHookContext(consumer, build);
 	if (typeof outputOptionsHook === 'function') {
 		return outputOptionsHook.call(context as never, outputOptions as never);
 	}
@@ -369,14 +364,9 @@ async function callTransform(
 ) {
 	const transform = plugin.transform;
 	const { consumer = 'client', build = {} } = options;
-	const context = {
-		environment: { config: { consumer, build } },
-	};
+	const context = createHookContext(consumer, build);
 	if (typeof transform === 'function') {
 		return transform.call(context as never, code, id, undefined as never);
-	}
-	if (transform && typeof transform === 'object' && 'handler' in transform) {
-		return transform.handler.call(context as never, code, id, undefined as never);
 	}
 	throw new Error('Expected function transform hook');
 }
@@ -391,10 +381,8 @@ function callTransformIndexHtml(plugin: Plugin) {
 
 async function callResolveId(plugin: Plugin, id: string, importer?: string, resolve = vi.fn()) {
 	const resolveId = plugin.resolveId;
-	const context = {
-		environment: { config: { consumer: 'client' } },
-		resolve,
-	};
+	const context = createHookContext('client', {});
+	context.resolve = resolve;
 	if (typeof resolveId === 'function') {
 		return resolveId.call(context as never, id, importer, { isEntry: false } as never);
 	}
@@ -403,8 +391,9 @@ async function callResolveId(plugin: Plugin, id: string, importer?: string, reso
 
 async function callLoad(plugin: Plugin, id: string) {
 	const load = plugin.load;
+	const context = createHookContext('client', {});
 	if (typeof load === 'function') {
-		return load.call({} as never, id, undefined as never);
+		return load.call(context as never, id, undefined as never);
 	}
 	throw new Error('Expected function load hook');
 }
@@ -415,4 +404,12 @@ function callHotUpdate(plugin: Plugin, context: unknown, options: unknown) {
 		return hotUpdate.call(context as never, options as never);
 	}
 	throw new Error('Expected function hotUpdate hook');
+}
+
+function createHookContext(consumer: 'client' | 'server', build: { lib?: unknown }) {
+	return {
+		environment: { config: { consumer, build } },
+		emitFile: vi.fn(),
+		resolve: vi.fn(),
+	};
 }

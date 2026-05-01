@@ -1,5 +1,5 @@
 import { defineConfig } from 'rolldown';
-import { qwik } from 'qwik-bundler/rolldown';
+import { qwikClient, qwikServer } from '../../src/rolldown';
 
 export default defineConfig([
 	{
@@ -8,7 +8,7 @@ export default defineConfig([
 			dir: 'dist',
 			format: 'esm',
 		},
-		plugins: [qwik()],
+		plugins: [qwikClient()],
 	},
 	{
 		input: 'src/server.ts',
@@ -17,7 +17,10 @@ export default defineConfig([
 			format: 'esm',
 		},
 		platform: 'node',
+		resolve: {
+			conditionNames: ['development', 'import', 'node', 'default'],
+		},
 		external: [/^node:/, '@hono/node-server', '@hono/node-server/serve-static', 'hono'],
-		plugins: [qwik()],
+		plugins: [qwikServer()],
 	},
 ]);

@@ -1,24 +1,27 @@
+import type { OutputOptions } from 'rolldown';
 import type { ConfigEnv, HotUpdateOptions, Plugin, UserConfig } from 'vite';
 import { hmrBridgeCode } from './client/hmr-bridge';
 import {
-	createPlugin,
-	type BuildEnvironment,
-	type PluginOptions,
-	withQwikOutputDefaults,
-} from './plugin';
+	outputDefaults,
+	plugin as qwikRolldown,
+	type QwikEnvironment,
+	type QwikRolldownOptions,
+} from './rolldown';
 
 const HMR_BRIDGE_ID = '@qwik-hmr-bridge';
 const RESOLVED_HMR_BRIDGE_ID = `\0${HMR_BRIDGE_ID}`;
 
-export interface VitePluginOptions extends PluginOptions {}
+export interface VitePluginOptions extends QwikRolldownOptions {}
+
+type QwikOutputOptions = OutputOptions | OutputOptions[] | undefined;
 
 export function qwik(options: VitePluginOptions = {}): Plugin[] {
-	const plugin = createPlugin(options, getBuildEnvironment);
-	const basePlugin = plugin.plugin;
+	const rolldownOptions = { ...options };
+	const basePlugin = qwikRolldown(getBuildEnvironment, rolldownOptions) as Plugin;
 	let isServe = false;
 
 	const qwikPlugin = {
-		...(basePlugin as unknown as Plugin),
+		...basePlugin,
 		name: 'vite-plugin-qwik',
 		api: {
 			getManifest: () => null,
@@ -28,7 +31,7 @@ export function qwik(options: VitePluginOptions = {}): Plugin[] {
 		},
 		configResolved(resolvedConfig) {
 			isServe = resolvedConfig.command === 'serve';
-			plugin.setOptimizerRoot(resolvedConfig.root);
+			rolldownOptions.rootDir = resolvedConfig.root;
 		},
 	} satisfies Plugin & { api: { getManifest: () => null } };
 
@@ -80,22 +83,42 @@ function setQwikConfigDefaults(config: UserConfig, env: ConfigEnv) {
 	rolldownOptions.output = withQwikOutputDefaults(rolldownOptions.output, 'client');
 }
 
+function withQwikOutputDefaults(
+	output: QwikOutputOptions,
+	environment: QwikEnvironment,
+): OutputOptions | OutputOptions[] {
+	if (Array.isArray(output)) {
+		return output.map((item) => outputDefaults(item, environment));
+	}
+
+	if (!output) {
+		return outputDefaults({}, environment);
+	}
+
+	return outputDefaults(output, environment);
+}
+
 type ViteHookContext = {
-	environment: {
-		config: {
-			consumer: 'client' | 'server';
+	environment?: {
+		config?: {
+			consumer?: 'client' | 'server';
 			build?: { lib?: unknown };
 		};
 	};
 };
 
-function getBuildEnvironment(context: unknown): BuildEnvironment | undefined {
+function getBuildEnvironment(context: unknown): QwikEnvironment {
 	const pluginContext = context as ViteHookContext;
-	if (pluginContext.environment.config.build?.lib) {
+	const config = pluginContext.environment?.config;
+	if (!config) {
+		return 'client';
+	}
+
+	if (config.build?.lib) {
 		return 'lib';
 	}
 
-	if (pluginContext.environment.config.consumer === 'server') {
+	if (config.consumer === 'server') {
 		return 'server';
 	}
 
@@ -103,7 +126,7 @@ function getBuildEnvironment(context: unknown): BuildEnvironment | undefined {
 }
 
 function hotUpdate(pluginContext: ViteHookContext, ctx: HotUpdateOptions) {
-	if (pluginContext.environment.config.consumer !== 'server' || ctx.modules.length === 0) {
+	if (pluginContext.environment?.config?.consumer !== 'server' || ctx.modules.length === 0) {
 		return;
 	}
 

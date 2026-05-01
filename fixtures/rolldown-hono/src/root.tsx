@@ -5,7 +5,7 @@ interface RootProps {
 	url?: string;
 }
 
-export default component$<RootProps>(({ url = '/' }) => {
+const Root = component$<RootProps>(({ url = '/' }) => {
 	return (
 		<>
 			<head>
@@ -22,3 +22,5 @@ export default component$<RootProps>(({ url = '/' }) => {
 });
 
 export const createDocument = (url: string) => <Root url={url} />;
+
+export default Root;

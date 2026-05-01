@@ -1,8 +1,7 @@
 import { createOptimizer } from '@qwik.dev/optimizer';
+import type { Plugin } from 'rolldown';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
-import type { Plugin, RolldownOptions } from 'rolldown';
-import { TRANSFORM_ID_FILTER } from './plugin';
-import { qwik } from './rolldown';
+import { qwik, qwikClient, qwikLib, qwikServer } from './rolldown';
 
 const optimizerMock = vi.hoisted(() => ({
 	createOptimizer: vi.fn(),
@@ -38,20 +37,17 @@ beforeEach(() => {
 });
 
 describe('Rolldown plugin', () => {
-	test('infers root and source directories from Rolldown build options', async () => {
+	test('defaults qwik() to the client plugin', async () => {
 		const plugin = qwik();
 
-		callBuildStart(plugin, {
-			cwd: '/workspace/app',
-			input: ['src/root.tsx'],
-		});
+		callBuildStart(plugin, { cwd: '/workspace/app' });
 		const result = await callTransform(
 			plugin,
 			'export const answer = 42;',
 			'/workspace/app/src/root.tsx',
 		);
 
-		expect(createOptimizer).toHaveBeenCalledWith({});
+		expect(createOptimizer).toHaveBeenCalledWith(undefined);
 		expect(optimizerMock.transformModules).toHaveBeenCalledWith(
 			expect.objectContaining({
 				input: [{ code: 'export const answer = 42;', path: '/workspace/app/src/root.tsx' }],
@@ -65,7 +61,7 @@ describe('Rolldown plugin', () => {
 	});
 
 	test('sets Qwik runtime defines without replacing host defines', () => {
-		const plugin = qwik();
+		const plugin = qwikClient();
 		const options = {
 			transform: {
 				define: {
@@ -80,106 +76,81 @@ describe('Rolldown plugin', () => {
 			'globalThis.qDev': 'true',
 			'import.meta.env.BASE_URL': '"/"',
 			'import.meta.env.DEV': 'false',
+			'import.meta.env.MODE': '"production"',
 			'import.meta.env.TEST': 'false',
 		});
 	});
 
-	test('does not transform bundled Qwik runtime modules', () => {
-		expect(TRANSFORM_ID_FILTER.test('/workspace/app/src/root.tsx')).toBe(true);
-		expect(TRANSFORM_ID_FILTER.test('/workspace/app/lib/button.qwik.mjs')).toBe(true);
-		expect(
-			TRANSFORM_ID_FILTER.test(
-				'/workspace/app/node_modules/@qwik.dev/core/dist/core.prod.mjs',
-			),
-		).toBe(false);
+	test('emits Qwik handlers as a resolved client chunk', async () => {
+		const plugin = qwikClient();
+		const emitFile = vi.fn();
+		const resolve = vi.fn().mockResolvedValue({ id: '@qwik.dev/core/handlers.mjs' });
+
+		await callResolveId(
+			plugin,
+			'@qwik.dev/core',
+			'/workspace/app/src/root.tsx',
+			resolve,
+			emitFile,
+		);
+
+		expect(resolve).toHaveBeenCalledWith(
+			'@qwik.dev/core/handlers.mjs',
+			'/workspace/app/src/root.tsx',
+			{
+				skipSelf: true,
+			},
+		);
+		expect(emitFile).toHaveBeenCalledWith({
+			type: 'chunk',
+			id: '@qwik.dev/core/handlers.mjs',
+			name: 'handlers',
+		});
 	});
 
-	test('sets Qwik output defaults in the Rolldown plugin', () => {
-		const plugin = qwik();
-
-		expect(callOutputOptions(plugin, { dir: 'dist' })).toEqual({
+	test('uses explicit output defaults for each environment', () => {
+		expect(callOutputOptions(qwikClient(), { dir: 'dist' })).toEqual({
 			dir: 'dist',
 			entryFileNames: 'build/q-[hash].js',
 			chunkFileNames: 'build/q-[hash].js',
 			hoistTransitiveImports: false,
 		});
-		expect(
-			callOutputOptions(plugin, {
-				entryFileNames: '[name].js',
-				chunkFileNames: 'chunks/[name].js',
-			}),
-		).toEqual({
-			entryFileNames: '[name].js',
-			chunkFileNames: 'chunks/[name].js',
-			hoistTransitiveImports: false,
-		});
-	});
-
-	test('sets server output defaults for the common server output directory', () => {
-		const plugin = qwik();
-
-		expect(callOutputOptions(plugin, { dir: 'server' })).toEqual({
+		expect(callOutputOptions(qwikServer(), { dir: 'server' })).toEqual({
 			dir: 'server',
 			chunkFileNames: 'q-[hash].js',
 			hoistTransitiveImports: false,
 		});
+		expect(callOutputOptions(qwikLib(), { entryFileNames: '[name].js' })).toEqual({
+			entryFileNames: '[name].js',
+		});
 	});
 
-	test('uses tsdown library builds for Qwik library transforms', async () => {
-		const plugin = qwik();
-		const tsdownPlugin = plugin as Plugin & {
-			tsdownConfigResolved?: (config: unknown) => void;
-		};
+	test('uses server optimizer settings for qwikServer()', async () => {
+		const plugin = qwikServer();
 
-		tsdownPlugin.tsdownConfigResolved?.({});
-		callBuildStart(plugin, {
-			cwd: '/workspace/app',
-			input: ['src/index.tsx'],
-			platform: 'node',
-		});
-		await callTransform(plugin, 'export default 1;', '/workspace/app/src/index.tsx');
-
-		expect(optimizerMock.transformModules).toHaveBeenCalledWith(
-			expect.objectContaining({
-				mode: 'lib',
-			}),
-		);
-	});
-
-	test('does not infer server transforms from Rolldown platform', async () => {
-		const plugin = qwik();
-
-		callBuildStart(plugin, {
-			cwd: '/workspace/app',
-			input: ['src/server.ts'],
-			platform: 'node',
-		});
+		callBuildStart(plugin, { cwd: '/workspace/app' });
 		await callTransform(plugin, 'export default 1;', '/workspace/app/src/server.ts');
 
 		expect(optimizerMock.transformModules).toHaveBeenCalledWith(
 			expect.objectContaining({
-				isServer: false,
+				isServer: true,
+				mode: 'prod',
+				entryStrategy: { type: 'hoist' },
 			}),
 		);
 	});
 
-	test('infers server transforms from Qwik server entry imports', async () => {
-		const plugin = qwik();
+	test('uses library optimizer settings for qwikLib()', async () => {
+		const plugin = qwikLib();
 
-		callBuildStart(plugin, {
-			cwd: '/workspace/app',
-			input: ['src/server.ts'],
-		});
-		await callTransform(
-			plugin,
-			"import { renderToString } from '@qwik.dev/core/server';",
-			'/workspace/app/src/server.ts',
-		);
-		await callTransform(plugin, 'export default 1;', '/workspace/app/src/root.tsx');
+		callBuildStart(plugin, { cwd: '/workspace/app' });
+		await callTransform(plugin, 'export default 1;', '/workspace/app/src/index.tsx');
 
-		expect(optimizerMock.transformModules).toHaveBeenLastCalledWith(
+		expect(optimizerMock.transformModules).toHaveBeenCalledWith(
 			expect.objectContaining({
-				isServer: true,
+				isServer: false,
+				mode: 'lib',
+				entryStrategy: { type: 'inline' },
 			}),
 		);
 	});
@@ -222,11 +193,8 @@ describe('Rolldown plugin', () => {
 			isJsx: true,
 		});
 
-		const plugin = qwik();
-		callBuildStart(plugin, {
-			cwd: '/workspace/app',
-			input: ['src/root.tsx'],
-		});
+		const plugin = qwikClient();
+		callBuildStart(plugin, { cwd: '/workspace/app' });
 		await callTransform(plugin, 'source', '/workspace/app/src/root.tsx');
 
 		const resolvedId = await callResolveId(
@@ -236,10 +204,9 @@ describe('Rolldown plugin', () => {
 		);
 
 		expect(typeof resolvedId).toBe('string');
-		expect(await callLoad(plugin, resolvedId as string)).toEqual({
-			code: 'export const s_abc = () => "Hello";',
-			map: null,
-		});
+		expect(await callLoad(plugin, resolvedId as string)).toBe(
+			'export const s_abc = () => "Hello";',
+		);
 
 		const resolve = vi.fn().mockResolvedValue({ id: '/workspace/app/src/home.tsx' });
 		expect(await callResolveId(plugin, './home', resolvedId as string, resolve)).toEqual({
@@ -267,14 +234,7 @@ function callOutputOptions(plugin: Plugin, options: unknown) {
 	throw new Error('Expected function outputOptions hook');
 }
 
-function callBuildStart(
-	plugin: Plugin,
-	options: {
-		cwd: string;
-		input: RolldownOptions['input'];
-		platform?: RolldownOptions['platform'];
-	},
-) {
+function callBuildStart(plugin: Plugin, options: { cwd: string }) {
 	const buildStart = plugin.buildStart;
 	if (typeof buildStart === 'function') {
 		return buildStart.call({} as never, options as never);
@@ -282,21 +242,26 @@ function callBuildStart(
 	throw new Error('Expected function buildStart hook');
 }
 
-async function callTransform(plugin: Plugin, code: string, id: string) {
+async function callTransform(plugin: Plugin, code: string, id: string, emitFile = vi.fn()) {
 	const transform = plugin.transform;
 	if (typeof transform === 'function') {
-		return transform.call({} as never, code, id, undefined as never);
-	}
-	if (transform && typeof transform === 'object' && 'handler' in transform) {
-		return transform.handler.call({} as never, code, id, undefined as never);
+		return transform.call({ emitFile } as never, code, id, undefined as never);
 	}
 	throw new Error('Expected function transform hook');
 }
 
-async function callResolveId(plugin: Plugin, source: string, importer: string, resolve = vi.fn()) {
+async function callResolveId(
+	plugin: Plugin,
+	source: string,
+	importer?: string,
+	resolve = vi.fn(),
+	emitFile = vi.fn(),
+) {
 	const resolveId = plugin.resolveId;
 	if (typeof resolveId === 'function') {
-		return resolveId.call({ resolve } as never, source, importer, { isEntry: false } as never);
+		return resolveId.call({ emitFile, resolve } as never, source, importer, {
+			isEntry: false,
+		} as never);
 	}
 	throw new Error('Expected function resolveId hook');
 }

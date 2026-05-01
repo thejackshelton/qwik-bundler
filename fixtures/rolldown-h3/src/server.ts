@@ -1,9 +1,29 @@
 import { renderToString } from '@qwik.dev/core/server';
-import { createApp, eventHandler, toNodeListener } from 'h3';
+import { createApp, eventHandler, html, serveStatic } from 'h3';
+import { toNodeHandler } from 'h3/node';
+import { readFile, stat } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { createDocument } from './root';
 
 export const app = createApp();
+const distUrl = new URL('../dist/', import.meta.url);
+
+function getAssetUrl(id: string) {
+	return new URL(`.${id}`, distUrl);
+}
+
+app.use(
+	'/build/**',
+	eventHandler((event) =>
+		serveStatic(event, {
+			getContents: (id) => readFile(getAssetUrl(id)),
+			getMeta: async (id) => {
+				const stats = await stat(getAssetUrl(id)).catch(() => undefined);
+				return stats?.isFile() ? { mtime: stats.mtime, size: stats.size } : undefined;
+			},
+		}),
+	),
+);
 
 app.use(
 	'/',
@@ -13,14 +33,13 @@ app.use(
 			containerAttributes: { lang: 'en-us' },
 		});
 
-		event.node.res.setHeader('content-type', 'text/html; charset=utf-8');
-		return result.html;
+		return html(result.html);
 	}),
 );
 
 if (import.meta.url === `file://${process.argv[1]}`) {
 	const port = Number(process.env.PORT ?? 4173);
-	createServer(toNodeListener(app)).listen(port, () => {
+	createServer(toNodeHandler(app)).listen(port, () => {
 		console.log(`h3 fixture listening on http://localhost:${port}`);
 	});
 }

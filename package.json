@@ -20,7 +20,7 @@
 	},
 	"dependencies": {
 		"@qwik.dev/optimizer": "2.1.0-beta.2",
-		"magic-regexp": "^0.11.0"
+		"pathe": "^2.0.3"
 	},
 	"devDependencies": {
 		"@types/node": "^24.10.1",

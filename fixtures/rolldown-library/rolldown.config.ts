@@ -1,5 +1,5 @@
 import { defineConfig } from 'rolldown';
-import { qwik } from 'qwik-bundler/rolldown';
+import { qwikLib } from '../../src/rolldown';
 
 export default defineConfig({
 	input: 'src/index.tsx',
@@ -13,5 +13,5 @@ export default defineConfig({
 	},
 	platform: 'neutral',
 	external: [/^@qwik\.dev\/core/],
-	plugins: [qwik()],
+	plugins: [qwikLib()],
 });
