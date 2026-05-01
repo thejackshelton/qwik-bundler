@@ -1,6 +1,7 @@
 import { createOptimizer } from '@qwik.dev/optimizer';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import type { Plugin, RolldownOptions } from 'rolldown';
+import { TRANSFORM_ID_FILTER } from './plugin';
 import { qwik } from './rolldown';
 
 const optimizerMock = vi.hoisted(() => ({
@@ -81,6 +82,16 @@ describe('Rolldown plugin', () => {
 			'import.meta.env.DEV': 'false',
 			'import.meta.env.TEST': 'false',
 		});
+	});
+
+	test('does not transform bundled Qwik runtime modules', () => {
+		expect(TRANSFORM_ID_FILTER.test('/workspace/app/src/root.tsx')).toBe(true);
+		expect(TRANSFORM_ID_FILTER.test('/workspace/app/lib/button.qwik.mjs')).toBe(true);
+		expect(
+			TRANSFORM_ID_FILTER.test(
+				'/workspace/app/node_modules/@qwik.dev/core/dist/core.prod.mjs',
+			),
+		).toBe(false);
 	});
 
 	test('sets Qwik output defaults in the Rolldown plugin', () => {

@@ -12,16 +12,9 @@ import type {
 export type BuildEnvironment = 'client' | 'server' | 'lib';
 
 export const TRANSFORM_ID_FILTER = createRegExp(
-	exactly(
-		'.',
-		anyOf(
-			exactly('jsx'),
-			exactly('tsx'),
-			exactly('mjs'),
-			exactly('mts'),
-			exactly('js'),
-			exactly('ts'),
-		),
+	anyOf(
+		exactly('.', anyOf(exactly('jsx'), exactly('tsx'), exactly('ts'))),
+		exactly('.qwik.', anyOf(exactly('mjs'), exactly('js'))),
 	).at.lineEnd(),
 );
 
