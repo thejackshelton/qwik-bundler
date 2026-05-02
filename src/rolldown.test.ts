@@ -4,6 +4,13 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { qwik, qwikClient, qwikLib, qwikServer } from './rolldown';
 import { QWIK_MANIFEST, type QwikManifest } from './q-manifest';
 
+type QwikOutputOptions = {
+	codeSplitting?: {
+		includeDependenciesRecursively?: boolean;
+		groups?: Array<{ name: string }>;
+	};
+};
+
 const optimizerMock = vi.hoisted(() => ({
 	createOptimizer: vi.fn(),
 	transformModules: vi.fn(),
@@ -90,6 +97,25 @@ describe('Rolldown plugin', () => {
 		});
 	});
 
+	test('sets client input defaults for Qwik runtime chunk groups', () => {
+		const options = {};
+
+		callOptions(qwikClient(), options);
+
+		expect(options).toHaveProperty('preserveEntrySignatures', 'allow-extension');
+	});
+
+	test('does not set client-only input defaults for server and library builds', () => {
+		const serverOptions = {};
+		const libOptions = {};
+
+		callOptions(qwikServer(), serverOptions);
+		callOptions(qwikLib(), libOptions);
+
+		expect(serverOptions).not.toHaveProperty('preserveEntrySignatures');
+		expect(libOptions).not.toHaveProperty('preserveEntrySignatures');
+	});
+
 	test('emits Qwik runtime entries as resolved client chunks', async () => {
 		const plugin = qwikClient();
 		const emitFile = vi.fn();
@@ -132,12 +158,21 @@ describe('Rolldown plugin', () => {
 	});
 
 	test('uses explicit output defaults for each environment', () => {
-		expect(callOutputOptions(qwikClient(), { dir: 'dist' })).toEqual({
+		const clientOutput = callOutputOptions(qwikClient(), { dir: 'dist' }) as QwikOutputOptions;
+		expect(clientOutput).toMatchObject({
 			dir: 'dist',
 			entryFileNames: 'build/q-[hash].js',
 			chunkFileNames: 'build/q-[hash].js',
 			hoistTransitiveImports: false,
+			codeSplitting: {
+				includeDependenciesRecursively: false,
+			},
 		});
+		expect(clientOutput.codeSplitting?.groups?.map((group) => group.name)).toEqual([
+			'qwik-core',
+			'qwik-loader',
+			'qwik-preloader',
+		]);
 		expect(callOutputOptions(qwikServer(), { dir: 'server' })).toEqual({
 			dir: 'server',
 			chunkFileNames: 'q-[hash].js',
@@ -146,6 +181,27 @@ describe('Rolldown plugin', () => {
 		expect(callOutputOptions(qwikLib(), { entryFileNames: '[name].js' })).toEqual({
 			entryFileNames: '[name].js',
 		});
+	});
+
+	test('appends user code splitting groups after Qwik groups', () => {
+		const userGroup = { name: 'vendor', test: /vendor/ };
+		const output = callOutputOptions(qwikClient(), {
+			codeSplitting: { groups: [userGroup] },
+		}) as QwikOutputOptions;
+
+		expect(output.codeSplitting?.groups?.map((group) => group.name)).toEqual([
+			'qwik-core',
+			'qwik-loader',
+			'qwik-preloader',
+			'vendor',
+		]);
+		expect(output.codeSplitting?.groups?.at(-1)).toBe(userGroup);
+	});
+
+	test('rejects boolean code splitting for client builds', () => {
+		expect(() => callOutputOptions(qwikClient(), { codeSplitting: true })).toThrow(
+			'Qwik requires output.codeSplitting to be an object',
+		);
 	});
 
 	test('uses server optimizer settings for qwikServer()', async () => {
@@ -292,7 +348,7 @@ describe('Rolldown plugin', () => {
 					name: 'entry',
 					code: 'import "./q-symbol.js"; export const entry = 1;',
 					exports: ['entry'],
-					imports: ['build/q-symbol.js'],
+					imports: ['build/q-symbol.js', 'build/q-core.js'],
 					dynamicImports: [],
 					moduleIds: ['/workspace/app/src/root.tsx'],
 					facadeModuleId: '/workspace/app/src/root.tsx',
@@ -308,16 +364,19 @@ describe('Rolldown plugin', () => {
 					moduleIds: ['/workspace/app/src/root.tsx_root_component_abc.js'],
 					facadeModuleId: '/workspace/app/src/root.tsx_root_component_abc.js',
 				},
-				'build/q-handlers.js': {
+				'build/q-core.js': {
 					type: 'chunk',
-					fileName: 'build/q-handlers.js',
-					name: 'handlers',
-					code: 'export const _h = 1;',
-					exports: ['_h'],
+					fileName: 'build/q-core.js',
+					name: 'qwik-core',
+					code: 'export const _chk = 1;',
+					exports: ['_chk'],
 					imports: [],
 					dynamicImports: [],
-					moduleIds: ['/workspace/app/node_modules/@qwik.dev/core/handlers.mjs'],
-					facadeModuleId: '/workspace/app/node_modules/@qwik.dev/core/handlers.mjs',
+					moduleIds: [
+						'/workspace/app/node_modules/@qwik.dev/core/dist/core.prod.mjs',
+						'/workspace/app/node_modules/@qwik.dev/core/handlers.mjs',
+					],
+					facadeModuleId: '/workspace/app/node_modules/@qwik.dev/core/dist/core.prod.mjs',
 				},
 				'build/style.css': {
 					type: 'asset',
@@ -338,7 +397,7 @@ describe('Rolldown plugin', () => {
 		);
 
 		expect(manifest?.mapping.s_abc).toBe('q-symbol.js');
-		expect(manifest?.mapping._chk).toBe('q-handlers.js');
+		expect(manifest?.mapping._chk).toBe('q-core.js');
 		expect(manifest?.symbols.s_abc).toMatchObject({ displayName: 'root.tsx_root_component' });
 		expect(manifest?.bundles['q-entry.js']).toMatchObject({
 			imports: ['q-symbol.js'],

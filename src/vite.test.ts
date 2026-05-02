@@ -101,13 +101,21 @@ describe('Vite plugin', () => {
 
 	test('dispatches output defaults by Vite environment context', () => {
 		const plugin = getQwikPlugin();
+		const clientOutput = callOutputOptions(plugin, { dir: 'dist' }) as {
+			codeSplitting?: { groups?: Array<{ name: string }> };
+		};
 
-		expect(callOutputOptions(plugin, { dir: 'dist' })).toEqual({
+		expect(clientOutput).toMatchObject({
 			dir: 'dist',
 			entryFileNames: 'build/q-[hash].js',
 			chunkFileNames: 'build/q-[hash].js',
 			hoistTransitiveImports: false,
 		});
+		expect(clientOutput.codeSplitting?.groups?.map((group) => group.name)).toEqual([
+			'qwik-core',
+			'qwik-loader',
+			'qwik-preloader',
+		]);
 		expect(callOutputOptions(plugin, { dir: 'server' }, { consumer: 'server' })).toEqual({
 			dir: 'server',
 			chunkFileNames: 'q-[hash].js',

@@ -78,7 +78,6 @@ export function createManifest(
 		assets: {},
 		injections: [],
 	};
-	let handlersBundle: string | undefined;
 
 	for (const item of Object.values(bundle)) {
 		if (item.type === 'asset') {
@@ -127,9 +126,6 @@ export function createManifest(
 		}
 
 		detectQwikCoreBundles(manifest, item, origins, bundleFileName);
-		if (isHandlers(item, origins)) {
-			handlersBundle = bundleFileName;
-		}
 
 		manifest.bundles[bundleFileName] = qwikBundle;
 	}
@@ -149,13 +145,13 @@ export function createManifest(
 		manifest.symbols[symbolName] = segment;
 	}
 
-	if (handlersBundle) {
+	if (manifest.core) {
 		for (const symbol of HANDLERS) {
-			manifest.mapping[symbol] = handlersBundle;
+			manifest.mapping[symbol] = manifest.core;
 			manifest.symbols[symbol] = { origin: 'Qwik core', displayName: symbol, hash: symbol };
 		}
 	}
-	filterRuntimeImports(manifest, handlersBundle);
+	filterRuntimeImports(manifest);
 	sortManifest(manifest);
 
 	if (options.bundleGraphAsset) {
@@ -316,23 +312,13 @@ function detectQwikCoreBundles(
 	}
 }
 
-function isHandlers(item: OutputChunk, origins: string[]) {
-	if (item.name === 'handlers') {
-		return true;
-	}
-	return [...item.moduleIds, ...origins].some((id) => /[/\\]handlers\.mjs$/.test(id));
-}
-
-function filterRuntimeImports(manifest: QwikManifest, handlersBundle: string | undefined) {
+function filterRuntimeImports(manifest: QwikManifest) {
 	const ignored = new Set<string>();
 	if (manifest.core) {
 		ignored.add(manifest.core);
 	}
 	if (manifest.preloader) {
 		ignored.add(manifest.preloader);
-	}
-	if (handlersBundle) {
-		ignored.add(handlersBundle);
 	}
 	if (ignored.size === 0) {
 		return;

@@ -6,7 +6,7 @@ import {
 	type TransformModule,
 } from '@qwik.dev/optimizer';
 import { dirname, join, relative, resolve } from 'pathe';
-import type { InputOptions, OutputOptions, Plugin } from 'rolldown';
+import type { CodeSplittingOptions, InputOptions, OutputOptions, Plugin } from 'rolldown';
 import {
 	createManifest,
 	injectManifest,
@@ -33,11 +33,32 @@ const QWIK_BUILD = '@qwik.dev/core/build';
 const QWIK_CORE = '@qwik.dev/core';
 const QWIK_HANDLERS = '@qwik.dev/core/handlers.mjs';
 const QWIK_PRELOADER = '@qwik.dev/core/preloader';
+const VITE_PRELOAD_HELPER = '\0vite/preload-helper.js';
 const Q_BUILD_DIR = 'build';
 const Q_BUNDLE_GRAPH = join(Q_BUILD_DIR, 'bundle-graph.json');
 const Q_MANIFEST = 'q-manifest.json';
 const SEGMENT = '\0qwik:segment:';
 const SOURCE_RE = /(?:\.[jt]sx?|\.qwik\.[mj]s)$/;
+const QWIK_CORE_GROUP_RE = /[/\\](core|qwik)[/\\](handlers|dist[/\\]core(\.prod|\.min)?)\.mjs$/;
+const QWIK_PRELOADER_GROUP_RE = /[/\\](core|qwik)[/\\]dist[/\\]preloader\.mjs$/;
+const QWIK_LOADER_GROUP_RE = /[/\\](core|qwik)[/\\]dist[/\\]qwikloader\.js$/;
+const QWIK_CODE_SPLITTING_GROUPS = [
+	{
+		name: 'qwik-core',
+		test: QWIK_CORE_GROUP_RE,
+	},
+	{
+		name: 'qwik-loader',
+		test: QWIK_LOADER_GROUP_RE,
+	},
+	{
+		name: 'qwik-preloader',
+		test: (id: string) =>
+			id.endsWith(QWIK_BUILD) ||
+			id === VITE_PRELOAD_HELPER ||
+			QWIK_PRELOADER_GROUP_RE.test(id),
+	},
+] satisfies NonNullable<CodeSplittingOptions['groups']>;
 const EXPERIMENTAL_FEATURES =
 	'each suspense preventNavigate valibot noSPA enableRequestRewrite webWorker insights'.split(
 		' ',
@@ -85,7 +106,11 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 	return {
 		name,
 		options(input) {
-			return defineQwik(input, options.experimental);
+			const next = defineQwik(input, options.experimental);
+			if (isClient(getEnvironment(this))) {
+				next.preserveEntrySignatures ??= 'allow-extension';
+			}
+			return next;
 		},
 		async buildStart(input) {
 			if (!root) {
@@ -301,7 +326,22 @@ export function outputDefaults(output: OutputOptions, environment: QwikEnvironme
 
 	next.entryFileNames ??= join(Q_BUILD_DIR, 'q-[hash].js');
 	next.chunkFileNames ??= join(Q_BUILD_DIR, 'q-[hash].js');
+	next.codeSplitting = qwikCodeSplitting(next.codeSplitting);
 	return next;
+}
+
+function qwikCodeSplitting(codeSplitting: OutputOptions['codeSplitting']) {
+	if (typeof codeSplitting === 'boolean') {
+		throw new Error(
+			'Qwik requires output.codeSplitting to be an object so runtime chunks can be grouped.',
+		);
+	}
+
+	return {
+		...codeSplitting,
+		includeDependenciesRecursively: false,
+		groups: [...QWIK_CODE_SPLITTING_GROUPS, ...(codeSplitting?.groups ?? [])],
+	} satisfies CodeSplittingOptions;
 }
 
 function canonicalBundlePath(fileName: string, buildDir: string) {
