@@ -1,6 +1,7 @@
 import { createOptimizer } from '@qwik.dev/optimizer';
 import type { Plugin, ResolvedConfig, UserConfig } from 'vite';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
+import type { QwikManifest } from './q-manifest';
 import { qwik } from './vite';
 
 const optimizerMock = vi.hoisted(() => ({
@@ -40,7 +41,7 @@ describe('Vite plugin', () => {
 	test('exposes the Vite plugin identity expected by Qwik Router', () => {
 		const plugin = getQwikPlugin() as Plugin & {
 			api?: {
-				getManifest?: () => null;
+				getManifest?: () => QwikManifest | null;
 			};
 		};
 

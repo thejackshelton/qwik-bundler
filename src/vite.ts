@@ -7,6 +7,7 @@ import {
 	type QwikEnvironment,
 	type QwikRolldownOptions,
 } from './rolldown';
+import type { QwikManifest } from './q-manifest';
 
 const HMR_BRIDGE_ID = '@qwik-hmr-bridge';
 const RESOLVED_HMR_BRIDGE_ID = `\0${HMR_BRIDGE_ID}`;
@@ -17,6 +18,11 @@ type QwikOutputOptions = OutputOptions | OutputOptions[] | undefined;
 
 export function qwik(options: VitePluginOptions = {}): Plugin[] {
 	const rolldownOptions = { ...options };
+	let manifest: QwikManifest | null = null;
+	rolldownOptions.onManifest = (nextManifest) => {
+		manifest = nextManifest;
+		options.onManifest?.(nextManifest);
+	};
 	const basePlugin = qwikRolldown(getBuildEnvironment, rolldownOptions) as Plugin;
 	let isServe = false;
 
@@ -24,7 +30,7 @@ export function qwik(options: VitePluginOptions = {}): Plugin[] {
 		...basePlugin,
 		name: 'vite-plugin-qwik',
 		api: {
-			getManifest: () => null,
+			getManifest: () => manifest,
 		},
 		config(config, env) {
 			setQwikConfigDefaults(config, env);
@@ -33,7 +39,7 @@ export function qwik(options: VitePluginOptions = {}): Plugin[] {
 			isServe = resolvedConfig.command === 'serve';
 			rolldownOptions.rootDir = resolvedConfig.root;
 		},
-	} satisfies Plugin & { api: { getManifest: () => null } };
+	} satisfies Plugin & { api: { getManifest: () => QwikManifest | null } };
 
 	const hmrPlugin = {
 		name: 'vite-plugin-qwik-hmr',
