@@ -357,6 +357,57 @@ describe('Rolldown plugin', () => {
 		);
 	});
 
+	test('maps inlined QRL symbols from library modules', async () => {
+		let manifest: QwikManifest | undefined;
+		const plugin = qwikClient({ onManifest: (nextManifest) => (manifest = nextManifest) });
+
+		callBuildStart(plugin, { cwd: '/workspace/app' });
+		await callGenerateBundle(plugin, {
+			'build/q-lib.js': {
+				type: 'chunk',
+				fileName: 'build/q-lib.js',
+				name: 'lib',
+				code: 'const Card = c(r(() => "card", "Card_component_D8Jm0aJFndY")); export { Card };',
+				exports: ['Card'],
+				imports: [],
+				dynamicImports: [],
+				moduleIds: [
+					'/workspace/app/node_modules/@fixtures/rolldown-library/lib/index.qwik.mjs',
+				],
+				facadeModuleId:
+					'/workspace/app/node_modules/@fixtures/rolldown-library/lib/index.qwik.mjs',
+			},
+		});
+
+		expect(manifest?.mapping.Card_component_D8Jm0aJFndY).toBe('q-lib.js');
+		expect(manifest?.symbols.Card_component_D8Jm0aJFndY).toBeUndefined();
+		expect(manifest?.bundles['q-lib.js']?.symbols).toBeUndefined();
+		expect(manifest?.bundleGraph).toContain('D8Jm0aJFndY');
+	});
+
+	test('ignores symbol-like strings outside library modules', async () => {
+		let manifest: QwikManifest | undefined;
+		const plugin = qwikClient({ onManifest: (nextManifest) => (manifest = nextManifest) });
+
+		callBuildStart(plugin, { cwd: '/workspace/app' });
+		await callGenerateBundle(plugin, {
+			'build/q-app.js': {
+				type: 'chunk',
+				fileName: 'build/q-app.js',
+				name: 'app',
+				code: 'const label = "NotAQrl_12345678"; export { label };',
+				exports: ['label'],
+				imports: [],
+				dynamicImports: [],
+				moduleIds: ['/workspace/app/src/root.tsx'],
+				facadeModuleId: '/workspace/app/src/root.tsx',
+			},
+		});
+
+		expect(manifest?.mapping.NotAQrl_12345678).toBeUndefined();
+		expect(manifest?.bundleGraph).not.toContain('12345678');
+	});
+
 	test('injects only the server manifest subset for server builds', async () => {
 		const manifest = {
 			manifestHash: 'abc',

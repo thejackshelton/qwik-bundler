@@ -100,6 +100,34 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
+  fixtures/rolldown-library-consumer:
+    dependencies:
+      '@fixtures/rolldown-library':
+        specifier: workspace:*
+        version: link:../rolldown-library
+      '@hono/node-server':
+        specifier: ^2.0.1
+        version: 2.0.1(hono@4.12.16)
+      '@qwik.dev/core':
+        specifier: https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@dc9a8e8
+        version: https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@dc9a8e8(vite@8.0.10(@types/node@24.12.2)(yaml@2.8.3))(vitest@4.1.5(@types/node@24.12.2)(vite@8.0.10(@types/node@24.12.2)(yaml@2.8.3)))
+      hono:
+        specifier: ^4.12.16
+        version: 4.12.16
+    devDependencies:
+      '@types/node':
+        specifier: ^24.10.1
+        version: 24.12.2
+      qwik-bundler:
+        specifier: workspace:*
+        version: link:../..
+      rolldown:
+        specifier: ^1.0.0-rc.18
+        version: 1.0.0-rc.18
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
   fixtures/tsdown-library:
     dependencies:
       '@qwik.dev/core':

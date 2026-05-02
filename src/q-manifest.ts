@@ -60,6 +60,8 @@ const HANDLERS = ['_chk', '_rsc', '_res', '_run', '_task', '_val', '_eaC', '_eaT
 const PRELOADER_RE = /[/\\](core|qwik)[/\\]dist[/\\]preloader\.(|c|m)js$/;
 const CORE_RE = /[/\\](core|qwik)[/\\]dist[/\\]core(\.min|\.prod)?\.(|c|m)js$/;
 const QWIK_LOADER_RE = /[/\\](core|qwik)[/\\](dist[/\\])?qwikloader(\.debug)?\.[^/\\]*js$/;
+const QWIK_LIBRARY_MODULE_RE = /\.qwik\.mjs$/;
+const LIBRARY_QRL_SYMBOL_RE = /["']([A-Za-z_$][\w$.-]*_[A-Za-z0-9_-]{8,})["']/g;
 
 export function createManifest(
 	bundle: OutputBundle,
@@ -92,10 +94,18 @@ export function createManifest(
 		}
 
 		const bundleFileName = bundleName(item.fileName, options);
-		const names = item.exports.filter((name) => segments.has(name));
-		for (const name of names) {
+		const origins = getOrigins(item, root);
+		const exportedNames = item.exports.filter((name) => segments.has(name));
+		for (const name of exportedNames) {
 			if (!manifest.mapping[name] || item.exports.length !== 1) {
 				manifest.mapping[name] = bundleFileName;
+			}
+		}
+		if (hasQwikLibraryModule(item)) {
+			for (const name of findLibraryQrlSymbols(item.code)) {
+				if (!segments.has(name) && !manifest.mapping[name]) {
+					manifest.mapping[name] = bundleFileName;
+				}
 			}
 		}
 
@@ -112,7 +122,6 @@ export function createManifest(
 			qwikBundle.dynamicImports = dynamicImports;
 		}
 
-		const origins = getOrigins(item, root);
 		if (origins.length > 0) {
 			qwikBundle.origins = origins;
 		}
@@ -161,6 +170,21 @@ export function createManifest(
 	manifest.manifestHash = '';
 	manifest.manifestHash = hash(JSON.stringify(manifest));
 	return manifest;
+}
+
+function hasQwikLibraryModule(item: OutputChunk) {
+	return item.moduleIds.some((id) => QWIK_LIBRARY_MODULE_RE.test(id));
+}
+
+function findLibraryQrlSymbols(code: string) {
+	const symbols = new Set<string>();
+	for (const match of code.matchAll(LIBRARY_QRL_SYMBOL_RE)) {
+		const symbol = match[1];
+		if (symbol) {
+			symbols.add(symbol);
+		}
+	}
+	return symbols;
 }
 
 export function injectManifest(code: string, manifest: QwikManifest | ServerQwikManifest | null) {
