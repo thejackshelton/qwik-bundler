@@ -1,4 +1,5 @@
 import { createOptimizer } from '@qwik.dev/optimizer';
+import { resolve } from 'pathe';
 import type { Plugin } from 'rolldown';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { qwik, qwikClient, qwikLib, qwikServer } from './rolldown';
@@ -15,6 +16,7 @@ const optimizerMock = vi.hoisted(() => ({
 	createOptimizer: vi.fn(),
 	transformModules: vi.fn(),
 }));
+const libraryConsumerFixture = resolve('fixtures/rolldown-library-consumer');
 
 vi.mock('@qwik.dev/optimizer', () => ({
 	createOptimizer: optimizerMock.createOptimizer,
@@ -114,6 +116,47 @@ describe('Rolldown plugin', () => {
 
 		expect(serverOptions).not.toHaveProperty('preserveEntrySignatures');
 		expect(libOptions).not.toHaveProperty('preserveEntrySignatures');
+	});
+
+	test('resolves matched server externals before deciding whether to bundle Qwik output', async () => {
+		const options = { external: [/@fixtures\/rolldown-library/g, 'hono'] };
+		const plugin = qwikServer({ rootDir: libraryConsumerFixture });
+		const resolve = vi.fn((id: string) => {
+			if (id === '@fixtures/rolldown-library') {
+				return Promise.resolve({
+					id: '/workspace/node_modules/@fixtures/rolldown-library/lib/index.qwik.mjs',
+				});
+			}
+			return Promise.resolve({ id: `/workspace/node_modules/${id}/index.mjs` });
+		});
+
+		callOptions(plugin, options);
+		const external = options.external as unknown as (
+			id: string,
+			parentId: string | undefined,
+			isResolved: boolean,
+		) => boolean | null | undefined;
+
+		expect(typeof options.external).toBe('function');
+		expect(external('@fixtures/rolldown-library', 'src/server.ts', false)).toBe(false);
+		expect(external('hono', 'src/server.ts', false)).toBe(false);
+		expect(
+			external(
+				'/workspace/node_modules/@fixtures/rolldown-library/lib/index.qwik.mjs',
+				'src/server.ts',
+				true,
+			),
+		).toBe(false);
+		expect(
+			await callResolveId(plugin, '@fixtures/rolldown-library', 'src/server.ts', resolve),
+		).toEqual({
+			external: false,
+			id: '/workspace/node_modules/@fixtures/rolldown-library/lib/index.qwik.mjs',
+		});
+		expect(await callResolveId(plugin, 'hono', 'src/server.ts', resolve)).toEqual({
+			id: 'hono',
+			external: true,
+		});
 	});
 
 	test('emits Qwik runtime entries as resolved client chunks', async () => {

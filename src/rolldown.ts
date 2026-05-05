@@ -14,6 +14,7 @@ import {
 	type QwikManifest,
 	type ServerQwikManifest,
 } from './q-manifest';
+import { qwikExternal } from './qwik-external';
 
 export type QwikEnvironment = 'client' | 'server' | 'lib';
 
@@ -73,6 +74,8 @@ export const qwikLib = (options: QwikRolldownOptions = {}) => plugin('lib', opti
 export function plugin(environment: Environment, options: QwikRolldownOptions = {}): Plugin {
 	const segments = new Map<string, TransformModule>();
 	const symbols = new Map<string, SegmentAnalysis>();
+	// TODO: Remove this Qwik library noExternal workaround after https://github.com/QwikDev/qwik-evolution/discussions/318.
+	const external = qwikExternal();
 	let manifest: QwikManifest | ServerQwikManifest | null = null;
 	let optimizer: ReturnType<typeof createOptimizer> | undefined;
 	let root = options.rootDir;
@@ -107,9 +110,12 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 		name,
 		options(input) {
 			const next = defineQwik(input, options.experimental);
-			if (isClient(getEnvironment(this))) {
+			const currentEnvironment = getEnvironment(this);
+			if (isClient(currentEnvironment)) {
 				next.preserveEntrySignatures ??= 'allow-extension';
 			}
+
+			external.options(this, next, currentEnvironment);
 			return next;
 		},
 		async buildStart(input) {
@@ -141,6 +147,16 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 
 			if (source.startsWith(SEGMENT)) {
 				return source;
+			}
+
+			const externalResolution = await external.resolve(
+				this,
+				currentEnvironment,
+				source,
+				importer,
+			);
+			if (externalResolution) {
+				return externalResolution;
 			}
 
 			if (isClient(currentEnvironment) && source === QWIK_CORE && !handlers) {
