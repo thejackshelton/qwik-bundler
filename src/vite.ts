@@ -8,6 +8,7 @@ import {
 	type QwikRolldownOptions,
 } from './rolldown';
 import type { QwikManifest } from './q-manifest';
+import { qwikViteExternal } from './qwik-external';
 
 const HMR_BRIDGE_ID = '@qwik-hmr-bridge';
 const RESOLVED_HMR_BRIDGE_ID = `\0${HMR_BRIDGE_ID}`;
@@ -18,6 +19,8 @@ type QwikOutputOptions = OutputOptions | OutputOptions[] | undefined;
 
 export function qwik(options: VitePluginOptions = {}): Plugin[] {
 	const rolldownOptions = { ...options };
+	// TODO: Remove this Qwik library noExternal workaround after https://github.com/QwikDev/qwik-evolution/discussions/318.
+	const external = qwikViteExternal(setQwikConfigDefaults);
 	let manifest: QwikManifest | null = null;
 	rolldownOptions.onManifest = (nextManifest) => {
 		manifest = nextManifest;
@@ -32,9 +35,7 @@ export function qwik(options: VitePluginOptions = {}): Plugin[] {
 		api: {
 			getManifest: () => manifest,
 		},
-		config(config, env) {
-			setQwikConfigDefaults(config, env);
-		},
+		...external,
 		configResolved(resolvedConfig) {
 			isServe = resolvedConfig.command === 'serve';
 			rolldownOptions.rootDir = resolvedConfig.root;

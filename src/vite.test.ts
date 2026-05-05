@@ -1,5 +1,5 @@
 import { createOptimizer } from '@qwik.dev/optimizer';
-import type { Plugin, ResolvedConfig, UserConfig } from 'vite';
+import type { EnvironmentOptions, Plugin, ResolvedConfig, UserConfig } from 'vite';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import type { QwikManifest } from './q-manifest';
 import { qwik } from './vite';
@@ -8,14 +8,21 @@ const optimizerMock = vi.hoisted(() => ({
 	createOptimizer: vi.fn(),
 	transformModules: vi.fn(),
 }));
+const vitefuMock = vi.hoisted(() => ({
+	crawlFrameworkPkgs: vi.fn(),
+}));
 
 vi.mock('@qwik.dev/optimizer', () => ({
 	createOptimizer: optimizerMock.createOptimizer,
+}));
+vi.mock('vitefu', () => ({
+	crawlFrameworkPkgs: vitefuMock.crawlFrameworkPkgs,
 }));
 
 beforeEach(() => {
 	optimizerMock.createOptimizer.mockReset();
 	optimizerMock.transformModules.mockReset();
+	vitefuMock.crawlFrameworkPkgs.mockReset();
 	optimizerMock.transformModules.mockResolvedValue({
 		modules: [
 			{
@@ -34,6 +41,10 @@ beforeEach(() => {
 	optimizerMock.createOptimizer.mockResolvedValue({
 		transformModules: optimizerMock.transformModules,
 		sys: {} as never,
+	});
+	vitefuMock.crawlFrameworkPkgs.mockResolvedValue({
+		optimizeDeps: { include: [], exclude: [] },
+		ssr: { noExternal: [], external: [] },
 	});
 });
 
@@ -76,7 +87,7 @@ describe('Vite plugin', () => {
 		expect(result).toEqual({ code: 'optimized', map: null });
 	});
 
-	test('sets Vite config defaults for app builds', () => {
+	test('sets Vite config defaults for app builds', async () => {
 		const plugin = getQwikPlugin();
 		const config: UserConfig = {
 			build: {
@@ -86,7 +97,7 @@ describe('Vite plugin', () => {
 			},
 		};
 
-		callConfig(plugin, config, { command: 'build', mode: 'production' });
+		await callConfig(plugin, config, { command: 'build', mode: 'production' });
 
 		expect(config.build!.rolldownOptions).toMatchObject({
 			external: ['external-dependency'],
@@ -97,6 +108,59 @@ describe('Vite plugin', () => {
 			},
 		});
 		expect(config.build!.modulePreload).toBe(false);
+	});
+
+	test('uses vitefu to exclude Qwik deps from optimization and SSR externalization', async () => {
+		vitefuMock.crawlFrameworkPkgs.mockResolvedValueOnce({
+			optimizeDeps: { include: [], exclude: ['@fixtures/qwik-lib'] },
+			ssr: { noExternal: ['@fixtures/qwik-lib'], external: [] },
+		});
+		const plugin = getQwikPlugin();
+		const config: UserConfig = { root: '/workspace/app' };
+
+		const result = await callConfig(plugin, config, {
+			command: 'serve',
+			mode: 'development',
+		});
+
+		expect(result).toEqual({
+			optimizeDeps: { include: [], exclude: ['@fixtures/qwik-lib'] },
+			ssr: { noExternal: ['@fixtures/qwik-lib'], external: [] },
+		});
+		expect(vitefuMock.crawlFrameworkPkgs).toHaveBeenCalledWith(
+			expect.objectContaining({
+				root: '/workspace/app',
+				isBuild: false,
+				viteUserConfig: config,
+			}),
+		);
+
+		const [crawlOptions] = vitefuMock.crawlFrameworkPkgs.mock.calls[0] ?? [];
+		if (!crawlOptions) {
+			throw new Error('Expected crawlFrameworkPkgs options');
+		}
+		expect(crawlOptions.isFrameworkPkgByJson({ qwik: './lib/index.qwik.mjs' })).toBe(true);
+		expect(
+			crawlOptions.isFrameworkPkgByJson({ peerDependencies: { '@qwik.dev/core': '^2.0.0' } }),
+		).toBe(true);
+		expect(crawlOptions.isFrameworkPkgByJson({ dependencies: { plain: '1.0.0' } })).toBe(false);
+
+		const environmentConfig: EnvironmentOptions = {
+			resolve: { noExternal: ['existing'] },
+		};
+		const environmentResult = callConfigEnvironment(plugin, 'ssr', environmentConfig);
+
+		expect(environmentResult).toEqual({
+			resolve: { noExternal: ['existing', '@fixtures/qwik-lib'] },
+		});
+		expect(
+			callConfigEnvironment(plugin, 'ssr', {
+				resolve: { noExternal: ['existing', '@fixtures/qwik-lib'] },
+			}),
+		).toBeUndefined();
+		expect(
+			callConfigEnvironment(plugin, 'ssr', { resolve: { noExternal: true } }),
+		).toBeUndefined();
 	});
 
 	test('dispatches output defaults by Vite environment context', () => {
@@ -128,7 +192,7 @@ describe('Vite plugin', () => {
 		});
 	});
 
-	test('keeps Vite library config output under host control', () => {
+	test('keeps Vite library config output under host control', async () => {
 		const plugin = getQwikPlugin();
 		const config: UserConfig = {
 			build: {
@@ -137,7 +201,7 @@ describe('Vite plugin', () => {
 			},
 		};
 
-		callConfig(plugin, config, { command: 'build', mode: 'production' });
+		await callConfig(plugin, config, { command: 'build', mode: 'production' });
 
 		expect(config.build!.rolldownOptions!.output).toBeUndefined();
 	});
@@ -327,14 +391,28 @@ function getPlugin(plugins: Plugin[], name: string) {
 
 function callConfig(
 	plugin: Plugin,
-	config: unknown,
+	config: UserConfig,
 	env: { command: 'build' | 'serve'; mode: string },
 ) {
 	const configHook = plugin.config;
 	if (typeof configHook === 'function') {
 		return configHook.call({} as never, config as never, env as never);
 	}
+	if (configHook && 'handler' in configHook) {
+		return configHook.handler.call({} as never, config as never, env as never);
+	}
 	throw new Error('Expected function config hook');
+}
+
+function callConfigEnvironment(plugin: Plugin, name: string, config: EnvironmentOptions) {
+	const configEnvironment = plugin.configEnvironment;
+	if (typeof configEnvironment === 'function') {
+		return configEnvironment.call({} as never, name, config, {} as never);
+	}
+	if (configEnvironment && 'handler' in configEnvironment) {
+		return configEnvironment.handler.call({} as never, name, config, {} as never);
+	}
+	throw new Error('Expected function configEnvironment hook');
 }
 
 function callConfigResolved(plugin: Plugin, config: unknown) {
