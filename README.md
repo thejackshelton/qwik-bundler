@@ -1,45 +1,58 @@
 # Qwik Bundler
 
-This package hosts the Qwik plugins for Rolldown-powered builds. It exposes the Rolldown plugin at `qwik-bundler/rolldown` and the Vite wrapper at `qwik-bundler/vite`.
+Small Rolldown/Vite harness for trying the TypeScript Qwik optimizer rewrite in real apps.
 
-## Optimizer Rewrite Integration
+## Where to Integrate
 
-The current optimizer boundary is intentionally small. `src/rolldown.ts` imports `createOptimizer` and the optimizer types from `@qwik.dev/optimizer`, forwards `QwikRolldownOptions.optimizerOptions`, and calls `transformModules` from the Rolldown `transform` hook.
+Start in `src/rolldown.ts`. The current plugin lazily creates the optimizer, then calls `transformModules` from the Rolldown `transform` hook.
 
-The TypeScript optimizer rewrite should keep that adapter boundary stable unless there is a concrete reason to change the plugin API.
+Replace that optimizer boundary with the TypeScript optimizer, but keep the adapter contract simple:
 
-### Contract to Preserve
+- accept TS/JSX input directly because Rolldown lowers TS/JSX after plugin transforms
+- keep the existing client/server/lib entry strategies
+- return the same segment data used by `src/q-manifest.ts`
+- keep Qwik segment virtual module ids as `\0qwik:segment:<environment>:<path>`
+- keep manifest creation/injection in this repo unless the manifest schema changes
 
-- `createOptimizer(options.optimizerOptions)` is initialized lazily and may be async.
-- `transformModules` must accept TypeScript and JSX input because Rolldown runs its internal TS/JSX lowering after plugin `transform` hooks.
-- Source modules passed to the optimizer use `stripQuery(id)` as the optimizer path.
-- Client builds default to `entryStrategy: { type: 'smart' }`, server builds use `{ type: 'hoist' }`, and library builds use `{ type: 'inline' }`.
-- Client and server builds use optimizer mode `prod`; library builds use mode `lib`.
-- The adapter currently passes `minify: 'simplify'`, `transpileTs: true`, `transpileJsx: true`, `explicitExtensions: true`, and `preserveFilenames: true`.
-- Optimizer result modules with a `segment` become virtual Rolldown chunks using the `\0qwik:segment:<environment>:<path>` id prefix.
-- Client segment analysis is collected into the Qwik manifest in `generateBundle`.
-- Server output replaces `globalThis.__QWIK_MANIFEST__` with either `manifestInput` or the client manifest cached for the same root.
+## Rolldown AST Access
 
-### Integration Steps
+Rolldown already exposes an OXC parser AST inside `transform`:
 
-1. Replace the optimizer import boundary in `src/rolldown.ts` only after the TypeScript rewrite exposes equivalent `createOptimizer`, `OptimizerOptions`, `TransformModule`, `SegmentAnalysis`, and `EntryStrategy` types.
-2. Keep the optimizer result shape compatible with the existing manifest code in `src/q-manifest.ts`, especially `segment.name`, `segment.origin`, and symbol mapping data.
-3. Preserve virtual module ids and `resolveId` behavior so Rolldown does not hand Qwik segments to normal filesystem or package resolution.
-4. Keep manifest creation and injection outside the optimizer rewrite unless the manifest schema itself changes.
-5. Update `src/rolldown.test.ts` mocks before changing production code so the adapter contract stays explicit.
-6. Run `pnpm test` and `pnpm build`, then run fixture builds after changing optimizer output behavior.
+```ts
+transform(code, id, meta) {
+	const ast = meta.ast;
+}
+```
 
-### Rolldown and Vite Notes
+`meta.ast` is a lazy `@oxc-project/types` `Program` for the current module. Rolldown creates it with the module type, so TS/TSX files get a TS-capable AST. This is the right place to try reusing Rolldown's parser once the optimizer works with its own parser path.
 
-- Prefer Rolldown hook filters only when the filter and the existing in-hook guard can stay in sync. The current `SOURCE_RE` guard is still the source of truth for optimizer input.
-- Rolldown output generation can run per output configuration, so plugin state should stay scoped by root and environment rather than assuming one Rollup-style build pass.
-- The Vite plugin in `src/vite.ts` delegates to the Rolldown plugin. Optimizer rewrite work should start in the Rolldown adapter and only add Vite-specific handling when dev-server behavior requires it.
-- Vite custom HMR currently lives in the small bridge plugin returned by `qwik-bundler/vite`; avoid coupling optimizer initialization to that bridge.
+Other options exist, but use them later:
 
-### Useful Files
+- `this.parse(code, options)` parses through Rolldown's internal parser from a plugin context.
+- `parseAst` from `rolldown/parseAst` parses code outside a plugin hook.
+- `moduleParsed` gives `ModuleInfo`, not the AST, so it is not the first place to wire optimizer transforms.
 
-- `src/rolldown.ts`: optimizer calls, Qwik segment virtual modules, output defaults, and manifest emission.
-- `src/vite.ts`: Vite wrapper around the Rolldown plugin and Qwik HMR bridge.
-- `src/q-manifest.ts`: manifest shape, symbol mapping, bundle graph, and server manifest injection.
-- `src/rolldown.test.ts`: optimizer contract tests and mocks.
-- `fixtures/README.md`: fixture build workflow for manual QA.
+## Running A Fixture
+
+Build the package first so fixtures resolve the local plugin output:
+
+```sh
+pnpm build
+```
+
+Then run a fixture, for example `rolldown-h3`:
+
+```sh
+pnpm --dir fixtures/rolldown-h3 build
+pnpm --dir fixtures/rolldown-h3 start
+```
+
+Open the printed local URL and check that Qwik interactivity still works.
+
+## Useful Files
+
+- `src/rolldown.ts`: optimizer adapter, segment modules, output defaults, manifest emission
+- `src/q-manifest.ts`: manifest shape and symbol mapping
+- `src/vite.ts`: Vite wrapper around the Rolldown plugin
+- `src/rolldown.test.ts`: optimizer contract tests/mocks
+- `fixtures/`: real app smoke tests
