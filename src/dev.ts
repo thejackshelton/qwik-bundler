@@ -1,5 +1,6 @@
 import type { TransformModule } from '@qwik.dev/optimizer';
 import { relative } from 'pathe';
+import { isEqual, isRelative, parsePath, withLeadingSlash } from 'ufo';
 import type { QwikEnvironment } from './rolldown';
 
 export interface QwikDevServer {
@@ -31,7 +32,7 @@ export function createQwikDev(
 	return {
 		isEnabled: enabled,
 		optimizerInput(code: string, id: string) {
-			const path = stripQuery(id);
+			const path = pathname(id);
 			return { code, path, devPath: enabled() ? getDevPath(path, root()) : undefined };
 		},
 		resolveId(source: string, environment: QwikEnvironment) {
@@ -59,7 +60,7 @@ export function createQwikDev(
 				return undefined;
 			}
 
-			const key = stripQuery(id);
+			const key = pathname(id);
 			const parent = parents.get(key);
 			if (!parent) {
 				return undefined;
@@ -87,21 +88,17 @@ export function createQwikDev(
 }
 
 function isDevHandlers(id: string) {
-	const path = stripQuery(id);
-	return path === QWIK_DEV_HANDLERS || path.endsWith(`/${QWIK_DEV_HANDLERS}`);
+	return isEqual(pathname(id), QWIK_DEV_HANDLERS);
 }
 
 function parseDevQrl(id: string) {
-	const path = stripQuery(id);
+	const path = pathname(id);
 	const match = /^(?<parent>.*\.[cm]?[jt]sx?)_(?<name>[^/]+)\.js$/.exec(path);
 	return match?.groups ? { parent: match.groups.parent, path } : null;
 }
 
 function devSegmentPaths(path: string, root: string | undefined) {
-	const paths = new Set([path]);
-	if (!path.startsWith('/')) {
-		paths.add(`/${path}`);
-	}
+	const paths = new Set([path, withLeadingSlash(path)]);
 	const devPath = getDevPath(path, root);
 	if (devPath) {
 		paths.add(devPath);
@@ -115,7 +112,7 @@ function getDevPath(id: string, root: string | undefined) {
 	}
 
 	const path = relative(root, id);
-	return path && !path.startsWith('..') ? `/${path}` : undefined;
+	return path && path !== '..' && !isRelative(path) ? withLeadingSlash(path) : undefined;
 }
 
 function transformDevParent(server: QwikDevServer, environment: QwikEnvironment, parent: string) {
@@ -123,7 +120,6 @@ function transformDevParent(server: QwikDevServer, environment: QwikEnvironment,
 	return devEnvironment?.transformRequest(parent) ?? server.transformRequest(parent);
 }
 
-function stripQuery(id: string) {
-	const index = id.search(/[?#]/);
-	return index < 0 ? id : id.slice(0, index);
+function pathname(id: string) {
+	return parsePath(id).pathname;
 }
