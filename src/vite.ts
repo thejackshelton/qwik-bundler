@@ -1,5 +1,5 @@
 import type { OutputOptions } from 'rolldown';
-import type { ConfigEnv, HotUpdateOptions, Plugin, UserConfig } from 'vite';
+import type { ConfigEnv, HotUpdateOptions, Plugin, UserConfig, ViteDevServer } from 'vite';
 import { hmrBridgeCode } from './client/hmr-bridge';
 import {
 	outputDefaults,
@@ -32,13 +32,18 @@ export function qwik(options: VitePluginOptions = {}): Plugin[] {
 	const qwikPlugin = {
 		...basePlugin,
 		name: 'vite-plugin-qwik',
+		enforce: 'pre',
 		api: {
 			getManifest: () => manifest,
 		},
 		...external,
 		configResolved(resolvedConfig) {
 			isServe = resolvedConfig.command === 'serve';
+			rolldownOptions.dev = isServe;
 			rolldownOptions.rootDir = resolvedConfig.root;
+		},
+		configureServer(server: ViteDevServer) {
+			rolldownOptions.devServer = server;
 		},
 	} satisfies Plugin & { api: { getManifest: () => QwikManifest | null } };
 

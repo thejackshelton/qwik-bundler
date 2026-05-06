@@ -6,7 +6,9 @@ import {
 	type TransformModule,
 } from '@qwik.dev/optimizer';
 import { dirname, join, relative, resolve } from 'pathe';
-import type { CodeSplittingOptions, InputOptions, OutputOptions, Plugin } from 'rolldown';
+import type { CodeSplittingOptions, OutputOptions, Plugin } from 'rolldown';
+import { createQwikDev, type QwikDevServer } from './dev';
+import * as q from './features';
 import {
 	createManifest,
 	injectManifest,
@@ -19,6 +21,8 @@ import { qwikExternal } from './qwik-external';
 export type QwikEnvironment = 'client' | 'server' | 'lib';
 
 export interface QwikRolldownOptions {
+	dev?: boolean;
+	devServer?: QwikDevServer;
 	entryStrategy?: EntryStrategy;
 	experimental?: string[];
 	manifestInput?: QwikManifest | ServerQwikManifest;
@@ -30,7 +34,6 @@ export interface QwikRolldownOptions {
 type EmitFile = (file: { type: 'chunk'; id: string }) => string;
 type Environment = QwikEnvironment | ((context: unknown) => QwikEnvironment);
 
-const QWIK_BUILD = '@qwik.dev/core/build';
 const QWIK_CORE = '@qwik.dev/core';
 const QWIK_HANDLERS = '@qwik.dev/core/handlers.mjs';
 const QWIK_PRELOADER = '@qwik.dev/core/preloader';
@@ -39,7 +42,6 @@ const Q_BUILD_DIR = 'build';
 const Q_BUNDLE_GRAPH = join(Q_BUILD_DIR, 'bundle-graph.json');
 const Q_MANIFEST = 'q-manifest.json';
 const SEGMENT = '\0qwik:segment:';
-const SOURCE_RE = /(?:\.[jt]sx?|\.qwik\.[mj]s)$/;
 const QWIK_CORE_GROUP_RE = /[/\\](core|qwik)[/\\](handlers|dist[/\\]core(\.prod|\.min)?)\.mjs$/;
 const QWIK_PRELOADER_GROUP_RE = /[/\\](core|qwik)[/\\]dist[/\\]preloader\.mjs$/;
 const QWIK_LOADER_GROUP_RE = /[/\\](core|qwik)[/\\]dist[/\\]qwikloader\.js$/;
@@ -55,15 +57,11 @@ const QWIK_CODE_SPLITTING_GROUPS = [
 	{
 		name: 'qwik-preloader',
 		test: (id: string) =>
-			id.endsWith(QWIK_BUILD) ||
+			id.endsWith(q.QWIK_BUILD) ||
 			id === VITE_PRELOAD_HELPER ||
 			QWIK_PRELOADER_GROUP_RE.test(id),
 	},
 ] satisfies NonNullable<CodeSplittingOptions['groups']>;
-const EXPERIMENTAL_FEATURES =
-	'each suspense preventNavigate valibot noSPA enableRequestRewrite webWorker insights'.split(
-		' ',
-	);
 const manifests = new Map<string, QwikManifest>();
 
 export const qwik = (options?: QwikRolldownOptions) => qwikClient(options);
@@ -105,11 +103,12 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 	function getRoot() {
 		return root ?? options.rootDir;
 	}
+	const dev = createQwikDev(options, segments, getRoot, encode, decode);
 
 	return {
 		name,
 		options(input) {
-			const next = defineQwik(input, options.experimental);
+			const next = q.defineQwik(input, options.experimental, options.dev);
 			const currentEnvironment = getEnvironment(this);
 			if (isClient(currentEnvironment)) {
 				next.preserveEntrySignatures ??= 'allow-extension';
@@ -141,8 +140,11 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 		},
 		async resolveId(source, importer) {
 			const currentEnvironment = getEnvironment(this);
-			if (source === QWIK_BUILD) {
-				return QWIK_BUILD;
+			const devResolution = dev.resolveId(source, currentEnvironment);
+			if (devResolution) return devResolution;
+
+			if (q.isQwikBuild(source)) {
+				return q.QWIK_BUILD;
 			}
 
 			if (source.startsWith(SEGMENT)) {
@@ -159,7 +161,12 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 				return externalResolution;
 			}
 
-			if (isClient(currentEnvironment) && source === QWIK_CORE && !handlers) {
+			if (
+				!dev.isEnabled() &&
+				isClient(currentEnvironment) &&
+				source === QWIK_CORE &&
+				!handlers
+			) {
 				handlers = true;
 				const entries = [
 					[QWIK_HANDLERS, 'handlers'],
@@ -168,7 +175,12 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 				for (const [id, name] of entries) {
 					const resolved = await this.resolve(id, importer, { skipSelf: true });
 					if (resolved) {
-						this.emitFile({ type: 'chunk', id: resolved.id, name });
+						this.emitFile({
+							type: 'chunk',
+							id: resolved.id,
+							name,
+							preserveSignature: 'allow-extension',
+						});
 					}
 				}
 			}
@@ -200,11 +212,13 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 
 			return this.resolve(source, parent, { skipSelf: true });
 		},
-		load(id) {
-			if (id === QWIK_BUILD) {
-				const server = isServer(getEnvironment(this));
-				return `export const isServer=${server};export const isBrowser=${!server};export const isDev=false;`;
+		async load(id) {
+			if (id === q.QWIK_BUILD) {
+				return q.qwikBuildCode(getEnvironment(this), dev.isEnabled());
 			}
+
+			const devCode = await dev.load(id);
+			if (devCode !== undefined) return devCode;
 
 			const segment = segments.get(stripQuery(id));
 			if (!segment) {
@@ -215,21 +229,27 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 		},
 		async transform(code, id) {
 			const currentEnvironment = getEnvironment(this);
-			let transformed = null;
-			if (SOURCE_RE.test(stripQuery(id))) {
-				transformed = await transform(
-					code,
-					id,
-					this.emitFile.bind(this),
-					currentEnvironment,
-				);
-			}
+			const prepared = q.prepareQwikTransform(
+				code,
+				id,
+				currentEnvironment,
+				options.experimental,
+			);
+			const transformed = prepared.transform
+				? await transform(
+						prepared.code,
+						prepared.path,
+						this.emitFile.bind(this),
+						currentEnvironment,
+					)
+				: null;
+			const fallback = transformed ?? prepared.replacement;
 
 			if (!isServer(currentEnvironment)) {
-				return transformed;
+				return fallback;
 			}
 
-			let next = code;
+			let next = prepared.code;
 			let map = null;
 			if (transformed) {
 				next = transformed.code;
@@ -237,7 +257,7 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 			}
 
 			if (!next.includes(QWIK_MANIFEST)) {
-				return transformed;
+				return fallback;
 			}
 
 			return { code: injectManifest(next, manifest), map };
@@ -281,16 +301,17 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 		const result = await (
 			await getOptimizer()
 		).transformModules({
-			input: [{ code, path: stripQuery(id) }],
+			input: [dev.optimizerInput(code, id)],
 			entryStrategy: entryStrategy(currentEnvironment, options.entryStrategy),
 			minify: 'simplify',
+			sourceMaps: dev.isEnabled(),
 			transpileTs: true,
 			transpileJsx: true,
 			explicitExtensions: true,
 			preserveFilenames: true,
 			srcDir: getRoot() ?? '',
 			rootDir: getRoot(),
-			mode: optimizerMode(currentEnvironment),
+			mode: q.qwikOptimizerMode(currentEnvironment, dev.isEnabled()),
 			isServer: isServer(currentEnvironment),
 		});
 
@@ -301,9 +322,12 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 
 			const id = encode(currentEnvironment, module.path);
 			segments.set(id, module);
+			dev.recordSegment(module, currentEnvironment);
 			if (isClient(currentEnvironment)) {
 				symbols.set(module.segment.name, module.segment);
-				emitFile({ type: 'chunk', id });
+				if (!dev.isEnabled()) {
+					emitFile({ type: 'chunk', id });
+				}
 			}
 		}
 
@@ -337,6 +361,7 @@ export function outputDefaults(output: OutputOptions, environment: QwikEnvironme
 	const next: OutputOptions = { ...output, hoistTransitiveImports: false };
 	if (environment === 'server') {
 		next.chunkFileNames ??= 'q-[hash].js';
+		next.codeSplitting = qwikCodeSplitting(next.codeSplitting);
 		return next;
 	}
 
@@ -369,19 +394,6 @@ function canonicalBundlePath(fileName: string, buildDir: string) {
 	return path;
 }
 
-function defineQwik(input: InputOptions, experimental: string[] = []) {
-	const define = ((input.transform ??= {}).define ??= {});
-	define['globalThis.qDev'] ??= 'false';
-	define['import.meta.env.BASE_URL'] ??= '"/"';
-	define['import.meta.env.DEV'] ??= 'false';
-	define['import.meta.env.MODE'] ??= '"production"';
-	define['import.meta.env.TEST'] ??= 'false';
-	for (const feature of EXPERIMENTAL_FEATURES) {
-		define[`__EXPERIMENTAL__.${feature}`] ??= String(experimental.includes(feature));
-	}
-	return input;
-}
-
 function entryStrategy(environment: QwikEnvironment, value: EntryStrategy | undefined) {
 	if (environment === 'server') {
 		return { type: 'hoist' } satisfies EntryStrategy;
@@ -396,14 +408,6 @@ function entryStrategy(environment: QwikEnvironment, value: EntryStrategy | unde
 	}
 
 	return { type: 'smart' } satisfies EntryStrategy;
-}
-
-function optimizerMode(environment: QwikEnvironment) {
-	if (environment === 'lib') {
-		return 'lib';
-	}
-
-	return 'prod';
 }
 
 function encode(environment: QwikEnvironment, path: string) {

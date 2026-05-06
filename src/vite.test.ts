@@ -180,10 +180,13 @@ describe('Vite plugin', () => {
 			'qwik-loader',
 			'qwik-preloader',
 		]);
-		expect(callOutputOptions(plugin, { dir: 'server' }, { consumer: 'server' })).toEqual({
+		expect(callOutputOptions(plugin, { dir: 'server' }, { consumer: 'server' })).toMatchObject({
 			dir: 'server',
 			chunkFileNames: 'q-[hash].js',
 			hoistTransitiveImports: false,
+			codeSplitting: {
+				includeDependenciesRecursively: false,
+			},
 		});
 		expect(
 			callOutputOptions(plugin, { entryFileNames: '[name].js' }, { build: { lib: true } }),
