@@ -91,10 +91,11 @@ function isDevHandlers(id: string) {
 	return isEqual(pathname(id), QWIK_DEV_HANDLERS);
 }
 
-function parseDevQrl(id: string) {
+function parseDevQrl(id: string): { parent: string; path: string } | null {
 	const path = pathname(id);
 	const match = /^(?<parent>.*\.[cm]?[jt]sx?)_(?<name>[^/]+)\.js$/.exec(path);
-	return match?.groups ? { parent: match.groups.parent, path } : null;
+	const parent = match?.groups?.parent;
+	return parent ? { parent, path } : null;
 }
 
 function devSegmentPaths(path: string, root: string | undefined) {
