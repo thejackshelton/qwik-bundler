@@ -1,5 +1,4 @@
 import { renderToString } from '@qwik.dev/core/server';
-import type { SymbolMapperFn } from '@qwik.dev/core/optimizer';
 import serverAssets from './entry-server?assets=ssr';
 import clientAssets from './root?assets=client';
 import Root from './root';
@@ -11,7 +10,6 @@ export default {
 		const result = await renderToString(<Root url={pathname} />, {
 			base: import.meta.env.DEV ? '/' : undefined,
 			containerAttributes: { lang: 'en-us' },
-			symbolMapper: import.meta.env.DEV ? devSymbolMapper : undefined,
 		});
 
 		return new Response(injectAssets(result.html, assets), {
@@ -30,18 +28,6 @@ function injectAssets(html: string, assets: NitroAssets) {
 
 	return html.replace('</head>', `${tags}</head>`);
 }
-
-const devSymbolMapper: SymbolMapperFn = (symbolName, _mapper, parent) => {
-	if (symbolName.startsWith('_') && symbolName.length < 6) {
-		return [symbolName, '@qwik-handlers'];
-	}
-
-	if (!parent) {
-		return;
-	}
-
-	return [symbolName, `${parent.startsWith('/') ? parent.slice(1) : parent}_${symbolName}.js`];
-};
 
 function renderAttributes(attributes: NitroAssetAttributes) {
 	return Object.entries(attributes)
