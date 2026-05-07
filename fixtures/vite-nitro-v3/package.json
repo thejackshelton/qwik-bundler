@@ -1,0 +1,21 @@
+{
+	"name": "@fixtures/vite-nitro-v3",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "vite",
+		"build": "vite build",
+		"preview": "vite preview",
+		"start": "node .output/server/index.mjs"
+	},
+	"dependencies": {
+		"@qwik.dev/core": "https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@dc9a8e8"
+	},
+	"devDependencies": {
+		"@types/node": "^24.10.1",
+		"nitro": "3.0.260429-beta",
+		"qwik-bundler": "workspace:*",
+		"typescript": "^5.9.3",
+		"vite": "^8.0.10"
+	}
+}

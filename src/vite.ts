@@ -1,6 +1,5 @@
 import type { OutputOptions } from 'rolldown';
-import type { ConfigEnv, HotUpdateOptions, Plugin, UserConfig } from 'vite';
-import { hmrBridgeCode } from './client/hmr-bridge';
+import type { ConfigEnv, Plugin, UserConfig, ViteDevServer } from 'vite';
 import {
 	outputDefaults,
 	plugin as qwikRolldown,
@@ -9,9 +8,6 @@ import {
 } from './rolldown';
 import type { QwikManifest } from './q-manifest';
 import { qwikViteExternal } from './qwik-external';
-
-const HMR_BRIDGE_ID = '@qwik-hmr-bridge';
-const RESOLVED_HMR_BRIDGE_ID = `\0${HMR_BRIDGE_ID}`;
 
 export interface VitePluginOptions extends QwikRolldownOptions {}
 
@@ -32,50 +28,22 @@ export function qwik(options: VitePluginOptions = {}): Plugin[] {
 	const qwikPlugin = {
 		...basePlugin,
 		name: 'vite-plugin-qwik',
+		enforce: 'pre',
 		api: {
 			getManifest: () => manifest,
 		},
 		...external,
 		configResolved(resolvedConfig) {
 			isServe = resolvedConfig.command === 'serve';
+			rolldownOptions.dev = isServe;
 			rolldownOptions.rootDir = resolvedConfig.root;
+		},
+		configureServer(server: ViteDevServer) {
+			rolldownOptions.devServer = server;
 		},
 	} satisfies Plugin & { api: { getManifest: () => QwikManifest | null } };
 
-	const hmrPlugin = {
-		name: 'vite-plugin-qwik-hmr',
-		transformIndexHtml() {
-			if (!isServe) {
-				return;
-			}
-
-			return [
-				{
-					tag: 'script',
-					attrs: { type: 'module' },
-					children: `import ${JSON.stringify(HMR_BRIDGE_ID)};`,
-					injectTo: 'head',
-				},
-			];
-		},
-		resolveId(id) {
-			if (id === HMR_BRIDGE_ID) {
-				return RESOLVED_HMR_BRIDGE_ID;
-			}
-			return null;
-		},
-		load(id) {
-			if (id === RESOLVED_HMR_BRIDGE_ID) {
-				return hmrBridgeCode;
-			}
-			return null;
-		},
-		hotUpdate(ctx) {
-			return hotUpdate(this, ctx);
-		},
-	} satisfies Plugin;
-
-	return [qwikPlugin, hmrPlugin];
+	return [qwikPlugin];
 }
 
 function setQwikConfigDefaults(config: UserConfig, env: ConfigEnv) {
@@ -130,28 +98,4 @@ function getBuildEnvironment(context: unknown): QwikEnvironment {
 	}
 
 	return 'client';
-}
-
-function hotUpdate(pluginContext: ViteHookContext, ctx: HotUpdateOptions) {
-	if (pluginContext.environment?.config?.consumer !== 'server' || ctx.modules.length === 0) {
-		return;
-	}
-
-	const files = new Set<string>();
-	for (const module of ctx.modules) {
-		const url = module.url?.split('?')[0];
-		if (url) {
-			files.add(url);
-		}
-	}
-
-	if (files.size === 0) {
-		return;
-	}
-
-	ctx.server.environments.client.hot.send({
-		type: 'custom',
-		event: 'qwik:hmr',
-		data: { files: [...files], t: ctx.timestamp },
-	});
 }

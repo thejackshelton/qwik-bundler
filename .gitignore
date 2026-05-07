@@ -6,4 +6,5 @@ dist/
 coverage/
 fixtures/*/lib/
 fixtures/*/server/
+fixtures/*/.output/
 .opencode

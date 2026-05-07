@@ -107,6 +107,10 @@ export function createManifest(
 				}
 			}
 		}
+		for (const name of getHandlerExports(item)) {
+			manifest.mapping[name] = bundleFileName;
+			manifest.symbols[name] = handlerSymbol(name);
+		}
 
 		const qwikBundle: QwikBundle = {
 			size: item.code.length,
@@ -147,8 +151,8 @@ export function createManifest(
 
 	if (manifest.core) {
 		for (const symbol of HANDLERS) {
-			manifest.mapping[symbol] = manifest.core;
-			manifest.symbols[symbol] = { origin: 'Qwik core', displayName: symbol, hash: symbol };
+			manifest.mapping[symbol] ??= manifest.core;
+			manifest.symbols[symbol] ??= handlerSymbol(symbol);
 		}
 	}
 	filterRuntimeImports(manifest);
@@ -181,6 +185,14 @@ function findLibraryQrlSymbols(code: string) {
 		}
 	}
 	return symbols;
+}
+
+function getHandlerExports(item: OutputChunk) {
+	return item.exports.filter((name) => HANDLERS.includes(name));
+}
+
+function handlerSymbol(symbol: string): QwikSymbol {
+	return { origin: 'Qwik core', displayName: symbol, hash: symbol };
 }
 
 export function injectManifest(code: string, manifest: QwikManifest | ServerQwikManifest | null) {

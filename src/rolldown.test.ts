@@ -92,11 +92,15 @@ describe('Rolldown plugin', () => {
 			'__EXPERIMENTAL__.valibot': 'false',
 			'__EXPERIMENTAL__.webWorker': 'false',
 			'globalThis.qDev': 'true',
-			'import.meta.env.BASE_URL': '"/"',
-			'import.meta.env.DEV': 'false',
-			'import.meta.env.MODE': '"production"',
-			'import.meta.env.TEST': 'false',
 		});
+	});
+
+	test('sets development runtime defines in dev mode', () => {
+		const options = {};
+
+		callOptions(qwikClient({ dev: true }), options);
+
+		expect(options).toHaveProperty(['transform', 'define', 'globalThis.qDev'], 'true');
 	});
 
 	test('sets client input defaults for Qwik runtime chunk groups', () => {
@@ -192,12 +196,104 @@ describe('Rolldown plugin', () => {
 			type: 'chunk',
 			id: '@qwik.dev/core/handlers.mjs',
 			name: 'handlers',
+			preserveSignature: 'allow-extension',
 		});
 		expect(emitFile).toHaveBeenNthCalledWith(2, {
 			type: 'chunk',
 			id: '@qwik.dev/core/preloader',
 			name: 'preloader',
+			preserveSignature: 'allow-extension',
 		});
+	});
+
+	test('serves dev Qwik handlers without emitting build chunks', async () => {
+		const plugin = qwikClient({ dev: true });
+		const emitFile = vi.fn();
+		const resolve = vi.fn();
+
+		expect(
+			await callResolveId(plugin, '/@qwik-handlers', undefined, resolve, emitFile),
+		).toEqual({
+			id: '@qwik-handlers',
+			moduleSideEffects: false,
+		});
+		expect(await callLoad(plugin, '@qwik-handlers')).toEqual("export * from '@qwik.dev/core';");
+
+		await callResolveId(
+			plugin,
+			'@qwik.dev/core',
+			'/workspace/app/src/root.tsx',
+			resolve,
+			emitFile,
+		);
+
+		expect(emitFile).not.toHaveBeenCalled();
+	});
+
+	test('uses dev optimizer mode and root-relative dev paths in dev mode', async () => {
+		const plugin = qwikClient({ dev: true });
+
+		callBuildStart(plugin, { cwd: '/workspace/app' });
+		await callTransform(plugin, 'export const answer = 42;', '/workspace/app/src/root.tsx');
+
+		expect(optimizerMock.transformModules).toHaveBeenCalledWith(
+			expect.objectContaining({
+				input: [
+					expect.objectContaining({
+						devPath: '/src/root.tsx',
+						path: '/workspace/app/src/root.tsx',
+					}),
+				],
+				mode: 'dev',
+				sourceMaps: true,
+			}),
+		);
+	});
+
+	test('serves dev QRL segment URLs from transformed output', async () => {
+		optimizerMock.transformModules.mockResolvedValueOnce({
+			modules: [
+				{
+					path: '/workspace/app/src/home.tsx',
+					isEntry: false,
+					code: 'parent',
+					map: null,
+					segment: null,
+					origPath: null,
+				},
+				{
+					path: '/src/home.tsx_click_abc.js',
+					isEntry: false,
+					code: 'segment',
+					map: null,
+					segment: { name: 's_abc' },
+					origPath: null,
+				},
+			],
+			diagnostics: [],
+			isTypeScript: true,
+			isJsx: true,
+		});
+		const plugin = qwikClient({ dev: true });
+
+		callBuildStart(plugin, { cwd: '/workspace/app' });
+		await callTransform(plugin, 'export default 1;', '/workspace/app/src/home.tsx');
+		const resolved = await callResolveId(plugin, '/src/home.tsx_click_abc.js');
+
+		expect(await callLoad(plugin, (resolved as { id: string }).id)).toBe('segment');
+	});
+
+	test('transforms dev QRL parents on demand', async () => {
+		const transformRequest = vi.fn().mockResolvedValue(null);
+		const plugin = qwikClient({
+			dev: true,
+			devServer: { environments: { client: { transformRequest } }, transformRequest },
+		});
+
+		const resolved = await callResolveId(plugin, '/src/home.tsx_click_abc.js');
+		await callLoad(plugin, (resolved as { id: string }).id);
+
+		expect(transformRequest).toHaveBeenCalledWith('/src/home.tsx');
 	});
 
 	test('uses explicit output defaults for each environment', () => {
@@ -216,10 +312,13 @@ describe('Rolldown plugin', () => {
 			'qwik-loader',
 			'qwik-preloader',
 		]);
-		expect(callOutputOptions(qwikServer(), { dir: 'server' })).toEqual({
+		expect(callOutputOptions(qwikServer(), { dir: 'server' })).toMatchObject({
 			dir: 'server',
 			chunkFileNames: 'q-[hash].js',
 			hoistTransitiveImports: false,
+			codeSplitting: {
+				includeDependenciesRecursively: false,
+			},
 		});
 		expect(callOutputOptions(qwikLib(), { entryFileNames: '[name].js' })).toEqual({
 			entryFileNames: '[name].js',
@@ -258,6 +357,54 @@ describe('Rolldown plugin', () => {
 				isServer: true,
 				mode: 'prod',
 				entryStrategy: { type: 'hoist' },
+			}),
+		);
+	});
+
+	test('replaces experimental globals in non-source Qwik modules', async () => {
+		const plugin = qwikClient({ experimental: ['suspense'] });
+
+		const result = await callTransform(
+			plugin,
+			'export const flags = [__EXPERIMENTAL__.suspense, __EXPERIMENTAL__.insights];',
+			'/workspace/app/node_modules/@qwik.dev/core/dist/core.mjs',
+		);
+
+		expect(result).toEqual({ code: 'export const flags = [true, false];', map: null });
+		expect(optimizerMock.transformModules).not.toHaveBeenCalled();
+	});
+
+	test('skips non-Qwik node_modules source such as Nitro generated service chunks', async () => {
+		const plugin = qwikServer();
+
+		callBuildStart(plugin, { cwd: '/workspace/app' });
+		const result = await callTransform(
+			plugin,
+			'export const alreadyOptimized = true;',
+			'/workspace/app/node_modules/.nitro/vite/services/ssr/build/q-core.js',
+		);
+
+		expect(result).toBeNull();
+		expect(optimizerMock.transformModules).not.toHaveBeenCalled();
+	});
+
+	test('still optimizes Qwik library files in node_modules', async () => {
+		const plugin = qwikClient();
+
+		callBuildStart(plugin, { cwd: '/workspace/app' });
+		await callTransform(
+			plugin,
+			'export const library = true;',
+			'/workspace/app/node_modules/@fixtures/qwik-lib/lib/index.qwik.mjs',
+		);
+
+		expect(optimizerMock.transformModules).toHaveBeenCalledWith(
+			expect.objectContaining({
+				input: [
+					expect.objectContaining({
+						path: '/workspace/app/node_modules/@fixtures/qwik-lib/lib/index.qwik.mjs',
+					}),
+				],
 			}),
 		);
 	});
@@ -421,6 +568,17 @@ describe('Rolldown plugin', () => {
 					],
 					facadeModuleId: '/workspace/app/node_modules/@qwik.dev/core/dist/core.prod.mjs',
 				},
+				'build/q-handlers.js': {
+					type: 'chunk',
+					fileName: 'build/q-handlers.js',
+					name: 'handlers',
+					code: 'export const _run = 1;',
+					exports: ['_run'],
+					imports: ['build/q-core.js'],
+					dynamicImports: [],
+					moduleIds: ['/workspace/app/node_modules/@qwik.dev/core/handlers.mjs'],
+					facadeModuleId: '/workspace/app/node_modules/@qwik.dev/core/handlers.mjs',
+				},
 				'build/style.css': {
 					type: 'asset',
 					fileName: 'build/style.css',
@@ -441,6 +599,7 @@ describe('Rolldown plugin', () => {
 
 		expect(manifest?.mapping.s_abc).toBe('q-symbol.js');
 		expect(manifest?.mapping._chk).toBe('q-core.js');
+		expect(manifest?.mapping._run).toBe('q-handlers.js');
 		expect(manifest?.symbols.s_abc).toMatchObject({ displayName: 'root.tsx_root_component' });
 		expect(manifest?.bundles['q-entry.js']).toMatchObject({
 			imports: ['q-symbol.js'],
@@ -531,7 +690,7 @@ describe('Rolldown plugin', () => {
 		const result = await callTransform(
 			plugin,
 			`export const manifest = ${QWIK_MANIFEST};`,
-			'/workspace/app/src/entry.ssr',
+			'/workspace/app/node_modules/@qwik.dev/core/dist/server.mjs',
 		);
 		if (!result || typeof result === 'string' || !result.code) {
 			throw new Error('Expected transformed code');
@@ -544,6 +703,7 @@ describe('Rolldown plugin', () => {
 		expect(code).not.toContain('"symbols"');
 		expect(code).not.toContain('"bundles"');
 		expect(code).not.toContain('"assets"');
+		expect(optimizerMock.transformModules).not.toHaveBeenCalled();
 	});
 });
 
