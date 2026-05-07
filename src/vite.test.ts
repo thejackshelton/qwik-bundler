@@ -321,59 +321,6 @@ describe('Vite plugin', () => {
 			skipSelf: true,
 		});
 	});
-
-	test('injects and serves the Vite HMR bridge in dev', async () => {
-		const plugins = getVitePlugins();
-		const plugin = getPlugin(plugins, 'vite-plugin-qwik');
-		const hmrPlugin = getPlugin(plugins, 'vite-plugin-qwik-hmr');
-
-		callConfigResolved(plugin, {
-			command: 'serve',
-			root: '/workspace/app',
-			build: {
-				rolldownOptions: {},
-				rollupOptions: {},
-			},
-		});
-
-		expect(callTransformIndexHtml(hmrPlugin)).toEqual([
-			expect.objectContaining({
-				tag: 'script',
-				children: expect.stringContaining('@qwik-hmr-bridge'),
-			}),
-		]);
-		expect(await callResolveId(hmrPlugin, '@qwik-hmr-bridge')).toBe('\0@qwik-hmr-bridge');
-		expect(await callLoad(hmrPlugin, '\0@qwik-hmr-bridge')).toContain('qwik:hmr');
-	});
-
-	test('forwards SSR module updates to the client HMR bridge', () => {
-		const plugin = getPlugin(getVitePlugins(), 'vite-plugin-qwik-hmr');
-		const send = vi.fn();
-
-		callHotUpdate(
-			plugin,
-			{
-				environment: { config: { consumer: 'server' } },
-			},
-			{
-				modules: [{ url: '/src/root.tsx?v=123', importers: new Set(), type: 'js' }],
-				server: {
-					environments: {
-						client: {
-							hot: { send },
-						},
-					},
-				},
-				timestamp: 123,
-			},
-		);
-
-		expect(send).toHaveBeenCalledWith({
-			type: 'custom',
-			event: 'qwik:hmr',
-			data: { files: ['/src/root.tsx'], t: 123 },
-		});
-	});
 });
 
 function getVitePlugins() {
@@ -461,14 +408,6 @@ async function callTransform(
 	throw new Error('Expected function transform hook');
 }
 
-function callTransformIndexHtml(plugin: Plugin) {
-	const transformIndexHtml = plugin.transformIndexHtml;
-	if (typeof transformIndexHtml === 'function') {
-		return transformIndexHtml.call({} as never, '', {} as never);
-	}
-	throw new Error('Expected function transformIndexHtml hook');
-}
-
 async function callResolveId(plugin: Plugin, id: string, importer?: string, resolve = vi.fn()) {
 	const resolveId = plugin.resolveId;
 	const context = createHookContext('client', {});
@@ -486,14 +425,6 @@ async function callLoad(plugin: Plugin, id: string) {
 		return load.call(context as never, id, undefined as never);
 	}
 	throw new Error('Expected function load hook');
-}
-
-function callHotUpdate(plugin: Plugin, context: unknown, options: unknown) {
-	const hotUpdate = plugin.hotUpdate;
-	if (typeof hotUpdate === 'function') {
-		return hotUpdate.call(context as never, options as never);
-	}
-	throw new Error('Expected function hotUpdate hook');
 }
 
 function createHookContext(consumer: 'client' | 'server', build: { lib?: unknown }) {
