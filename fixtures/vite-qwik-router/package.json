@@ -3,7 +3,7 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"dev": "vite",
+		"dev": "vite --mode ssr",
 		"build": "vite build"
 	},
 	"dependencies": {
