@@ -55,8 +55,10 @@ export type GlobalInjections = {
 };
 
 export const QWIK_MANIFEST = 'globalThis.__QWIK_MANIFEST__';
+export const Q_MANIFEST_FILE = 'q-manifest.json';
 
 const HANDLERS = ['_chk', '_rsc', '_res', '_run', '_task', '_val', '_eaC', '_eaT', '_suC', '_suT'];
+const HANDLER_SET = new Set(HANDLERS);
 const PRELOADER_RE = /[/\\](core|qwik)[/\\]dist[/\\]preloader\.(|c|m)js$/;
 const CORE_RE = /[/\\](core|qwik)[/\\]dist[/\\]core(\.min|\.prod)?\.(|c|m)js$/;
 const QWIK_LOADER_RE = /[/\\](core|qwik)[/\\](dist[/\\])?qwikloader(\.debug)?\.[^/\\]*js$/;
@@ -69,6 +71,7 @@ export function createManifest(
 	root: string | undefined,
 	options: { bundleGraphAsset?: string; canonPath?: (fileName: string) => string } = {},
 ) {
+	const canonPath = options.canonPath ?? ((fileName: string) => fileName);
 	const manifest: QwikManifest = {
 		version: '1',
 		manifestHash: '',
@@ -92,7 +95,7 @@ export function createManifest(
 			continue;
 		}
 
-		const bundleFileName = bundleName(item.fileName, options);
+		const bundleFileName = canonPath(item.fileName);
 		const origins = getOrigins(item, root);
 		const exportedNames = item.exports.filter((name) => segments.has(name));
 		for (const name of exportedNames) {
@@ -100,14 +103,14 @@ export function createManifest(
 				manifest.mapping[name] = bundleFileName;
 			}
 		}
-		if (hasQwikLibraryModule(item)) {
+		if (item.moduleIds.some((id) => QWIK_LIBRARY_MODULE_RE.test(id))) {
 			for (const name of findLibraryQrlSymbols(item.code)) {
 				if (!segments.has(name) && !manifest.mapping[name]) {
 					manifest.mapping[name] = bundleFileName;
 				}
 			}
 		}
-		for (const name of getHandlerExports(item)) {
+		for (const name of item.exports.filter((name) => HANDLER_SET.has(name))) {
 			manifest.mapping[name] = bundleFileName;
 			manifest.symbols[name] = handlerSymbol(name);
 		}
@@ -116,11 +119,11 @@ export function createManifest(
 			size: item.code.length,
 			total: item.code.length,
 		};
-		const imports = mapBundleNames(bundle, item.imports, options);
+		const imports = mapBundleNames(bundle, item.imports, canonPath);
 		if (imports.length > 0) {
 			qwikBundle.imports = imports;
 		}
-		const dynamicImports = mapBundleNames(bundle, item.dynamicImports, options);
+		const dynamicImports = mapBundleNames(bundle, item.dynamicImports, canonPath);
 		if (dynamicImports.length > 0) {
 			qwikBundle.dynamicImports = dynamicImports;
 		}
@@ -172,10 +175,6 @@ export function createManifest(
 	return manifest;
 }
 
-function hasQwikLibraryModule(item: OutputChunk) {
-	return item.moduleIds.some((id) => QWIK_LIBRARY_MODULE_RE.test(id));
-}
-
 function findLibraryQrlSymbols(code: string) {
 	const symbols = new Set<string>();
 	for (const match of code.matchAll(LIBRARY_QRL_SYMBOL_RE)) {
@@ -185,10 +184,6 @@ function findLibraryQrlSymbols(code: string) {
 		}
 	}
 	return symbols;
-}
-
-function getHandlerExports(item: OutputChunk) {
-	return item.exports.filter((name) => HANDLERS.includes(name));
 }
 
 function handlerSymbol(symbol: string): QwikSymbol {
@@ -269,35 +264,23 @@ export function convertManifestToBundleGraph(manifest: QwikManifest): QwikBundle
 function mapBundleNames(
 	bundle: OutputBundle,
 	names: string[],
-	options: { canonPath?: (fileName: string) => string },
+	canonPath: (fileName: string) => string,
 ) {
-	const mapped: string[] = [];
-	for (const name of names) {
+	return names.flatMap((name) => {
 		const item = bundle[name];
-		if (item) {
-			mapped.push(bundleName(item.fileName, options));
-		}
-	}
-	return mapped;
-}
-
-function bundleName(fileName: string, options: { canonPath?: (fileName: string) => string }) {
-	return options.canonPath?.(fileName) ?? fileName;
+		return item ? [canonPath(item.fileName)] : [];
+	});
 }
 
 function getOrigins(item: OutputChunk, root: string | undefined) {
-	const origins: string[] = [];
-	for (const id of item.moduleIds) {
-		if (id.startsWith('\0')) {
-			continue;
-		}
-		if (root) {
-			origins.push(relative(root, id));
-			continue;
-		}
-		origins.push(id);
-	}
-	return origins.sort();
+	return item.moduleIds
+		.flatMap((id) => {
+			if (id.startsWith('\0')) {
+				return [];
+			}
+			return root ? [relative(root, id)] : [id];
+		})
+		.sort();
 }
 
 function detectQwikCoreBundles(

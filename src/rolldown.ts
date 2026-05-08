@@ -7,17 +7,19 @@ import {
 	type TransformModule,
 } from '@qwik.dev/optimizer';
 import { dirname, normalize, resolve } from 'pathe';
-import type { CodeSplittingOptions, OutputOptions, Plugin, RolldownError } from 'rolldown';
+import type { Plugin, RolldownError } from 'rolldown';
 import { isRelative, parsePath } from 'ufo';
+import { outputDefaults, Q_BUNDLE_GRAPH, Q_BUILD_PREFIX, QWIK_BUILD } from './build/chunking';
 import { createQwikDev, type QwikDevServer } from './dev';
 import { defineQwik, replaceExperimental } from './features';
 import {
 	createManifest,
 	injectManifest,
+	Q_MANIFEST_FILE,
 	QWIK_MANIFEST,
 	type QwikManifest,
 	type ServerQwikManifest,
-} from './q-manifest';
+} from './build/manifest';
 import { qwikExternal } from './qwik-external';
 
 export type QwikEnvironment = 'client' | 'server' | 'lib';
@@ -41,38 +43,12 @@ type TransformContext = {
 };
 type Environment = QwikEnvironment | ((context: unknown) => QwikEnvironment);
 
-const QWIK_BUILD = '@qwik.dev/core/build';
 const QWIK_CORE = '@qwik.dev/core';
 const QWIK_HANDLERS = '@qwik.dev/core/handlers.mjs';
 const QWIK_PRELOADER = '@qwik.dev/core/preloader';
-const VITE_PRELOAD_HELPER = '\0vite/preload-helper.js';
-const Q_BUILD_DIR = 'build';
-const Q_BUILD_PREFIX = `${Q_BUILD_DIR}/`;
-const Q_BUNDLE_GRAPH = `${Q_BUILD_PREFIX}bundle-graph.json`;
-const Q_MANIFEST = 'q-manifest.json';
 const SEGMENT = '\0qwik:segment:';
 const SOURCE_RE = /\.[cm]?[jt]sx?$/;
 const QWIK_LIBRARY_SOURCE_RE = /\.qwik\.[cm]?[jt]sx?$/;
-const QWIK_CORE_GROUP_RE = /[/\\](core|qwik)[/\\](handlers|dist[/\\]core(\.prod|\.min)?)\.mjs$/;
-const QWIK_PRELOADER_GROUP_RE = /[/\\](core|qwik)[/\\]dist[/\\]preloader\.mjs$/;
-const QWIK_LOADER_GROUP_RE = /[/\\](core|qwik)[/\\]dist[/\\]qwikloader\.js$/;
-const QWIK_CODE_SPLITTING_GROUPS = [
-	{
-		name: 'qwik-core',
-		test: QWIK_CORE_GROUP_RE,
-	},
-	{
-		name: 'qwik-loader',
-		test: QWIK_LOADER_GROUP_RE,
-	},
-	{
-		name: 'qwik-preloader',
-		test: (id: string) =>
-			id.endsWith(QWIK_BUILD) ||
-			id === VITE_PRELOAD_HELPER ||
-			QWIK_PRELOADER_GROUP_RE.test(id),
-	},
-] satisfies NonNullable<CodeSplittingOptions['groups']>;
 const manifests = new Map<string, QwikManifest>();
 
 export const qwik = (options?: QwikRolldownOptions) => qwikClient(options);
@@ -305,7 +281,7 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 
 			this.emitFile({
 				type: 'asset',
-				fileName: Q_MANIFEST,
+				fileName: Q_MANIFEST_FILE,
 				source: JSON.stringify(clientManifest, null, '\t'),
 			});
 		},
@@ -388,38 +364,6 @@ function createPluginError(id: string, message: string): RolldownError {
 		plugin: 'qwik',
 		stack: '',
 	});
-}
-
-export function outputDefaults(output: OutputOptions, environment: QwikEnvironment): OutputOptions {
-	if (environment === 'lib') {
-		return output;
-	}
-
-	const next: OutputOptions = { ...output, hoistTransitiveImports: false };
-	if (environment === 'server') {
-		next.chunkFileNames ??= 'q-[hash].js';
-		next.codeSplitting = qwikCodeSplitting(next.codeSplitting);
-		return next;
-	}
-
-	next.entryFileNames ??= `${Q_BUILD_PREFIX}q-[hash].js`;
-	next.chunkFileNames ??= `${Q_BUILD_PREFIX}q-[hash].js`;
-	next.codeSplitting = qwikCodeSplitting(next.codeSplitting);
-	return next;
-}
-
-function qwikCodeSplitting(codeSplitting: OutputOptions['codeSplitting']) {
-	if (typeof codeSplitting === 'boolean') {
-		throw new Error(
-			'Qwik requires output.codeSplitting to be an object so runtime chunks can be grouped.',
-		);
-	}
-
-	return {
-		...codeSplitting,
-		includeDependenciesRecursively: false,
-		groups: [...QWIK_CODE_SPLITTING_GROUPS, ...(codeSplitting?.groups ?? [])],
-	} satisfies CodeSplittingOptions;
 }
 
 function entryStrategy(environment: QwikEnvironment, value: EntryStrategy | undefined) {

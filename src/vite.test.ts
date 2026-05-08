@@ -1,7 +1,7 @@
 import { createOptimizer } from '@qwik.dev/optimizer';
 import type { EnvironmentOptions, Plugin, ResolvedConfig, UserConfig } from 'vite';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
-import type { QwikManifest } from './q-manifest';
+import type { QwikManifest } from './build/manifest';
 import { qwik } from './vite';
 
 const optimizerMock = vi.hoisted(() => ({

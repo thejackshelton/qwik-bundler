@@ -2,8 +2,8 @@ import { createOptimizer } from '@qwik.dev/optimizer';
 import { resolve } from 'pathe';
 import type { Plugin } from 'rolldown';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { QWIK_MANIFEST, type QwikManifest } from './build/manifest';
 import { qwik, qwikClient, qwikLib, qwikServer } from './rolldown';
-import { QWIK_MANIFEST, type QwikManifest } from './q-manifest';
 
 type QwikOutputOptions = {
 	codeSplitting?: {
