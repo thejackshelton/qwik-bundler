@@ -9,7 +9,6 @@ export interface QwikDevServer {
 }
 
 type EncodeSegment = (environment: QwikEnvironment, path: string) => string;
-type DecodeSegment = (id: string) => { environment: QwikEnvironment; path: string } | null;
 
 interface QwikDevOptions {
 	dev?: boolean;
@@ -24,9 +23,8 @@ export function createQwikDev(
 	segments: Map<string, TransformModule>,
 	root: () => string | undefined,
 	encode: EncodeSegment,
-	decode: DecodeSegment,
 ) {
-	const parents = new Map<string, string>();
+	const parents = new Map<string, { environment: QwikEnvironment; parent: string }>();
 	const enabled = () => options.dev === true;
 
 	return {
@@ -49,7 +47,7 @@ export function createQwikDev(
 			}
 
 			const id = encode(environment, qrl.path);
-			parents.set(id, qrl.parent);
+			parents.set(id, { environment, parent: qrl.parent });
 			return { id, moduleSideEffects: false };
 		},
 		async load(id: string) {
@@ -61,16 +59,15 @@ export function createQwikDev(
 			}
 
 			const key = pathname(id);
-			const parent = parents.get(key);
-			if (!parent) {
+			const pending = parents.get(key);
+			if (!pending) {
 				return undefined;
 			}
 
 			let segment = segments.get(key);
-			const decoded = decode(key);
 			const server = options.devServer;
-			if (!segment && decoded && server) {
-				await transformDevParent(server, decoded.environment, parent);
+			if (!segment && server) {
+				await transformDevParent(server, pending.environment, pending.parent);
 				segment = segments.get(key);
 			}
 			return segment?.code ?? null;
