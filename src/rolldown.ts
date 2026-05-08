@@ -1,12 +1,13 @@
 import {
 	createOptimizer,
+	type Diagnostic,
 	type EntryStrategy,
 	type OptimizerOptions,
 	type SegmentAnalysis,
 	type TransformModule,
 } from '@qwik.dev/optimizer';
 import { dirname, join, normalize, relative, resolve } from 'pathe';
-import type { CodeSplittingOptions, OutputOptions, Plugin } from 'rolldown';
+import type { CodeSplittingOptions, OutputOptions, Plugin, RolldownError } from 'rolldown';
 import { isRelative, parsePath } from 'ufo';
 import { createQwikDev, type QwikDevServer } from './dev';
 import { defineQwik, replaceExperimental } from './features';
@@ -33,6 +34,11 @@ export interface QwikRolldownOptions {
 }
 
 type EmitFile = (file: { type: 'chunk'; id: string }) => string;
+type TransformContext = {
+	emitFile: EmitFile;
+	error: (error: RolldownError) => never;
+	warn: (warning: RolldownError) => void;
+};
 type Environment = QwikEnvironment | ((context: unknown) => QwikEnvironment);
 
 const QWIK_BUILD = '@qwik.dev/core/build';
@@ -82,6 +88,7 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 	let optimizer: ReturnType<typeof createOptimizer> | undefined;
 	let root = options.rootDir;
 	let handlers = false;
+	let missingManifestWarned = false;
 	let name = 'qwik:rolldown';
 
 	if (typeof environment === 'string') {
@@ -127,6 +134,7 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 			}
 
 			handlers = false;
+			missingManifestWarned = false;
 			if (options.manifestInput) {
 				manifest = options.manifestInput;
 				return;
@@ -178,14 +186,18 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 				] as const;
 				for (const [id, name] of entries) {
 					const resolved = await this.resolve(id, importer, { skipSelf: true });
-					if (resolved) {
-						this.emitFile({
-							type: 'chunk',
-							id: resolved.id,
-							name,
-							preserveSignature: 'allow-extension',
-						});
+					if (!resolved) {
+						this.error(
+							createPluginError(importer ?? source, `Failed to resolve ${id}`),
+						);
 					}
+
+					this.emitFile({
+						type: 'chunk',
+						id: resolved.id,
+						name,
+						preserveSignature: 'allow-extension',
+					});
 				}
 			}
 
@@ -241,12 +253,7 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 				SOURCE_RE.test(path) &&
 				(!normalize(path).includes('/node_modules/') || QWIK_LIBRARY_SOURCE_RE.test(path));
 			const transformed = optimize
-				? await transform(
-						replaced ?? code,
-						path,
-						this.emitFile.bind(this),
-						currentEnvironment,
-					)
+				? await transform(replaced ?? code, path, this, currentEnvironment)
 				: null;
 			const fallback = transformed ?? (replaced ? { code: replaced, map: null } : null);
 
@@ -263,6 +270,15 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 
 			if (!next.includes(QWIK_MANIFEST)) {
 				return fallback;
+			}
+			if (!dev.isEnabled() && !manifest?.manifestHash && !missingManifestWarned) {
+				missingManifestWarned = true;
+				this.warn(
+					createPluginError(
+						path,
+						'Qwik server manifest was referenced, but no client manifest is available. Pass manifestInput or run the client build before the server build.',
+					),
+				);
 			}
 
 			return { code: injectManifest(next, manifest), map };
@@ -300,7 +316,7 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 	async function transform(
 		code: string,
 		id: string,
-		emitFile: EmitFile,
+		context: TransformContext,
 		currentEnvironment: QwikEnvironment,
 	) {
 		const result = await (
@@ -319,6 +335,7 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 			mode: currentEnvironment === 'lib' ? 'lib' : dev.isEnabled() ? 'dev' : 'prod',
 			isServer: isServer(currentEnvironment),
 		});
+		reportDiagnostics(result.diagnostics, id, context);
 
 		for (const module of result.modules) {
 			if (!module.segment) {
@@ -331,7 +348,7 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 			if (isClient(currentEnvironment)) {
 				symbols.set(module.segment.name, module.segment);
 				if (!dev.isEnabled()) {
-					emitFile({ type: 'chunk', id });
+					context.emitFile({ type: 'chunk', id });
 				}
 			}
 		}
@@ -348,6 +365,36 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 
 		return { code: fallback.code, map: fallback.map };
 	}
+}
+
+function reportDiagnostics(diagnostics: Diagnostic[], id: string, context: TransformContext) {
+	for (const diagnostic of diagnostics) {
+		const error = createDiagnosticError(id, diagnostic);
+		if (diagnostic.category === 'error') {
+			context.error(error);
+		} else {
+			context.warn(error);
+		}
+	}
+}
+
+function createDiagnosticError(id: string, diagnostic: Diagnostic): RolldownError {
+	const loc = diagnostic.highlights?.[0];
+	return Object.assign(createPluginError(id, diagnostic.message), {
+		id,
+		loc: loc && {
+			column: loc.startCol,
+			line: loc.startLine,
+		},
+	});
+}
+
+function createPluginError(id: string, message: string): RolldownError {
+	return Object.assign(new Error(message), {
+		id,
+		plugin: 'qwik',
+		stack: '',
+	});
 }
 
 function isServer(environment: QwikEnvironment) {

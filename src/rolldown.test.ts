@@ -70,6 +70,82 @@ describe('Rolldown plugin', () => {
 		expect(result).toEqual({ code: 'optimized', map: null });
 	});
 
+	test('forwards optimizer diagnostics through the plugin context', async () => {
+		optimizerMock.transformModules.mockResolvedValueOnce({
+			modules: [
+				{
+					path: './src/root.tsx',
+					isEntry: false,
+					code: 'optimized',
+					map: null,
+					segment: null,
+					origPath: null,
+				},
+			],
+			diagnostics: [
+				{
+					scope: 'optimizer',
+					category: 'warning',
+					code: 'qwik-warning',
+					file: 'src/diagnostic.tsx',
+					message: 'optimizer warning',
+					highlights: [
+						{
+							hi: 0,
+							lo: 0,
+							startLine: 4,
+							startCol: 2,
+							endLine: 4,
+							endCol: 8,
+						},
+					],
+					suggestions: null,
+				},
+				{
+					scope: 'optimizer',
+					category: 'error',
+					code: 'qwik-error',
+					file: 'src/diagnostic.tsx',
+					message: 'optimizer error',
+					highlights: null,
+					suggestions: null,
+				},
+			],
+			isTypeScript: true,
+			isJsx: true,
+		});
+		const plugin = qwikClient();
+		const warn = vi.fn();
+		const error = vi.fn();
+
+		callBuildStart(plugin, { cwd: '/workspace/app' });
+		await callTransform(plugin, 'export default 1;', '/workspace/app/src/root.tsx', {
+			warn,
+			error,
+		});
+
+		expect(warn).toHaveBeenCalledTimes(1);
+		expect(error).toHaveBeenCalledTimes(1);
+		const warning = warn.mock.calls[0]?.[0] as Error & {
+			id?: string;
+			plugin?: string;
+			loc?: { line: number; column: number };
+		};
+		const failure = error.mock.calls[0]?.[0] as Error & { id?: string; plugin?: string };
+
+		expect(warning.message).toBe('optimizer warning');
+		expect(warning).toMatchObject({
+			id: '/workspace/app/src/root.tsx',
+			plugin: 'qwik',
+			loc: { line: 4, column: 2 },
+		});
+		expect(failure.message).toBe('optimizer error');
+		expect(failure).toMatchObject({
+			id: '/workspace/app/src/root.tsx',
+			plugin: 'qwik',
+		});
+	});
+
 	test('sets Qwik runtime defines without replacing host defines', () => {
 		const plugin = qwikClient({ experimental: ['suspense'] });
 		const options = {
@@ -204,6 +280,26 @@ describe('Rolldown plugin', () => {
 			name: 'preloader',
 			preserveSignature: 'allow-extension',
 		});
+	});
+
+	test('errors when required Qwik runtime entries cannot be resolved', async () => {
+		const plugin = qwikClient();
+		const resolve = vi.fn().mockResolvedValue(null);
+		const error = vi.fn((value: unknown) => {
+			throw value instanceof Error ? value : new Error(String(value));
+		});
+
+		await expect(
+			callResolveId(
+				plugin,
+				'@qwik.dev/core',
+				'/workspace/app/src/root.tsx',
+				resolve,
+				vi.fn(),
+				error,
+			),
+		).rejects.toThrow('Failed to resolve @qwik.dev/core/handlers.mjs');
+		expect(error).toHaveBeenCalledTimes(1);
 	});
 
 	test('serves dev Qwik handlers without emitting build chunks', async () => {
@@ -669,6 +765,46 @@ describe('Rolldown plugin', () => {
 		expect(manifest?.bundleGraph).not.toContain('12345678');
 	});
 
+	test('warns when server manifest injection has no manifest available', async () => {
+		const plugin = qwikServer();
+		const warn = vi.fn();
+
+		callBuildStart(plugin, { cwd: '/workspace/server-only' });
+		const result = await callTransform(
+			plugin,
+			`export const manifest = ${QWIK_MANIFEST};`,
+			'/workspace/server-only/node_modules/@qwik.dev/core/dist/server.mjs',
+			{ warn },
+		);
+		if (!result || typeof result === 'string' || !result.code) {
+			throw new Error('Expected transformed code');
+		}
+
+		expect(warn).toHaveBeenCalledWith(
+			expect.objectContaining({
+				id: '/workspace/server-only/node_modules/@qwik.dev/core/dist/server.mjs',
+				plugin: 'qwik',
+				message: expect.stringContaining('Qwik server manifest'),
+			}),
+		);
+		expect(result.code).toContain(QWIK_MANIFEST);
+	});
+
+	test('does not warn for missing server manifest in dev mode', async () => {
+		const plugin = qwikServer({ dev: true });
+		const warn = vi.fn();
+
+		callBuildStart(plugin, { cwd: '/workspace/dev-server' });
+		await callTransform(
+			plugin,
+			`export const manifest = ${QWIK_MANIFEST};`,
+			'/workspace/dev-server/node_modules/@qwik.dev/core/dist/core.mjs',
+			{ warn },
+		);
+
+		expect(warn).not.toHaveBeenCalled();
+	});
+
 	test('injects only the server manifest subset for server builds', async () => {
 		const manifest = {
 			manifestHash: 'abc',
@@ -731,10 +867,28 @@ function callBuildStart(plugin: Plugin, options: { cwd: string }) {
 	throw new Error('Expected function buildStart hook');
 }
 
-async function callTransform(plugin: Plugin, code: string, id: string, emitFile = vi.fn()) {
+async function callTransform(
+	plugin: Plugin,
+	code: string,
+	id: string,
+	context: {
+		emitFile?: ReturnType<typeof vi.fn>;
+		warn?: ReturnType<typeof vi.fn>;
+		error?: ReturnType<typeof vi.fn>;
+	} = {},
+) {
 	const transform = plugin.transform;
 	if (typeof transform === 'function') {
-		return transform.call({ emitFile } as never, code, id, undefined as never);
+		return transform.call(
+			{
+				emitFile: context.emitFile ?? vi.fn(),
+				warn: context.warn ?? vi.fn(),
+				error: context.error ?? vi.fn(),
+			} as never,
+			code,
+			id,
+			undefined as never,
+		);
 	}
 	throw new Error('Expected function transform hook');
 }
@@ -745,10 +899,13 @@ async function callResolveId(
 	importer?: string,
 	resolve = vi.fn(),
 	emitFile = vi.fn(),
+	error = vi.fn((value: unknown) => {
+		throw value instanceof Error ? value : new Error(String(value));
+	}),
 ) {
 	const resolveId = plugin.resolveId;
 	if (typeof resolveId === 'function') {
-		return resolveId.call({ emitFile, resolve } as never, source, importer, {
+		return resolveId.call({ emitFile, error, resolve } as never, source, importer, {
 			isEntry: false,
 		} as never);
 	}
