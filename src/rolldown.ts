@@ -6,7 +6,7 @@ import {
 	type SegmentAnalysis,
 	type TransformModule,
 } from '@qwik.dev/optimizer';
-import { dirname, join, normalize, relative, resolve } from 'pathe';
+import { dirname, normalize, resolve } from 'pathe';
 import type { CodeSplittingOptions, OutputOptions, Plugin, RolldownError } from 'rolldown';
 import { isRelative, parsePath } from 'ufo';
 import { createQwikDev, type QwikDevServer } from './dev';
@@ -47,7 +47,8 @@ const QWIK_HANDLERS = '@qwik.dev/core/handlers.mjs';
 const QWIK_PRELOADER = '@qwik.dev/core/preloader';
 const VITE_PRELOAD_HELPER = '\0vite/preload-helper.js';
 const Q_BUILD_DIR = 'build';
-const Q_BUNDLE_GRAPH = join(Q_BUILD_DIR, 'bundle-graph.json');
+const Q_BUILD_PREFIX = `${Q_BUILD_DIR}/`;
+const Q_BUNDLE_GRAPH = `${Q_BUILD_PREFIX}bundle-graph.json`;
 const Q_MANIFEST = 'q-manifest.json';
 const SEGMENT = '\0qwik:segment:';
 const SOURCE_RE = /\.[cm]?[jt]sx?$/;
@@ -121,7 +122,7 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 		options(input) {
 			const next = defineQwik(input, options.experimental, options.dev);
 			const currentEnvironment = getEnvironment(this);
-			if (isClient(currentEnvironment)) {
+			if (currentEnvironment === 'client') {
 				next.preserveEntrySignatures ??= 'allow-extension';
 			}
 
@@ -175,7 +176,7 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 
 			if (
 				!dev.isEnabled() &&
-				isClient(currentEnvironment) &&
+				currentEnvironment === 'client' &&
 				source === QWIK_CORE &&
 				!handlers
 			) {
@@ -224,7 +225,7 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 		},
 		async load(id) {
 			if (id === QWIK_BUILD) {
-				const server = isServer(getEnvironment(this));
+				const server = getEnvironment(this) === 'server';
 				const isDev = dev.isEnabled();
 				return `globalThis.qDev=${isDev};export const isServer=${server};export const isBrowser=${!server};export const isDev=${isDev};`;
 			}
@@ -251,7 +252,7 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 				: null;
 			const fallback = transformed ?? (replaced ? { code: replaced, map: null } : null);
 
-			if (!isServer(currentEnvironment)) {
+			if (currentEnvironment !== 'server') {
 				return fallback;
 			}
 
@@ -278,14 +279,17 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 			return { code: injectManifest(next, manifest), map };
 		},
 		async generateBundle(_, bundle) {
-			if (!isClient(getEnvironment(this))) {
+			if (getEnvironment(this) !== 'client') {
 				return;
 			}
 
 			const currentRoot = getRoot();
 			const clientManifest = createManifest(bundle, symbols, currentRoot, {
 				bundleGraphAsset: Q_BUNDLE_GRAPH,
-				canonPath: (fileName) => canonicalBundlePath(fileName, Q_BUILD_DIR),
+				canonPath: (fileName) =>
+					fileName.startsWith(Q_BUILD_PREFIX)
+						? fileName.slice(Q_BUILD_PREFIX.length)
+						: fileName,
 			});
 			manifest = clientManifest;
 			if (currentRoot) {
@@ -327,7 +331,7 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 			srcDir: getRoot() ?? '',
 			rootDir: getRoot(),
 			mode: currentEnvironment === 'lib' ? 'lib' : dev.isEnabled() ? 'dev' : 'prod',
-			isServer: isServer(currentEnvironment),
+			isServer: currentEnvironment === 'server',
 		});
 		reportDiagnostics(result.diagnostics, id, context);
 
@@ -339,7 +343,7 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 			const id = segmentId(currentEnvironment, module.path);
 			segments.set(id, module);
 			dev.recordSegment(module, currentEnvironment);
-			if (isClient(currentEnvironment)) {
+			if (currentEnvironment === 'client') {
 				symbols.set(module.segment.name, module.segment);
 				if (!dev.isEnabled()) {
 					context.emitFile({ type: 'chunk', id });
@@ -363,7 +367,13 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 
 function reportDiagnostics(diagnostics: Diagnostic[], id: string, context: TransformContext) {
 	for (const diagnostic of diagnostics) {
-		const error = createDiagnosticError(id, diagnostic);
+		const loc = diagnostic.highlights?.[0];
+		const error = Object.assign(createPluginError(id, diagnostic.message), {
+			loc: loc && {
+				column: loc.startCol,
+				line: loc.startLine,
+			},
+		});
 		if (diagnostic.category === 'error') {
 			context.error(error);
 		} else {
@@ -372,31 +382,12 @@ function reportDiagnostics(diagnostics: Diagnostic[], id: string, context: Trans
 	}
 }
 
-function createDiagnosticError(id: string, diagnostic: Diagnostic): RolldownError {
-	const loc = diagnostic.highlights?.[0];
-	return Object.assign(createPluginError(id, diagnostic.message), {
-		id,
-		loc: loc && {
-			column: loc.startCol,
-			line: loc.startLine,
-		},
-	});
-}
-
 function createPluginError(id: string, message: string): RolldownError {
 	return Object.assign(new Error(message), {
 		id,
 		plugin: 'qwik',
 		stack: '',
 	});
-}
-
-function isServer(environment: QwikEnvironment) {
-	return environment === 'server';
-}
-
-function isClient(environment: QwikEnvironment) {
-	return environment === 'client';
 }
 
 export function outputDefaults(output: OutputOptions, environment: QwikEnvironment): OutputOptions {
@@ -411,8 +402,8 @@ export function outputDefaults(output: OutputOptions, environment: QwikEnvironme
 		return next;
 	}
 
-	next.entryFileNames ??= join(Q_BUILD_DIR, 'q-[hash].js');
-	next.chunkFileNames ??= join(Q_BUILD_DIR, 'q-[hash].js');
+	next.entryFileNames ??= `${Q_BUILD_PREFIX}q-[hash].js`;
+	next.chunkFileNames ??= `${Q_BUILD_PREFIX}q-[hash].js`;
 	next.codeSplitting = qwikCodeSplitting(next.codeSplitting);
 	return next;
 }
@@ -429,15 +420,6 @@ function qwikCodeSplitting(codeSplitting: OutputOptions['codeSplitting']) {
 		includeDependenciesRecursively: false,
 		groups: [...QWIK_CODE_SPLITTING_GROUPS, ...(codeSplitting?.groups ?? [])],
 	} satisfies CodeSplittingOptions;
-}
-
-function canonicalBundlePath(fileName: string, buildDir: string) {
-	const path = relative(buildDir, fileName);
-	if (!path || path === '..' || path.startsWith('../')) {
-		return fileName;
-	}
-
-	return path;
 }
 
 function entryStrategy(environment: QwikEnvironment, value: EntryStrategy | undefined) {
