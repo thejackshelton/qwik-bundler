@@ -3,8 +3,12 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
+		"qwik": "qwik",
 		"dev": "vite --mode ssr",
-		"build": "vite build"
+		"build": "qwik build",
+		"build.client": "vite build",
+		"build.preview": "vite build --ssr src/entry.preview.tsx",
+		"preview": "qwik build preview && vite preview --open"
 	},
 	"dependencies": {
 		"@qwik.dev/core": "https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@dc9a8e8",
