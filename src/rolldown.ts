@@ -114,7 +114,7 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 	function getRoot() {
 		return root ?? options.rootDir;
 	}
-	const dev = createQwikDev(options, segments, getRoot, encode, decode);
+	const dev = createQwikDev(options, segments, getRoot, segmentId);
 
 	return {
 		name,
@@ -205,26 +205,20 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 				return null;
 			}
 
-			const decoded = decode(pathname(importer));
-			let from = pathname(importer);
-			if (decoded) {
-				from = decoded.path;
-			}
+			const importerPath = pathname(importer);
+			const importerSegment = segments.get(importerPath);
+			const from = importerSegment?.path ?? importerPath;
 
-			const id = encode(currentEnvironment, resolve(dirname(from), source));
+			const id = segmentId(currentEnvironment, resolve(dirname(from), source));
 			if (segments.has(id)) {
 				return id;
 			}
 
-			if (!decoded) {
+			if (!importerSegment) {
 				return null;
 			}
 
-			let parent = decoded.path;
-			const segment = segments.get(encode(decoded.environment, decoded.path));
-			if (segment?.segment?.origin) {
-				parent = segment.segment.origin;
-			}
+			const parent = importerSegment.segment?.origin ?? importerSegment.path;
 
 			return this.resolve(source, parent, { skipSelf: true });
 		},
@@ -342,7 +336,7 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 				continue;
 			}
 
-			const id = encode(currentEnvironment, module.path);
+			const id = segmentId(currentEnvironment, module.path);
 			segments.set(id, module);
 			dev.recordSegment(module, currentEnvironment);
 			if (isClient(currentEnvironment)) {
@@ -462,25 +456,8 @@ function entryStrategy(environment: QwikEnvironment, value: EntryStrategy | unde
 	return { type: 'smart' } satisfies EntryStrategy;
 }
 
-function encode(environment: QwikEnvironment, path: string) {
+function segmentId(environment: QwikEnvironment, path: string) {
 	return `${SEGMENT}${environment}:${path}`;
-}
-
-function decode(id: string) {
-	if (!id.startsWith(SEGMENT)) {
-		return null;
-	}
-
-	const value = id.slice(SEGMENT.length);
-	const index = value.indexOf(':');
-	if (index < 0) {
-		return null;
-	}
-
-	return {
-		environment: value.slice(0, index) as QwikEnvironment,
-		path: value.slice(index + 1),
-	};
 }
 
 function pathname(id: string) {
