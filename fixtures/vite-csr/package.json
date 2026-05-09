@@ -1,5 +1,5 @@
 {
-	"name": "@fixtures/vite-direct",
+	"name": "@fixtures/vite-csr",
 	"private": true,
 	"type": "module",
 	"scripts": {

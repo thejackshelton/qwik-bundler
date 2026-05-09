@@ -14,7 +14,6 @@
 	"scripts": {
 		"build": "vp pack",
 		"test": "vp test",
-		"test:csr": "pnpm build && node test/csr-preview.mjs",
 		"test:watch": "vp test watch",
 		"check": "vp check",
 		"prepare": "vp config"

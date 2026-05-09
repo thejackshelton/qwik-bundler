@@ -10,6 +10,7 @@ import { dirname, normalize, resolve } from 'pathe';
 import type { Plugin, RolldownError } from 'rolldown';
 import { isRelative, parsePath } from 'ufo';
 import { outputDefaults, Q_BUNDLE_GRAPH, Q_BUILD_PREFIX, QWIK_BUILD } from './build/chunking';
+import { injectQwikPreloaderTags } from './build/static-html';
 import { createQwikDev, type QwikDevServer } from './dev';
 import { defineQwik, replaceExperimental } from './features';
 import {
@@ -47,8 +48,8 @@ const QWIK_CORE = '@qwik.dev/core';
 const QWIK_HANDLERS = '@qwik.dev/core/handlers.mjs';
 const QWIK_PRELOADER = '@qwik.dev/core/preloader';
 const SEGMENT = '\0qwik:segment:';
-const SOURCE_RE = /\.[cm]?[jt]sx?$/;
-const QWIK_LIBRARY_SOURCE_RE = /\.qwik\.[cm]?[jt]sx?$/;
+const JS_OR_TS_SOURCE_FILE = /\.[cm]?[jt]sx?$/;
+const QWIK_LIBRARY_SOURCE_FILE = /\.qwik\.[cm]?[jt]sx?$/;
 const manifests = new Map<string, QwikManifest>();
 
 export const qwik = (options?: QwikRolldownOptions) => qwikClient(options);
@@ -225,8 +226,9 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 			const path = pathname(id);
 			const replaced = replaceExperimental(code, currentEnvironment, options.experimental);
 			const optimize =
-				SOURCE_RE.test(path) &&
-				(!normalize(path).includes('/node_modules/') || QWIK_LIBRARY_SOURCE_RE.test(path));
+				JS_OR_TS_SOURCE_FILE.test(path) &&
+				(!normalize(path).includes('/node_modules/') ||
+					QWIK_LIBRARY_SOURCE_FILE.test(path));
 			const transformed = optimize
 				? await transform(replaced ?? code, path, this, currentEnvironment)
 				: null;
@@ -258,36 +260,30 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 
 			return { code: injectManifest(next, manifest), map };
 		},
-		async generateBundle(_, bundle) {
-			if (getEnvironment(this) !== 'client') {
-				return;
-			}
+		generateBundle: {
+			order: 'post',
+			handler(_, bundle) {
+				if (getEnvironment(this) !== 'client') return;
 
-			const currentRoot = getRoot();
-			const clientManifest = createManifest(bundle, symbols, currentRoot, {
-				bundleGraphAsset: Q_BUNDLE_GRAPH,
-				canonPath: (fileName) =>
-					fileName.startsWith(Q_BUILD_PREFIX)
-						? fileName.slice(Q_BUILD_PREFIX.length)
-						: fileName,
-			});
-			manifest = clientManifest;
-			if (currentRoot) {
-				manifests.set(currentRoot, clientManifest);
-			}
-			options.onManifest?.(clientManifest);
+				const clientManifest = createManifest(bundle, symbols, getRoot(), {
+					bundleGraphAsset: Q_BUNDLE_GRAPH,
+					canonPath: stripBuildPrefix,
+				});
+				manifest = clientManifest;
+				const currentRoot = getRoot();
+				if (currentRoot) {
+					manifests.set(currentRoot, clientManifest);
+				}
+				options.onManifest?.(clientManifest);
+				injectQwikPreloaderTags(bundle, clientManifest);
 
-			this.emitFile({
-				type: 'asset',
-				fileName: Q_BUNDLE_GRAPH,
-				source: JSON.stringify(clientManifest.bundleGraph),
-			});
-
-			this.emitFile({
-				type: 'asset',
-				fileName: Q_MANIFEST_FILE,
-				source: JSON.stringify(clientManifest, null, '\t'),
-			});
+				for (const [fileName, source] of [
+					[Q_BUNDLE_GRAPH, JSON.stringify(clientManifest.bundleGraph)],
+					[Q_MANIFEST_FILE, JSON.stringify(clientManifest, null, '\t')],
+				] as const) {
+					this.emitFile({ type: 'asset', fileName, source });
+				}
+			},
 		},
 	};
 
@@ -343,6 +339,10 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 
 		return { code: fallback.code, map: fallback.map };
 	}
+}
+
+function stripBuildPrefix(fileName: string) {
+	return fileName.startsWith(Q_BUILD_PREFIX) ? fileName.slice(Q_BUILD_PREFIX.length) : fileName;
 }
 
 function reportDiagnostics(diagnostics: Diagnostic[], id: string, context: TransformContext) {

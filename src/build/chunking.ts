@@ -7,24 +7,23 @@ export const Q_BUILD_PREFIX = `${Q_BUILD_DIR}/`;
 export const Q_BUNDLE_GRAPH = `${Q_BUILD_PREFIX}bundle-graph.json`;
 
 const VITE_PRELOAD_HELPER = '\0vite/preload-helper.js';
-const QWIK_CORE_GROUP_RE = /[/\\](core|qwik)[/\\](handlers|dist[/\\]core(\.prod|\.min)?)\.mjs$/;
-const QWIK_PRELOADER_GROUP_RE = /[/\\](core|qwik)[/\\]dist[/\\]preloader\.mjs$/;
-const QWIK_LOADER_GROUP_RE = /[/\\](core|qwik)[/\\]dist[/\\]qwikloader\.js$/;
+const QWIK_CORE_OR_HANDLERS_MODULE =
+	/[/\\](core|qwik)[/\\](handlers|dist[/\\]core(\.prod|\.min)?)\.mjs$/;
+const QWIK_PRELOADER_MODULE = /[/\\](core|qwik)[/\\]dist[/\\]preloader\.mjs$/;
+const QWIK_LOADER_SCRIPT = /[/\\](core|qwik)[/\\]dist[/\\]qwikloader\.js$/;
 const QWIK_CODE_SPLITTING_GROUPS = [
 	{
 		name: 'qwik-core',
-		test: QWIK_CORE_GROUP_RE,
+		test: QWIK_CORE_OR_HANDLERS_MODULE,
 	},
 	{
 		name: 'qwik-loader',
-		test: QWIK_LOADER_GROUP_RE,
+		test: QWIK_LOADER_SCRIPT,
 	},
 	{
 		name: 'qwik-preloader',
 		test: (id: string) =>
-			id.endsWith(QWIK_BUILD) ||
-			id === VITE_PRELOAD_HELPER ||
-			QWIK_PRELOADER_GROUP_RE.test(id),
+			id.endsWith(QWIK_BUILD) || id === VITE_PRELOAD_HELPER || QWIK_PRELOADER_MODULE.test(id),
 	},
 ] satisfies NonNullable<CodeSplittingOptions['groups']>;
 

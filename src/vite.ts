@@ -19,7 +19,6 @@ export function qwik(options: VitePluginOptions = {}): Plugin[] {
 		options.onManifest?.(nextManifest);
 	};
 	const basePlugin = qwikRolldown(getBuildEnvironment, rolldownOptions) as Plugin;
-	let isServe = false;
 
 	const qwikPlugin = {
 		...basePlugin,
@@ -30,8 +29,7 @@ export function qwik(options: VitePluginOptions = {}): Plugin[] {
 		},
 		...external,
 		configResolved(resolvedConfig) {
-			isServe = resolvedConfig.command === 'serve';
-			rolldownOptions.dev = isServe;
+			rolldownOptions.dev = resolvedConfig.command === 'serve';
 			rolldownOptions.rootDir = resolvedConfig.root;
 		},
 		configureServer(server: ViteDevServer) {

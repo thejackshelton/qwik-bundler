@@ -153,7 +153,7 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
-  fixtures/vite-direct:
+  fixtures/vite-csr:
     dependencies:
       '@qwik.dev/core':
         specifier: https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@1f3647c
