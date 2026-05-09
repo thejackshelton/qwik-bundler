@@ -85,46 +85,46 @@ Explicitly excluded. Documented to prevent scope creep.
 
 Which phases cover which requirements. Updated during roadmap creation.
 
-| Requirement | Phase | Status  |
-| ----------- | ----- | ------- |
-| GATE-01     | TBD   | Pending |
-| GATE-02     | TBD   | Pending |
-| GATE-03     | TBD   | Pending |
-| GATE-04     | TBD   | Pending |
-| GATE-05     | TBD   | Pending |
-| SEGM-01     | TBD   | Pending |
-| SEGM-02     | TBD   | Pending |
-| SEGM-03     | TBD   | Pending |
-| SEGM-04     | TBD   | Pending |
-| SEGM-05     | TBD   | Pending |
-| SEGM-06     | TBD   | Pending |
-| TRAN-01     | TBD   | Pending |
-| TRAN-02     | TBD   | Pending |
-| TRAN-03     | TBD   | Pending |
-| TRAN-04     | TBD   | Pending |
-| TRAN-05     | TBD   | Pending |
-| TRAN-06     | TBD   | Pending |
-| BRDG-01     | TBD   | Pending |
-| BRDG-02     | TBD   | Pending |
-| BRDG-03     | TBD   | Pending |
-| BRDG-04     | TBD   | Pending |
-| TEST-01     | TBD   | Pending |
-| TEST-02     | TBD   | Pending |
-| TEST-03     | TBD   | Pending |
-| TEST-04     | TBD   | Pending |
-| TEST-05     | TBD   | Pending |
-| TEST-06     | TBD   | Pending |
-| TEST-07     | TBD   | Pending |
-| TEST-08     | TBD   | Pending |
-| TEST-09     | TBD   | Pending |
+| Requirement | Phase   | Status  |
+| ----------- | ------- | ------- |
+| GATE-01     | Phase 2 | Pending |
+| GATE-02     | Phase 2 | Pending |
+| GATE-03     | Phase 2 | Pending |
+| GATE-04     | Phase 3 | Pending |
+| GATE-05     | Phase 3 | Pending |
+| SEGM-01     | Phase 1 | Pending |
+| SEGM-02     | Phase 1 | Pending |
+| SEGM-03     | Phase 1 | Pending |
+| SEGM-04     | Phase 1 | Pending |
+| SEGM-05     | Phase 1 | Pending |
+| SEGM-06     | Phase 1 | Pending |
+| TRAN-01     | Phase 2 | Pending |
+| TRAN-02     | Phase 2 | Pending |
+| TRAN-03     | Phase 2 | Pending |
+| TRAN-04     | Phase 2 | Pending |
+| TRAN-05     | Phase 2 | Pending |
+| TRAN-06     | Phase 2 | Pending |
+| BRDG-01     | Phase 2 | Pending |
+| BRDG-02     | Phase 2 | Pending |
+| BRDG-03     | Phase 2 | Pending |
+| BRDG-04     | Phase 2 | Pending |
+| TEST-01     | Phase 2 | Pending |
+| TEST-02     | Phase 2 | Pending |
+| TEST-03     | Phase 2 | Pending |
+| TEST-04     | Phase 2 | Pending |
+| TEST-05     | Phase 1 | Pending |
+| TEST-06     | Phase 1 | Pending |
+| TEST-07     | Phase 4 | Pending |
+| TEST-08     | Phase 3 | Pending |
+| TEST-09     | Phase 4 | Pending |
 
 **Coverage:**
 
 - v1 requirements: 30 total
-- Mapped to phases: 0
-- Unmapped: 30
+- Mapped to phases: 30
+- Unmapped: 0
 
 ---
 
 _Requirements defined: 2026-05-09_
-_Last updated: 2026-05-09 after initial definition_
+_Last updated: 2026-05-09 after roadmap creation_
