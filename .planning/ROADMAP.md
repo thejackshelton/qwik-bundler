@@ -13,7 +13,7 @@ This milestone delivers Qwik HMR in Vite serve mode by first making generated de
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Dev QRL Segment Core** - Generated dev QRL segments resolve, load, self-accept, and invalidate correctly across Vite environments.
+- [x] **Phase 1: Dev QRL Segment Core** - Generated dev QRL segments resolve, load, self-accept, and invalidate correctly across Vite environments.
 - [ ] **Phase 2: Vite HMR Transport and Browser Bridge** - Vite serve mode injects the Qwik bridge, forwards source updates to the right channel, and supports opt-out reload behavior.
 - [ ] **Phase 3: Serve/Build Gating and Regression Safety** - HMR remains dev-only and existing CSR, SSR/Nitro, static HTML, raw Rolldown, and library behavior stays intact.
 - [ ] **Phase 4: Browser Smoke and Final Verification** - Real fixture/browser checks and final commands prove the HMR port is complete.
@@ -41,7 +41,7 @@ Plans:
 
 **Wave 2** _(blocked on Wave 1 completion)_
 
-- [ ] 01-02-PLAN.md — Implement environment-isolated segment caches, parent invalidation primitive, and URL/source normalization coverage.
+- [x] 01-02-PLAN.md — Implement environment-isolated segment caches, parent invalidation primitive, and URL/source normalization coverage.
 
 ### Phase 2: Vite HMR Transport and Browser Bridge
 
@@ -86,9 +86,9 @@ Plans:
 **Execution Order:**
 Phases execute in numeric order: 1 → 2 → 3 → 4
 
-| Phase                                       | Plans Complete | Status      | Completed |
-| ------------------------------------------- | -------------- | ----------- | --------- |
-| 1. Dev QRL Segment Core                     | 1/2            | In Progress | -         |
-| 2. Vite HMR Transport and Browser Bridge    | 0/TBD          | Not started | -         |
-| 3. Serve/Build Gating and Regression Safety | 0/TBD          | Not started | -         |
-| 4. Browser Smoke and Final Verification     | 0/TBD          | Not started | -         |
+| Phase                                       | Plans Complete | Status      | Completed  |
+| ------------------------------------------- | -------------- | ----------- | ---------- |
+| 1. Dev QRL Segment Core                     | 2/2            | Complete    | 2026-05-09 |
+| 2. Vite HMR Transport and Browser Bridge    | 0/TBD          | Not started | -          |
+| 3. Serve/Build Gating and Regression Safety | 0/TBD          | Not started | -          |
+| 4. Browser Smoke and Final Verification     | 0/TBD          | Not started | -          |

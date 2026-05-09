@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: Roadmap and initial state created
-last_updated: '2026-05-09T21:57:22.147Z'
+status: verifying
+stopped_at: Completed 01-dev-qrl-segment-core-02-PLAN.md
+last_updated: '2026-05-09T22:16:18.238Z'
 last_activity: 2026-05-09
 progress:
     total_phases: 4
-    completed_phases: 0
+    completed_phases: 1
     total_plans: 2
-    completed_plans: 1
-    percent: 50
+    completed_plans: 2
+    percent: 100
 ---
 
 # Project State
@@ -27,10 +27,10 @@ See: .planning/PROJECT.md (updated 2026-05-09)
 
 Phase: 01 (dev-qrl-segment-core) — EXECUTING
 Plan: 2 of 2
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-05-09
 
-Progress: [█████░░░░░] 50%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -43,12 +43,12 @@ Progress: [█████░░░░░] 50%
 
 **By Phase:**
 
-| Phase                                       | Plans | Total | Avg/Plan |
-| ------------------------------------------- | ----- | ----- | -------- |
-| 1. Dev QRL Segment Core                     | 1/2   | 4m43s | 4m43s    |
-| 2. Vite HMR Transport and Browser Bridge    | 0/TBD | N/A   | N/A      |
-| 3. Serve/Build Gating and Regression Safety | 0/TBD | N/A   | N/A      |
-| 4. Browser Smoke and Final Verification     | 0/TBD | N/A   | N/A      |
+| Phase                                       | Plans | Total  | Avg/Plan |
+| ------------------------------------------- | ----- | ------ | -------- |
+| 1. Dev QRL Segment Core                     | 2/2   | 20m51s | 10m26s   |
+| 2. Vite HMR Transport and Browser Bridge    | 0/TBD | N/A    | N/A      |
+| 3. Serve/Build Gating and Regression Safety | 0/TBD | N/A    | N/A      |
+| 4. Browser Smoke and Final Verification     | 0/TBD | N/A    | N/A      |
 
 **Recent Trend:**
 
@@ -56,6 +56,7 @@ Progress: [█████░░░░░] 50%
 - Trend: N/A
 
 _Updated after each plan completion_
+| Phase 01-dev-qrl-segment-core P02 | 16min 08s | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -68,6 +69,8 @@ Recent decisions affecting current work:
 - Roadmap: Use branch `HMR` and the local upstream Qwik Vite plugin as references, but keep this rewrite simpler unless tests require more complexity.
 - Plan 01: Keep generated segment HMR self-accept behavior in `src/dev.ts` with a narrow `QwikDevServer` callback and no Vite server type dependency.
 - Plan 01: Use a minimal `hmr?: boolean` option so `hmr: false` disables generated segment self-accept code without adding Phase 2 transport behavior.
+- [Phase 01-dev-qrl-segment-core]: Plan 02: Expose dev segment invalidation only through a non-public plugin api property for tests and later Vite wiring, without adding a package export.
+- [Phase 01-dev-qrl-segment-core]: Plan 02: Keep normalization centralized in src/dev.ts using ufo parsePath, pathe normalize, and a small backslash/drive-prefix boundary.
 
 ### Pending Todos
 
@@ -88,6 +91,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-05-09T21:57:22.142Z
-Stopped at: Completed 01-dev-qrl-segment-core-01-PLAN.md
+Last session: 2026-05-09T22:16:18.233Z
+Stopped at: Completed 01-dev-qrl-segment-core-02-PLAN.md
 Resume file: None

@@ -19,10 +19,10 @@ Requirements for the HMR implementation milestone. Each maps to exactly one road
 
 - [x] **SEGM-01**: Browser requests for generated dev QRL segment URLs resolve to the correct parent source module and generated segment identity.
 - [x] **SEGM-02**: If a generated QRL segment is requested before its parent has been transformed, the segment loader invokes a narrow parent-transform callback and returns the generated segment.
-- [ ] **SEGM-03**: Client and SSR dev segment caches are isolated so transforms from one Vite environment cannot overwrite the other.
-- [ ] **SEGM-04**: Editing a parent source file invalidates all generated QRL segments derived from that parent.
+- [x] **SEGM-03**: Client and SSR dev segment caches are isolated so transforms from one Vite environment cannot overwrite the other.
+- [x] **SEGM-04**: Editing a parent source file invalidates all generated QRL segments derived from that parent.
 - [x] **SEGM-05**: Non-worker dev QRL segment modules include literal `import.meta.hot.accept(` code when HMR is enabled.
-- [ ] **SEGM-06**: Dev segment URL and source-path normalization handles query strings, root-relative paths, absolute filesystem paths, and platform path separators consistently.
+- [x] **SEGM-06**: Dev segment URL and source-path normalization handles query strings, root-relative paths, absolute filesystem paths, and platform path separators consistently.
 
 ### Vite HMR Transport
 
@@ -47,7 +47,7 @@ Requirements for the HMR implementation milestone. Each maps to exactly one road
 - [ ] **TEST-03**: Unit tests cover SSR/server-environment hot updates forwarding to the client channel.
 - [ ] **TEST-04**: Unit tests cover `hmr: false` fallback/full reload behavior.
 - [x] **TEST-05**: Unit tests cover dev segment loading with appended HMR accept code.
-- [ ] **TEST-06**: Focused tests verify generated segment invalidation and parent-transform callback behavior.
+- [x] **TEST-06**: Focused tests verify generated segment invalidation and parent-transform callback behavior.
 - [ ] **TEST-07**: Fixture or browser smoke coverage verifies CSR Vite HMR updates a component in the browser when practical.
 - [ ] **TEST-08**: Fixture coverage verifies SSR/Nitro and library builds continue to pass without HMR leakage.
 - [ ] **TEST-09**: Final verification runs focused HMR tests, `pnpm test`, `pnpm check`, `pnpm --filter @fixtures/vite-csr build`, and `pnpm --filter @fixtures/vite-nitro-v3 build`.
@@ -94,10 +94,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | GATE-05     | Phase 3 | Pending  |
 | SEGM-01     | Phase 1 | Complete |
 | SEGM-02     | Phase 1 | Complete |
-| SEGM-03     | Phase 1 | Pending  |
-| SEGM-04     | Phase 1 | Pending  |
+| SEGM-03     | Phase 1 | Complete |
+| SEGM-04     | Phase 1 | Complete |
 | SEGM-05     | Phase 1 | Complete |
-| SEGM-06     | Phase 1 | Pending  |
+| SEGM-06     | Phase 1 | Complete |
 | TRAN-01     | Phase 2 | Pending  |
 | TRAN-02     | Phase 2 | Pending  |
 | TRAN-03     | Phase 2 | Pending  |
@@ -113,7 +113,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TEST-03     | Phase 2 | Pending  |
 | TEST-04     | Phase 2 | Pending  |
 | TEST-05     | Phase 1 | Complete |
-| TEST-06     | Phase 1 | Pending  |
+| TEST-06     | Phase 1 | Complete |
 | TEST-07     | Phase 4 | Pending  |
 | TEST-08     | Phase 3 | Pending  |
 | TEST-09     | Phase 4 | Pending  |
