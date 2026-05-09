@@ -43,8 +43,8 @@ importers:
   fixtures/rolldown-h3:
     dependencies:
       '@qwik.dev/core':
-        specifier: https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@dc9a8e8
-        version: https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@dc9a8e8(vite@8.0.10(@types/node@24.12.2)(yaml@2.8.3))(vitest@4.1.5(@types/node@24.12.2)(vite@8.0.10(@types/node@24.12.2)(yaml@2.8.3)))
+        specifier: https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@1f3647c
+        version: https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@1f3647c(vite@8.0.10(@types/node@24.12.2)(yaml@2.8.3))(vitest@4.1.5(@types/node@24.12.2)(vite@8.0.10(@types/node@24.12.2)(yaml@2.8.3)))
       h3:
         specifier: ^2.0.1-rc.21
         version: 2.0.1-rc.21(crossws@0.4.5(srvx@0.11.15))
@@ -68,8 +68,8 @@ importers:
         specifier: ^2.0.1
         version: 2.0.1(hono@4.12.16)
       '@qwik.dev/core':
-        specifier: https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@dc9a8e8
-        version: https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@dc9a8e8(vite@8.0.10(@types/node@24.12.2)(yaml@2.8.3))(vitest@4.1.5(@types/node@24.12.2)(vite@8.0.10(@types/node@24.12.2)(yaml@2.8.3)))
+        specifier: https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@1f3647c
+        version: https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@1f3647c(vite@8.0.10(@types/node@24.12.2)(yaml@2.8.3))(vitest@4.1.5(@types/node@24.12.2)(vite@8.0.10(@types/node@24.12.2)(yaml@2.8.3)))
       hono:
         specifier: ^4.12.16
         version: 4.12.16
@@ -90,8 +90,8 @@ importers:
   fixtures/rolldown-library:
     dependencies:
       '@qwik.dev/core':
-        specifier: https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@dc9a8e8
-        version: https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@dc9a8e8(vite@8.0.10(@types/node@24.12.2)(yaml@2.8.3))(vitest@4.1.5(@types/node@24.12.2)(vite@8.0.10(@types/node@24.12.2)(yaml@2.8.3)))
+        specifier: https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@1f3647c
+        version: https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@1f3647c(vite@8.0.10(@types/node@24.12.2)(yaml@2.8.3))(vitest@4.1.5(@types/node@24.12.2)(vite@8.0.10(@types/node@24.12.2)(yaml@2.8.3)))
     devDependencies:
       '@types/node':
         specifier: ^24.10.1
@@ -115,8 +115,8 @@ importers:
         specifier: ^2.0.1
         version: 2.0.1(hono@4.12.16)
       '@qwik.dev/core':
-        specifier: https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@dc9a8e8
-        version: https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@dc9a8e8(vite@8.0.10(@types/node@24.12.2)(yaml@2.8.3))(vitest@4.1.5(@types/node@24.12.2)(vite@8.0.10(@types/node@24.12.2)(yaml@2.8.3)))
+        specifier: https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@1f3647c
+        version: https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@1f3647c(vite@8.0.10(@types/node@24.12.2)(yaml@2.8.3))(vitest@4.1.5(@types/node@24.12.2)(vite@8.0.10(@types/node@24.12.2)(yaml@2.8.3)))
       hono:
         specifier: ^4.12.16
         version: 4.12.16
@@ -137,8 +137,8 @@ importers:
   fixtures/tsdown-library:
     dependencies:
       '@qwik.dev/core':
-        specifier: https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@dc9a8e8
-        version: https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@dc9a8e8(vite@8.0.10(@types/node@24.12.2)(yaml@2.8.3))(vitest@4.1.5(@types/node@24.12.2)(vite@8.0.10(@types/node@24.12.2)(yaml@2.8.3)))
+        specifier: https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@1f3647c
+        version: https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@1f3647c(vite@8.0.10(@types/node@24.12.2)(yaml@2.8.3))(vitest@4.1.5(@types/node@24.12.2)(vite@8.0.10(@types/node@24.12.2)(yaml@2.8.3)))
     devDependencies:
       '@types/node':
         specifier: ^24.10.1
@@ -156,8 +156,8 @@ importers:
   fixtures/vite-direct:
     dependencies:
       '@qwik.dev/core':
-        specifier: https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@dc9a8e8
-        version: https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@dc9a8e8(vite@8.0.10(@types/node@24.12.2)(yaml@2.8.3))(vitest@4.1.5(@types/node@24.12.2)(vite@8.0.10(@types/node@24.12.2)(yaml@2.8.3)))
+        specifier: https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@1f3647c
+        version: https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@1f3647c(vite@8.0.10(@types/node@24.12.2)(yaml@2.8.3))(vitest@4.1.5(@types/node@24.12.2)(vite@8.0.10(@types/node@24.12.2)(yaml@2.8.3)))
     devDependencies:
       '@types/node':
         specifier: ^24.10.1
@@ -175,8 +175,8 @@ importers:
   fixtures/vite-library:
     dependencies:
       '@qwik.dev/core':
-        specifier: https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@dc9a8e8
-        version: https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@dc9a8e8(vite@8.0.10(@types/node@24.12.2)(yaml@2.8.3))(vitest@4.1.5(@types/node@24.12.2)(vite@8.0.10(@types/node@24.12.2)(yaml@2.8.3)))
+        specifier: https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@1f3647c
+        version: https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@1f3647c(vite@8.0.10(@types/node@24.12.2)(yaml@2.8.3))(vitest@4.1.5(@types/node@24.12.2)(vite@8.0.10(@types/node@24.12.2)(yaml@2.8.3)))
     devDependencies:
       '@types/node':
         specifier: ^24.10.1
@@ -194,8 +194,8 @@ importers:
   fixtures/vite-nitro-v3:
     dependencies:
       '@qwik.dev/core':
-        specifier: https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@dc9a8e8
-        version: https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@dc9a8e8(vite@8.0.10(@types/node@24.12.2)(yaml@2.8.3))(vitest@4.1.5(@types/node@24.12.2)(vite@8.0.10(@types/node@24.12.2)(yaml@2.8.3)))
+        specifier: https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@1f3647c
+        version: https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@1f3647c(vite@8.0.10(@types/node@24.12.2)(yaml@2.8.3))(vitest@4.1.5(@types/node@24.12.2)(vite@8.0.10(@types/node@24.12.2)(yaml@2.8.3)))
     devDependencies:
       '@types/node':
         specifier: ^24.10.1
@@ -216,8 +216,8 @@ importers:
   fixtures/vite-plus:
     dependencies:
       '@qwik.dev/core':
-        specifier: https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@dc9a8e8
-        version: https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@dc9a8e8(vite@8.0.10(@types/node@24.12.2)(yaml@2.8.3))(vitest@4.1.5(@types/node@24.12.2)(vite@8.0.10(@types/node@24.12.2)(yaml@2.8.3)))
+        specifier: https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@1f3647c
+        version: https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@1f3647c(vite@8.0.10(@types/node@24.12.2)(yaml@2.8.3))(vitest@4.1.5(@types/node@24.12.2)(vite@8.0.10(@types/node@24.12.2)(yaml@2.8.3)))
     devDependencies:
       '@types/node':
         specifier: ^24.10.1
@@ -235,11 +235,11 @@ importers:
   fixtures/vite-qwik-router:
     dependencies:
       '@qwik.dev/core':
-        specifier: https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@dc9a8e8
-        version: https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@dc9a8e8(vite@8.0.10(@types/node@24.12.2)(yaml@2.8.3))(vitest@4.1.5(@types/node@24.12.2)(vite@8.0.10(@types/node@24.12.2)(yaml@2.8.3)))
+        specifier: https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@1f3647c
+        version: https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@1f3647c(vite@8.0.10(@types/node@24.12.2)(yaml@2.8.3))(vitest@4.1.5(@types/node@24.12.2)(vite@8.0.10(@types/node@24.12.2)(yaml@2.8.3)))
       '@qwik.dev/router':
         specifier: https://pkg.pr.new/QwikDev/qwik/@qwik.dev/router@dc9a8e8
-        version: https://pkg.pr.new/QwikDev/qwik/@qwik.dev/router@dc9a8e8(@qwik.dev/core@https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@dc9a8e8(vite@8.0.10(@types/node@24.12.2)(yaml@2.8.3))(vitest@4.1.5(@types/node@24.12.2)(vite@8.0.10(@types/node@24.12.2)(yaml@2.8.3))))(rollup@4.60.2)(typescript@5.9.3)(vite@8.0.10(@types/node@24.12.2)(yaml@2.8.3))
+        version: https://pkg.pr.new/QwikDev/qwik/@qwik.dev/router@dc9a8e8(@qwik.dev/core@https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@1f3647c(vite@8.0.10(@types/node@24.12.2)(yaml@2.8.3))(vitest@4.1.5(@types/node@24.12.2)(vite@8.0.10(@types/node@24.12.2)(yaml@2.8.3))))(rollup@4.60.2)(typescript@5.9.3)(vite@8.0.10(@types/node@24.12.2)(yaml@2.8.3))
     devDependencies:
       '@types/node':
         specifier: ^24.10.1
@@ -768,8 +768,8 @@ packages:
   '@quansync/fs@1.0.0':
     resolution: {integrity: sha512-4TJ3DFtlf1L5LDMaM6CanJ/0lckGNtJcMjQ1NAV6zDmA0tEHKZtxNKin8EgPaVX1YzljbxckyT2tJrpQKAtngQ==}
 
-  '@qwik.dev/core@https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@dc9a8e8':
-    resolution: {integrity: sha512-T4zmWn8+ITUcIYaNunQnXzOenM0cAlzwDqtb8BpNkd8yD2+ccjIHSuIXGotIJoYJh+E/WC/OgsCdjwQzLxWq7Q==, tarball: https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@dc9a8e8}
+  '@qwik.dev/core@https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@1f3647c':
+    resolution: {tarball: https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@1f3647c}
     version: 2.0.0-beta.34
     engines: {node: ^20.3.0 || >=21.0.0}
     hasBin: true
@@ -787,8 +787,8 @@ packages:
     resolution: {integrity: sha512-/L7RA9voF9RBZX22xUcmzSVXIcobLlvEVs9v6XLduPjjrn6l6hP6Gq0Igi0vQfXYsIeBEr7fGEq9UV+jIHqMRg==}
     engines: {node: ^20.3.0 || >=21.0.0}
 
-  '@qwik.dev/optimizer@https://pkg.pr.new/QwikDev/qwik/@qwik.dev/optimizer@dc9a8e8':
-    resolution: {tarball: https://pkg.pr.new/QwikDev/qwik/@qwik.dev/optimizer@dc9a8e8}
+  '@qwik.dev/optimizer@https://pkg.pr.new/QwikDev/qwik/@qwik.dev/optimizer@1f3647c':
+    resolution: {tarball: https://pkg.pr.new/QwikDev/qwik/@qwik.dev/optimizer@1f3647c}
     version: 2.1.0-beta.3
     engines: {node: ^20.3.0 || >=21.0.0}
 
@@ -2939,9 +2939,9 @@ snapshots:
     dependencies:
       quansync: 1.0.0
 
-  '@qwik.dev/core@https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@dc9a8e8(vite@8.0.10(@types/node@24.12.2)(yaml@2.8.3))(vitest@4.1.5(@types/node@24.12.2)(vite@8.0.10(@types/node@24.12.2)(yaml@2.8.3)))':
+  '@qwik.dev/core@https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@1f3647c(vite@8.0.10(@types/node@24.12.2)(yaml@2.8.3))(vitest@4.1.5(@types/node@24.12.2)(vite@8.0.10(@types/node@24.12.2)(yaml@2.8.3)))':
     dependencies:
-      '@qwik.dev/optimizer': https://pkg.pr.new/QwikDev/qwik/@qwik.dev/optimizer@dc9a8e8
+      '@qwik.dev/optimizer': https://pkg.pr.new/QwikDev/qwik/@qwik.dev/optimizer@1f3647c
       csstype: 3.2.3
       launch-editor: 2.13.2
       magic-string: 0.30.21
@@ -2952,14 +2952,14 @@ snapshots:
 
   '@qwik.dev/optimizer@2.1.0-beta.2': {}
 
-  '@qwik.dev/optimizer@https://pkg.pr.new/QwikDev/qwik/@qwik.dev/optimizer@dc9a8e8': {}
+  '@qwik.dev/optimizer@https://pkg.pr.new/QwikDev/qwik/@qwik.dev/optimizer@1f3647c': {}
 
-  '@qwik.dev/router@https://pkg.pr.new/QwikDev/qwik/@qwik.dev/router@dc9a8e8(@qwik.dev/core@https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@dc9a8e8(vite@8.0.10(@types/node@24.12.2)(yaml@2.8.3))(vitest@4.1.5(@types/node@24.12.2)(vite@8.0.10(@types/node@24.12.2)(yaml@2.8.3))))(rollup@4.60.2)(typescript@5.9.3)(vite@8.0.10(@types/node@24.12.2)(yaml@2.8.3))':
+  '@qwik.dev/router@https://pkg.pr.new/QwikDev/qwik/@qwik.dev/router@dc9a8e8(@qwik.dev/core@https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@1f3647c(vite@8.0.10(@types/node@24.12.2)(yaml@2.8.3))(vitest@4.1.5(@types/node@24.12.2)(vite@8.0.10(@types/node@24.12.2)(yaml@2.8.3))))(rollup@4.60.2)(typescript@5.9.3)(vite@8.0.10(@types/node@24.12.2)(yaml@2.8.3))':
     dependencies:
       '@azure/functions': 3.5.1
       '@mdx-js/mdx': 3.1.1
       '@netlify/edge-functions': 3.0.6
-      '@qwik.dev/core': https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@dc9a8e8(vite@8.0.10(@types/node@24.12.2)(yaml@2.8.3))(vitest@4.1.5(@types/node@24.12.2)(vite@8.0.10(@types/node@24.12.2)(yaml@2.8.3)))
+      '@qwik.dev/core': https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@1f3647c(vite@8.0.10(@types/node@24.12.2)(yaml@2.8.3))(vitest@4.1.5(@types/node@24.12.2)(vite@8.0.10(@types/node@24.12.2)(yaml@2.8.3)))
       '@types/mdx': 2.0.13
       estree-util-value-to-estree: 3.5.0
       github-slugger: 2.0.0

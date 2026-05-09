@@ -14,7 +14,7 @@
 		"build": "rolldown -c"
 	},
 	"dependencies": {
-		"@qwik.dev/core": "https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@dc9a8e8"
+		"@qwik.dev/core": "https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@1f3647c"
 	},
 	"devDependencies": {
 		"@types/node": "^24.10.1",

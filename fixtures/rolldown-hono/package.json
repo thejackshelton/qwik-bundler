@@ -8,7 +8,7 @@
 	},
 	"dependencies": {
 		"@hono/node-server": "^2.0.1",
-		"@qwik.dev/core": "https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@dc9a8e8",
+		"@qwik.dev/core": "https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@1f3647c",
 		"hono": "^4.12.16"
 	},
 	"devDependencies": {

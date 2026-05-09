@@ -232,6 +232,21 @@ describe('Rolldown runtime integration', () => {
 		expect(transformRequest).toHaveBeenCalledWith('/src/home.tsx');
 	});
 
+	test('resolves relative dev QRLs against their source importer', async () => {
+		const plugin = qwikClient({ dev: true });
+
+		const resolved = await callResolveId(
+			plugin,
+			'./home.tsx_home_component_abc.js',
+			'\0qwik:segment:client:/workspace/app/src/root.tsx_root_component_def.js',
+		);
+
+		expect(resolved).toEqual({
+			id: '\0qwik:segment:client:/workspace/app/src/home.tsx_home_component_abc.js',
+			moduleSideEffects: false,
+		});
+	});
+
 	test('resolves and loads QRL segment modules emitted by the optimizer', async () => {
 		optimizerMock.transformModules.mockResolvedValueOnce({
 			modules: [

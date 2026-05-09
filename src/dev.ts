@@ -1,5 +1,5 @@
 import type { TransformModule } from '@qwik.dev/optimizer';
-import { relative } from 'pathe';
+import { dirname, relative, resolve } from 'pathe';
 import { isEqual, isRelative, parsePath, withLeadingSlash } from 'ufo';
 import type { QwikEnvironment } from './rolldown';
 
@@ -33,7 +33,7 @@ export function createQwikDev(
 			const path = pathname(id);
 			return { code, path, devPath: enabled() ? getDevPath(path, root()) : undefined };
 		},
-		resolveId(source: string, environment: QwikEnvironment) {
+		resolveId(source: string, environment: QwikEnvironment, importer: string | undefined) {
 			if (isDevHandlers(source)) {
 				return { id: QWIK_DEV_HANDLERS, moduleSideEffects: false };
 			}
@@ -46,8 +46,10 @@ export function createQwikDev(
 				return null;
 			}
 
-			const id = encode(environment, qrl.path);
-			parents.set(id, { environment, parent: qrl.parent });
+			const path = resolveRelative(qrl.path, importer);
+			const parent = resolveRelative(qrl.parent, importer);
+			const id = encode(environment, path);
+			parents.set(id, { environment, parent });
 			return { id, moduleSideEffects: false };
 		},
 		async load(id: string) {
@@ -93,6 +95,10 @@ function parseDevQrl(id: string): { parent: string; path: string } | null {
 	const match = /^(?<parent>.*\.[cm]?[jt]sx?)_(?<name>[^/]+)\.js$/.exec(path);
 	const parent = match?.groups?.parent;
 	return parent ? { parent, path } : null;
+}
+
+function resolveRelative(path: string, importer: string | undefined) {
+	return importer && isRelative(path) ? resolve(dirname(pathname(importer)), path) : path;
 }
 
 function devSegmentPaths(path: string, root: string | undefined) {

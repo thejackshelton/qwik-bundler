@@ -129,7 +129,11 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 		},
 		async resolveId(source, importer) {
 			const currentEnvironment = getEnvironment(this);
-			const devResolution = dev.resolveId(source, currentEnvironment);
+			const devResolution = dev.resolveId(
+				source,
+				currentEnvironment,
+				sourceImporter(importer),
+			);
 			if (devResolution) return devResolution;
 
 			if (source === QWIK_BUILD) {
@@ -384,6 +388,15 @@ function entryStrategy(environment: QwikEnvironment, value: EntryStrategy | unde
 
 function segmentId(environment: QwikEnvironment, path: string) {
 	return `${SEGMENT}${environment}:${path}`;
+}
+
+function sourceImporter(id: string | undefined) {
+	if (!id?.startsWith(SEGMENT)) {
+		return id;
+	}
+
+	const index = id.indexOf(':', SEGMENT.length);
+	return index < 0 ? id : id.slice(index + 1);
 }
 
 function pathname(id: string) {
