@@ -166,7 +166,7 @@ describe('Rolldown runtime integration', () => {
 		expect(emitFile).not.toHaveBeenCalled();
 	});
 
-	test('uses dev optimizer mode and root-relative dev paths in dev mode', async () => {
+	test('uses HMR optimizer mode and root-relative dev paths in dev mode', async () => {
 		const plugin = qwikClient({ dev: true });
 
 		callBuildStart(plugin, { cwd: '/workspace/app' });
@@ -180,6 +180,20 @@ describe('Rolldown runtime integration', () => {
 						path: '/workspace/app/src/root.tsx',
 					}),
 				],
+				mode: 'hmr',
+				sourceMaps: true,
+			}),
+		);
+	});
+
+	test('uses dev optimizer mode when HMR is disabled', async () => {
+		const plugin = qwikClient({ dev: true, hmr: false });
+
+		callBuildStart(plugin, { cwd: '/workspace/app' });
+		await callTransform(plugin, 'export const answer = 42;', '/workspace/app/src/root.tsx');
+
+		expect(optimizerMock.transformModules).toHaveBeenCalledWith(
+			expect.objectContaining({
 				mode: 'dev',
 				sourceMaps: true,
 			}),
@@ -463,7 +477,7 @@ describe('Rolldown runtime integration', () => {
 		expect(code).toContain('export const click = () => "click";');
 		expect(code).toContain('import.meta.hot.accept(');
 		expect(code).toContain("document.dispatchEvent(new CustomEvent('qHmr'");
-		expect(code).toContain("files:['/src/home.tsx']");
+		expect(code).toContain('files:["/src/home.tsx"]');
 		expect(code).toContain('t:document.__hmrT');
 		expect(code).toContain("typeof document !== 'undefined'");
 	});

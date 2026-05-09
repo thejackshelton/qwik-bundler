@@ -310,7 +310,14 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 			preserveFilenames: true,
 			srcDir: getRoot() ?? '',
 			rootDir: getRoot(),
-			mode: currentEnvironment === 'lib' ? 'lib' : dev.isEnabled() ? 'dev' : 'prod',
+			mode:
+				currentEnvironment === 'lib'
+					? 'lib'
+					: dev.isEnabled() && options.hmr !== false
+						? 'hmr'
+						: dev.isEnabled()
+							? 'dev'
+							: 'prod',
 			isServer: currentEnvironment === 'server',
 		});
 		reportDiagnostics(result.diagnostics, id, context);
