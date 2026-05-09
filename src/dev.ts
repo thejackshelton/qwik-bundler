@@ -193,7 +193,7 @@ function appendSegmentAccept(
 		return code;
 	}
 
-	return `${code}\nif (import.meta.hot && typeof document !== 'undefined') {import.meta.hot.accept(()=>{void ${JSON.stringify(parent)};});}`;
+	return `${code}\nif (import.meta.hot && typeof document !== 'undefined') {import.meta.hot.accept(()=>{document.dispatchEvent(new CustomEvent('qHmr',{detail:{files:[${JSON.stringify(parent)}],t:document.__hmrT}}));});}`;
 }
 
 function pathname(id: string) {

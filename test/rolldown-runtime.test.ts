@@ -462,6 +462,9 @@ describe('Rolldown runtime integration', () => {
 
 		expect(code).toContain('export const click = () => "click";');
 		expect(code).toContain('import.meta.hot.accept(');
+		expect(code).toContain("document.dispatchEvent(new CustomEvent('qHmr'");
+		expect(code).toContain("files:['/src/home.tsx']");
+		expect(code).toContain('t:document.__hmrT');
 		expect(code).toContain("typeof document !== 'undefined'");
 	});
 
