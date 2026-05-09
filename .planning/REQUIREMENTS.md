@@ -17,11 +17,11 @@ Requirements for the HMR implementation milestone. Each maps to exactly one road
 
 ### Dev QRL Segments
 
-- [ ] **SEGM-01**: Browser requests for generated dev QRL segment URLs resolve to the correct parent source module and generated segment identity.
-- [ ] **SEGM-02**: If a generated QRL segment is requested before its parent has been transformed, the segment loader invokes a narrow parent-transform callback and returns the generated segment.
+- [x] **SEGM-01**: Browser requests for generated dev QRL segment URLs resolve to the correct parent source module and generated segment identity.
+- [x] **SEGM-02**: If a generated QRL segment is requested before its parent has been transformed, the segment loader invokes a narrow parent-transform callback and returns the generated segment.
 - [ ] **SEGM-03**: Client and SSR dev segment caches are isolated so transforms from one Vite environment cannot overwrite the other.
 - [ ] **SEGM-04**: Editing a parent source file invalidates all generated QRL segments derived from that parent.
-- [ ] **SEGM-05**: Non-worker dev QRL segment modules include literal `import.meta.hot.accept(` code when HMR is enabled.
+- [x] **SEGM-05**: Non-worker dev QRL segment modules include literal `import.meta.hot.accept(` code when HMR is enabled.
 - [ ] **SEGM-06**: Dev segment URL and source-path normalization handles query strings, root-relative paths, absolute filesystem paths, and platform path separators consistently.
 
 ### Vite HMR Transport
@@ -46,7 +46,7 @@ Requirements for the HMR implementation milestone. Each maps to exactly one road
 - [ ] **TEST-02**: Unit tests cover virtual bridge module resolution and loading.
 - [ ] **TEST-03**: Unit tests cover SSR/server-environment hot updates forwarding to the client channel.
 - [ ] **TEST-04**: Unit tests cover `hmr: false` fallback/full reload behavior.
-- [ ] **TEST-05**: Unit tests cover dev segment loading with appended HMR accept code.
+- [x] **TEST-05**: Unit tests cover dev segment loading with appended HMR accept code.
 - [ ] **TEST-06**: Focused tests verify generated segment invalidation and parent-transform callback behavior.
 - [ ] **TEST-07**: Fixture or browser smoke coverage verifies CSR Vite HMR updates a component in the browser when practical.
 - [ ] **TEST-08**: Fixture coverage verifies SSR/Nitro and library builds continue to pass without HMR leakage.
@@ -85,38 +85,38 @@ Explicitly excluded. Documented to prevent scope creep.
 
 Which phases cover which requirements. Updated during roadmap creation.
 
-| Requirement | Phase   | Status  |
-| ----------- | ------- | ------- |
-| GATE-01     | Phase 2 | Pending |
-| GATE-02     | Phase 2 | Pending |
-| GATE-03     | Phase 2 | Pending |
-| GATE-04     | Phase 3 | Pending |
-| GATE-05     | Phase 3 | Pending |
-| SEGM-01     | Phase 1 | Pending |
-| SEGM-02     | Phase 1 | Pending |
-| SEGM-03     | Phase 1 | Pending |
-| SEGM-04     | Phase 1 | Pending |
-| SEGM-05     | Phase 1 | Pending |
-| SEGM-06     | Phase 1 | Pending |
-| TRAN-01     | Phase 2 | Pending |
-| TRAN-02     | Phase 2 | Pending |
-| TRAN-03     | Phase 2 | Pending |
-| TRAN-04     | Phase 2 | Pending |
-| TRAN-05     | Phase 2 | Pending |
-| TRAN-06     | Phase 2 | Pending |
-| BRDG-01     | Phase 2 | Pending |
-| BRDG-02     | Phase 2 | Pending |
-| BRDG-03     | Phase 2 | Pending |
-| BRDG-04     | Phase 2 | Pending |
-| TEST-01     | Phase 2 | Pending |
-| TEST-02     | Phase 2 | Pending |
-| TEST-03     | Phase 2 | Pending |
-| TEST-04     | Phase 2 | Pending |
-| TEST-05     | Phase 1 | Pending |
-| TEST-06     | Phase 1 | Pending |
-| TEST-07     | Phase 4 | Pending |
-| TEST-08     | Phase 3 | Pending |
-| TEST-09     | Phase 4 | Pending |
+| Requirement | Phase   | Status   |
+| ----------- | ------- | -------- |
+| GATE-01     | Phase 2 | Pending  |
+| GATE-02     | Phase 2 | Pending  |
+| GATE-03     | Phase 2 | Pending  |
+| GATE-04     | Phase 3 | Pending  |
+| GATE-05     | Phase 3 | Pending  |
+| SEGM-01     | Phase 1 | Complete |
+| SEGM-02     | Phase 1 | Complete |
+| SEGM-03     | Phase 1 | Pending  |
+| SEGM-04     | Phase 1 | Pending  |
+| SEGM-05     | Phase 1 | Complete |
+| SEGM-06     | Phase 1 | Pending  |
+| TRAN-01     | Phase 2 | Pending  |
+| TRAN-02     | Phase 2 | Pending  |
+| TRAN-03     | Phase 2 | Pending  |
+| TRAN-04     | Phase 2 | Pending  |
+| TRAN-05     | Phase 2 | Pending  |
+| TRAN-06     | Phase 2 | Pending  |
+| BRDG-01     | Phase 2 | Pending  |
+| BRDG-02     | Phase 2 | Pending  |
+| BRDG-03     | Phase 2 | Pending  |
+| BRDG-04     | Phase 2 | Pending  |
+| TEST-01     | Phase 2 | Pending  |
+| TEST-02     | Phase 2 | Pending  |
+| TEST-03     | Phase 2 | Pending  |
+| TEST-04     | Phase 2 | Pending  |
+| TEST-05     | Phase 1 | Complete |
+| TEST-06     | Phase 1 | Pending  |
+| TEST-07     | Phase 4 | Pending  |
+| TEST-08     | Phase 3 | Pending  |
+| TEST-09     | Phase 4 | Pending  |
 
 **Coverage:**
 

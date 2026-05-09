@@ -37,7 +37,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 Plans:
 **Wave 1**
 
-- [ ] 01-01-PLAN.md — Implement generated dev QRL segment resolve/load, parent transform callback, and non-worker self-accept code.
+- [x] 01-01-PLAN.md — Implement generated dev QRL segment resolve/load, parent transform callback, and non-worker self-accept code.
 
 **Wave 2** _(blocked on Wave 1 completion)_
 
@@ -88,7 +88,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase                                       | Plans Complete | Status      | Completed |
 | ------------------------------------------- | -------------- | ----------- | --------- |
-| 1. Dev QRL Segment Core                     | 0/TBD          | Not started | -         |
+| 1. Dev QRL Segment Core                     | 1/2            | In Progress | -         |
 | 2. Vite HMR Transport and Browser Bridge    | 0/TBD          | Not started | -         |
 | 3. Serve/Build Gating and Regression Safety | 0/TBD          | Not started | -         |
 | 4. Browser Smoke and Final Verification     | 0/TBD          | Not started | -         |
