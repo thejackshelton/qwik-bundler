@@ -18,6 +18,7 @@
 		"verifier": true,
 		"nyquist_validation": false,
 		"auto_advance": true,
+		"_auto_chain_active": true,
 		"node_repair": true,
 		"node_repair_budget": 2,
 		"ui_phase": true,
