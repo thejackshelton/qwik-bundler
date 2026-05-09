@@ -1,5 +1,5 @@
 import type { TransformModule } from '@qwik.dev/optimizer';
-import { dirname, relative, resolve } from 'pathe';
+import { dirname, normalize, relative, resolve } from 'pathe';
 import { isEqual, isRelative, parsePath, withLeadingSlash } from 'ufo';
 import type { QwikEnvironment } from './rolldown';
 
@@ -26,6 +26,7 @@ export function createQwikDev(
 	encode: EncodeSegment,
 ) {
 	const parents = new Map<string, { environment: QwikEnvironment; parent: string }>();
+	const parentSegments = new Map<string, Set<string>>();
 	const enabled = () => options.dev === true;
 	const hmrEnabled = () => enabled() && options.hmr !== false;
 
@@ -83,9 +84,49 @@ export function createQwikDev(
 				return;
 			}
 
+			const ids: string[] = [];
 			for (const path of devSegmentPaths(module.path, root())) {
-				segments.set(encode(environment, path), module);
+				const id = encode(environment, path);
+				segments.set(id, module);
+				ids.push(id);
 			}
+
+			const qrl = parseDevQrl(module.path);
+			if (!qrl) {
+				return;
+			}
+
+			for (const parent of devSegmentPaths(qrl.parent, root())) {
+				const key = parentKey(environment, parent);
+				const existing = parentSegments.get(key) ?? new Set<string>();
+				for (const id of ids) {
+					existing.add(id);
+				}
+				parentSegments.set(key, existing);
+			}
+		},
+		invalidate(parent: string, environment?: QwikEnvironment) {
+			const deleted: string[] = [];
+			const environments = environment
+				? [environment]
+				: (['client', 'server', 'lib'] as const);
+
+			for (const currentEnvironment of environments) {
+				for (const path of devSegmentPaths(parent, root())) {
+					const key = parentKey(currentEnvironment, path);
+					const ids = parentSegments.get(key);
+					if (!ids) continue;
+
+					for (const id of ids) {
+						if (segments.delete(id)) {
+							deleted.push(id);
+						}
+					}
+					parentSegments.delete(key);
+				}
+			}
+
+			return deleted;
 		},
 	};
 }
@@ -106,6 +147,7 @@ function resolveRelative(path: string, importer: string | undefined) {
 }
 
 function devSegmentPaths(path: string, root: string | undefined) {
+	path = normalizeSourcePath(path);
 	const paths = new Set([path, withLeadingSlash(path)]);
 	const devPath = getDevPath(path, root);
 	if (devPath) {
@@ -121,6 +163,19 @@ function getDevPath(id: string, root: string | undefined) {
 
 	const path = relative(root, id);
 	return path && path !== '..' && !isRelative(path) ? withLeadingSlash(path) : undefined;
+}
+
+function parentKey(environment: QwikEnvironment, parent: string) {
+	return `${environment}:${normalizeSourcePath(parent)}`;
+}
+
+function normalizeSourcePath(id: string) {
+	return normalize(normalizePathname(id));
+}
+
+function normalizePathname(id: string) {
+	const path = parsePath(id).pathname.replace(/\\/g, '/');
+	return path.replace(/^[A-Za-z]:\//, '/');
 }
 
 function transformDevParent(server: QwikDevServer, environment: QwikEnvironment, parent: string) {
@@ -142,5 +197,5 @@ function appendSegmentAccept(
 }
 
 function pathname(id: string) {
-	return parsePath(id).pathname;
+	return normalizePathname(id);
 }

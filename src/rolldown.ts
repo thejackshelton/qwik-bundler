@@ -96,6 +96,9 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 	const dev = createQwikDev(options, segments, getRoot, segmentId);
 
 	return {
+		api: {
+			invalidateDevSegments: dev.invalidate,
+		},
 		name,
 		options(input) {
 			const next = defineQwik(input, options.experimental, options.dev);
@@ -286,7 +289,7 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 				}
 			},
 		},
-	};
+	} as Plugin & { api: { invalidateDevSegments: typeof dev.invalidate } };
 
 	async function transform(
 		code: string,
