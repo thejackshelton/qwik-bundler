@@ -13,6 +13,7 @@ type EncodeSegment = (environment: QwikEnvironment, path: string) => string;
 interface QwikDevOptions {
 	dev?: boolean;
 	devServer?: QwikDevServer;
+	hmr?: boolean;
 }
 
 const QWIK_CORE = '@qwik.dev/core';
@@ -26,6 +27,7 @@ export function createQwikDev(
 ) {
 	const parents = new Map<string, { environment: QwikEnvironment; parent: string }>();
 	const enabled = () => options.dev === true;
+	const hmrEnabled = () => enabled() && options.hmr !== false;
 
 	return {
 		isEnabled: enabled,
@@ -72,7 +74,9 @@ export function createQwikDev(
 				await transformDevParent(server, pending.environment, pending.parent);
 				segment = segments.get(key);
 			}
-			return segment?.code ?? null;
+			return segment
+				? appendSegmentAccept(segment.code, segment, pending.parent, hmrEnabled())
+				: null;
 		},
 		recordSegment(module: TransformModule, environment: QwikEnvironment) {
 			if (!enabled()) {
@@ -122,6 +126,19 @@ function getDevPath(id: string, root: string | undefined) {
 function transformDevParent(server: QwikDevServer, environment: QwikEnvironment, parent: string) {
 	const devEnvironment = server.environments?.[environment === 'server' ? 'ssr' : 'client'];
 	return devEnvironment?.transformRequest(parent) ?? server.transformRequest(parent);
+}
+
+function appendSegmentAccept(
+	code: string,
+	module: TransformModule,
+	parent: string,
+	hmrEnabled: boolean,
+) {
+	if (!hmrEnabled || module.segment?.ctxName === 'worker$') {
+		return code;
+	}
+
+	return `${code}\nif (import.meta.hot && typeof document !== 'undefined') {import.meta.hot.accept(()=>{void ${JSON.stringify(parent)};});}`;
 }
 
 function pathname(id: string) {

@@ -30,6 +30,7 @@ export interface QwikRolldownOptions {
 	devServer?: QwikDevServer;
 	entryStrategy?: EntryStrategy;
 	experimental?: string[];
+	hmr?: boolean;
 	manifestInput?: QwikManifest | ServerQwikManifest;
 	onManifest?: (manifest: QwikManifest) => void;
 	optimizerOptions?: OptimizerOptions;

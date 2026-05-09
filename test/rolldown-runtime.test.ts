@@ -216,7 +216,7 @@ describe('Rolldown runtime integration', () => {
 		await callTransform(plugin, 'export default 1;', '/workspace/app/src/home.tsx');
 		const resolved = await callResolveId(plugin, '/src/home.tsx_click_abc.js');
 
-		expect(await callLoad(plugin, (resolved as { id: string }).id)).toBe('segment');
+		expect(await callLoad(plugin, (resolved as { id: string }).id)).toContain('segment');
 	});
 
 	test('appends literal self-accept code to non-worker dev QRL segments', async () => {
