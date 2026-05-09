@@ -32,7 +32,16 @@ Decimal phases appear between their surrounding integers in numeric order.
 3. Client and SSR dev segment caches stay isolated, and editing a parent source invalidates all generated segments derived from that parent.
 4. Non-worker dev QRL segments include literal `import.meta.hot.accept(` code when HMR is enabled.
 5. Focused tests prove segment URL/source normalization, appended accept code, cache invalidation, and parent-transform callback behavior.
-   **Plans**: TBD
+   **Plans**: 2 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 01-01-PLAN.md — Implement generated dev QRL segment resolve/load, parent transform callback, and non-worker self-accept code.
+
+**Wave 2** _(blocked on Wave 1 completion)_
+
+- [ ] 01-02-PLAN.md — Implement environment-isolated segment caches, parent invalidation primitive, and URL/source normalization coverage.
 
 ### Phase 2: Vite HMR Transport and Browser Bridge
 
