@@ -21,13 +21,18 @@ export function qwik(options: VitePluginOptions = {}): Plugin[] {
 		options.onManifest?.(nextManifest);
 	};
 	const basePlugin = qwikRolldown(getBuildEnvironment, rolldownOptions) as Plugin;
-	const hmr = createViteHmr({ enabled: () => serve && options.hmr !== false });
+	const hmr = createViteHmr({
+		enabled: () => serve && options.hmr !== false,
+		invalidateDevSegments: (parent, environment) =>
+			qwikPlugin.api.invalidateDevSegments(parent, environment),
+	});
 
 	const qwikPlugin = {
 		...basePlugin,
 		name: 'vite-plugin-qwik',
 		enforce: 'pre',
 		api: {
+			...(basePlugin.api as QwikPluginApi),
 			getManifest: () => manifest,
 		},
 		...external,
@@ -62,7 +67,10 @@ export function qwik(options: VitePluginOptions = {}): Plugin[] {
 				? basePlugin.load.call(this, id, loadOptions)
 				: null;
 		},
-	} satisfies Plugin & { api: { getManifest: () => QwikManifest | null } };
+		hotUpdate(ctx) {
+			return hmr.hotUpdate(this.environment, ctx);
+		},
+	} satisfies Plugin & { api: QwikPluginApi & { getManifest: () => QwikManifest | null } };
 
 	return [qwikPlugin];
 }
@@ -101,6 +109,10 @@ type ViteHookContext = {
 			build?: { lib?: unknown };
 		};
 	};
+};
+
+type QwikPluginApi = {
+	invalidateDevSegments: (parent: string, environment?: QwikEnvironment) => string[];
 };
 
 function getBuildEnvironment(context: unknown): QwikEnvironment {

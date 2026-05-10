@@ -110,8 +110,8 @@ describe('Vite Qwik HMR transport', () => {
 		callConfigResolved(plugin, { command: 'serve', root: '/workspace/app' });
 		Object.assign(plugin, { api: { ...plugin.api, invalidateDevSegments } });
 
-		await expect(
-			callHotUpdate(
+		expect(
+			await callHotUpdate(
 				plugin,
 				{
 					modules: [
@@ -125,7 +125,7 @@ describe('Vite Qwik HMR transport', () => {
 				},
 				{ environment },
 			),
-		).resolves.toEqual([]);
+		).toEqual([]);
 
 		expect(invalidateDevSegments).toHaveBeenCalledWith('/src/root.tsx', 'client');
 		expect(getModuleById).toHaveBeenCalledWith(segmentModule.id);
@@ -150,8 +150,8 @@ describe('Vite Qwik HMR transport', () => {
 		callConfigResolved(plugin, { command: 'serve', root: '/workspace/app' });
 		Object.assign(plugin, { api: { ...plugin.api, invalidateDevSegments } });
 
-		await expect(
-			callHotUpdate(
+		expect(
+			await callHotUpdate(
 				plugin,
 				{
 					modules: [
@@ -178,7 +178,7 @@ describe('Vite Qwik HMR transport', () => {
 				},
 				{ environment },
 			),
-		).resolves.toEqual([]);
+		).toEqual([]);
 
 		expect(invalidateDevSegments).toHaveBeenCalledTimes(1);
 		expect(invalidateDevSegments).toHaveBeenCalledWith('/src/entry.tsx', 'client');
