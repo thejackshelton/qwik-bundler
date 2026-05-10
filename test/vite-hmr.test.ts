@@ -1,7 +1,15 @@
 import { describe, expect, test, vi } from 'vitest';
 import { createViteHmr, QWIK_HMR_BRIDGE_ID } from '../src/vite/hmr';
-import { callLoad, callResolveId } from './helpers';
-import { callConfigureServer, callHotUpdate, callTransformIndexHtml } from './helpers';
+import { qwik } from '../src/vite';
+import {
+	callConfigResolved,
+	callConfigureServer,
+	callHotUpdate,
+	callLoad,
+	callResolveId,
+	callTransformIndexHtml,
+	getPlugin,
+} from './helpers';
 
 describe('Vite HMR hook helpers', () => {
 	test('invokes HTML, server, and hot update hooks with caller-provided values', async () => {
@@ -45,5 +53,42 @@ describe('Vite Qwik HMR bridge module', () => {
 
 		expect(await callResolveId(hmr, 'virtual:other')).toBeNull();
 		expect(await callLoad(hmr, '\0virtual:other')).toBeNull();
+	});
+});
+
+describe('Vite Qwik HMR bridge injection', () => {
+	test('injects only the Qwik bridge script in serve mode', async () => {
+		const plugin = getPlugin(qwik(), 'vite-plugin-qwik');
+
+		callConfigResolved(plugin, { command: 'serve', root: '/workspace/app' });
+
+		const tags = await callTransformIndexHtml(plugin, '<html></html>');
+		expect(tags).toEqual([
+			{
+				tag: 'script',
+				attrs: { type: 'module', src: `/@id/${QWIK_HMR_BRIDGE_ID}` },
+			},
+		]);
+		expect(JSON.stringify(tags)).not.toContain('@vite/client');
+	});
+
+	test('does not inject the Qwik bridge when HMR is disabled', async () => {
+		const plugin = getPlugin(qwik({ hmr: false }), 'vite-plugin-qwik');
+
+		callConfigResolved(plugin, { command: 'serve', root: '/workspace/app' });
+
+		expect(await callTransformIndexHtml(plugin, '<html></html>')).toBeUndefined();
+	});
+
+	test('delegates bridge resolution and loading through the Vite plugin', async () => {
+		const plugin = getPlugin(qwik(), 'vite-plugin-qwik');
+
+		callConfigResolved(plugin, { command: 'serve', root: '/workspace/app' });
+
+		const resolved = await callResolveId(plugin, QWIK_HMR_BRIDGE_ID);
+		expect(resolved).toEqual({ id: `\0${QWIK_HMR_BRIDGE_ID}`, moduleSideEffects: true });
+		expect(await callLoad(plugin, `\0${QWIK_HMR_BRIDGE_ID}`)).toContain(
+			"import.meta.hot.on('qwik:hmr'",
+		);
 	});
 });
