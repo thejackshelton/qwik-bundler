@@ -4,14 +4,14 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: Completed 01-dev-qrl-segment-core-02-PLAN.md
-last_updated: '2026-05-10T00:42:29.165Z'
-last_activity: 2026-05-10 -- Phase 02 execution started
+last_updated: '2026-05-10T02:54:27.263Z'
+last_activity: 2026-05-10
 progress:
     total_phases: 4
     completed_phases: 1
     total_plans: 5
-    completed_plans: 2
-    percent: 40
+    completed_plans: 3
+    percent: 60
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-05-09)
 ## Current Position
 
 Phase: 02 (vite-hmr-transport-and-browser-bridge) — EXECUTING
-Plan: 1 of 3
-Status: Executing Phase 02
-Last activity: 2026-05-10 -- Phase 02 execution started
+Plan: 2 of 3
+Status: Ready to execute
+Last activity: 2026-05-10
 
-Progress: [██████████] 100%
+Progress: [██████░░░░] 60%
 
 ## Performance Metrics
 
@@ -58,6 +58,7 @@ Progress: [██████████] 100%
 
 _Updated after each plan completion_
 | Phase 01-dev-qrl-segment-core P02 | 16min 08s | 2 tasks | 4 files |
+| Phase 02-vite-hmr-transport-and-browser-bridge P01 | 1min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -72,6 +73,8 @@ Recent decisions affecting current work:
 - Plan 01: Use a minimal `hmr?: boolean` option so `hmr: false` disables generated segment self-accept code without adding Phase 2 transport behavior.
 - [Phase 01-dev-qrl-segment-core]: Plan 02: Expose dev segment invalidation only through a non-public plugin api property for tests and later Vite wiring, without adding a package export.
 - [Phase 01-dev-qrl-segment-core]: Plan 02: Keep normalization centralized in src/dev.ts using ufo parsePath, pathe normalize, and a small backslash/drive-prefix boundary.
+- [Phase 02-vite-hmr-transport-and-browser-bridge]: Plan 01: Keep Qwik HMR bridge behavior in src/vite/hmr.ts and src/client/hmr-bridge.ts so src/vite.ts remains a thin adapter.
+- [Phase 02-vite-hmr-transport-and-browser-bridge]: Plan 01: Inject only the virtual Qwik bridge script in Vite serve mode and leave @vite/client ownership to Vite.
 
 ### Pending Todos
 
@@ -92,6 +95,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-05-09T22:16:18.233Z
+Last session: 2026-05-10T02:53:56.748Z
 Stopped at: Completed 01-dev-qrl-segment-core-02-PLAN.md
 Resume file: None

@@ -9,8 +9,8 @@ Requirements for the HMR implementation milestone. Each maps to exactly one road
 
 ### Configuration and Gating
 
-- [ ] **GATE-01**: Maintainer can enable Qwik HMR automatically by running the bundler through Vite serve mode with default options.
-- [ ] **GATE-02**: Maintainer can set `hmr: false` to disable Qwik HMR bridge injection, dev segment self-accept code, and custom Qwik HMR events.
+- [x] **GATE-01**: Maintainer can enable Qwik HMR automatically by running the bundler through Vite serve mode with default options.
+- [x] **GATE-02**: Maintainer can set `hmr: false` to disable Qwik HMR bridge injection, dev segment self-accept code, and custom Qwik HMR events.
 - [ ] **GATE-03**: Developer receives a Vite full reload for relevant source updates when `hmr: false` is set.
 - [ ] **GATE-04**: Production, SSR build, static HTML, raw Rolldown, and library outputs contain no Qwik HMR bridge or generated dev-only HMR code.
 - [ ] **GATE-05**: Static CSR preloader injection and SSR/SSG duplicate-preloader avoidance remain unchanged by the HMR implementation.
@@ -26,8 +26,8 @@ Requirements for the HMR implementation milestone. Each maps to exactly one road
 
 ### Vite HMR Transport
 
-- [ ] **TRAN-01**: Vite serve mode injects only the Qwik HMR bridge module into dev HTML and does not manually inject `@vite/client`.
-- [ ] **TRAN-02**: The Vite HMR plugin exposes a virtual Qwik HMR bridge module that can be resolved and loaded by Vite.
+- [x] **TRAN-01**: Vite serve mode injects only the Qwik HMR bridge module into dev HTML and does not manually inject `@vite/client`.
+- [x] **TRAN-02**: The Vite HMR plugin exposes a virtual Qwik HMR bridge module that can be resolved and loaded by Vite.
 - [ ] **TRAN-03**: Source updates in the client environment invalidate affected generated segments and send a `qwik:hmr` custom event with normalized source files.
 - [ ] **TRAN-04**: Source updates discovered in the SSR environment forward relevant normalized source file changes to the client HMR channel.
 - [ ] **TRAN-05**: Non-source module changes use conservative importer/source fallback behavior instead of broadcasting unrelated updates.
@@ -35,15 +35,15 @@ Requirements for the HMR implementation milestone. Each maps to exactly one road
 
 ### Browser Bridge Runtime
 
-- [ ] **BRDG-01**: Browser bridge code listens for Vite `qwik:hmr` custom events and dispatches Qwik's browser `qHmr` event with the update payload.
-- [ ] **BRDG-02**: Browser bridge code deduplicates stale or repeated HMR payloads by timestamp.
-- [ ] **BRDG-03**: Browser bridge code triggers a full page reload when Qwik does not acknowledge an HMR update within the configured fallback window.
-- [ ] **BRDG-04**: Browser bridge runtime remains isolated in a client-facing module rather than embedded across Vite plugin logic.
+- [x] **BRDG-01**: Browser bridge code listens for Vite `qwik:hmr` custom events and dispatches Qwik's browser `qHmr` event with the update payload.
+- [x] **BRDG-02**: Browser bridge code deduplicates stale or repeated HMR payloads by timestamp.
+- [x] **BRDG-03**: Browser bridge code triggers a full page reload when Qwik does not acknowledge an HMR update within the configured fallback window.
+- [x] **BRDG-04**: Browser bridge runtime remains isolated in a client-facing module rather than embedded across Vite plugin logic.
 
 ### Regression and Fixture Coverage
 
-- [ ] **TEST-01**: Unit tests cover Qwik HMR bridge HTML injection and non-injection when disabled.
-- [ ] **TEST-02**: Unit tests cover virtual bridge module resolution and loading.
+- [x] **TEST-01**: Unit tests cover Qwik HMR bridge HTML injection and non-injection when disabled.
+- [x] **TEST-02**: Unit tests cover virtual bridge module resolution and loading.
 - [ ] **TEST-03**: Unit tests cover SSR/server-environment hot updates forwarding to the client channel.
 - [ ] **TEST-04**: Unit tests cover `hmr: false` fallback/full reload behavior.
 - [x] **TEST-05**: Unit tests cover dev segment loading with appended HMR accept code.
@@ -87,8 +87,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase   | Status   |
 | ----------- | ------- | -------- |
-| GATE-01     | Phase 2 | Pending  |
-| GATE-02     | Phase 2 | Pending  |
+| GATE-01     | Phase 2 | Complete |
+| GATE-02     | Phase 2 | Complete |
 | GATE-03     | Phase 2 | Pending  |
 | GATE-04     | Phase 3 | Pending  |
 | GATE-05     | Phase 3 | Pending  |
@@ -98,18 +98,18 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SEGM-04     | Phase 1 | Complete |
 | SEGM-05     | Phase 1 | Complete |
 | SEGM-06     | Phase 1 | Complete |
-| TRAN-01     | Phase 2 | Pending  |
-| TRAN-02     | Phase 2 | Pending  |
+| TRAN-01     | Phase 2 | Complete |
+| TRAN-02     | Phase 2 | Complete |
 | TRAN-03     | Phase 2 | Pending  |
 | TRAN-04     | Phase 2 | Pending  |
 | TRAN-05     | Phase 2 | Pending  |
 | TRAN-06     | Phase 2 | Pending  |
-| BRDG-01     | Phase 2 | Pending  |
-| BRDG-02     | Phase 2 | Pending  |
-| BRDG-03     | Phase 2 | Pending  |
-| BRDG-04     | Phase 2 | Pending  |
-| TEST-01     | Phase 2 | Pending  |
-| TEST-02     | Phase 2 | Pending  |
+| BRDG-01     | Phase 2 | Complete |
+| BRDG-02     | Phase 2 | Complete |
+| BRDG-03     | Phase 2 | Complete |
+| BRDG-04     | Phase 2 | Complete |
+| TEST-01     | Phase 2 | Complete |
+| TEST-02     | Phase 2 | Complete |
 | TEST-03     | Phase 2 | Pending  |
 | TEST-04     | Phase 2 | Pending  |
 | TEST-05     | Phase 1 | Complete |

@@ -60,7 +60,7 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 02-01-PLAN.md — Create the bridge virtual module, browser runtime, and serve/default HTML injection coverage.
+- [x] 02-01-PLAN.md — Create the bridge virtual module, browser runtime, and serve/default HTML injection coverage.
 
 **Wave 2** _(blocked on Wave 1 completion)_
 
