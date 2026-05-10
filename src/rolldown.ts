@@ -215,7 +215,7 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 				return `globalThis.qDev=${isDev};export const isServer=${server};export const isBrowser=${!server};export const isDev=${isDev};`;
 			}
 
-			const devCode = await dev.load(id);
+			const devCode = await dev.load(id, this.parse);
 			if (devCode !== undefined) return devCode;
 
 			const segment = segments.get(pathname(id));

@@ -1,7 +1,9 @@
 import type { TransformModule } from '@qwik.dev/optimizer';
 import { dirname, normalize, relative, resolve } from 'pathe';
+import type { PluginContext } from 'rolldown';
 import { isEqual, isRelative, parsePath, withLeadingSlash } from 'ufo';
 import type { QwikEnvironment } from './rolldown';
+import { makeConstPropsDiffable } from './vite/optimizer';
 
 export interface QwikDevServer {
 	environments?: Record<string, { transformRequest: (url: string) => Promise<unknown> }>;
@@ -55,7 +57,7 @@ export function createQwikDev(
 			parents.set(id, { environment, parent });
 			return { id, moduleSideEffects: false };
 		},
-		async load(id: string) {
+		async load(id: string, parse?: PluginContext['parse']) {
 			if (id === QWIK_DEV_HANDLERS) {
 				return `export * from '${QWIK_CORE}';`;
 			}
@@ -76,7 +78,7 @@ export function createQwikDev(
 				segment = segments.get(key);
 			}
 			return segment
-				? appendSegmentAccept(segment.code, segment, pending.parent, hmrEnabled())
+				? appendSegmentAccept(segment.code, segment, pending.parent, hmrEnabled(), parse)
 				: null;
 		},
 		recordSegment(module: TransformModule, environment: QwikEnvironment) {
@@ -188,11 +190,15 @@ function appendSegmentAccept(
 	module: TransformModule,
 	parent: string,
 	hmrEnabled: boolean,
+	parse: PluginContext['parse'] | undefined,
 ) {
 	if (!hmrEnabled || module.segment?.ctxName === 'worker$') {
 		return code;
 	}
 
+	if (parse) {
+		code = makeConstPropsDiffable(code, parse);
+	}
 	return `${code}\nif (import.meta.hot && typeof document !== 'undefined') {import.meta.hot.accept(()=>{document.dispatchEvent(new CustomEvent('qHmr',{detail:{files:[${JSON.stringify(parent)}],t:document.__hmrT}}));});}`;
 }
 

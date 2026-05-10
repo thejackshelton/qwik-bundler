@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { parseAst } from 'rolldown/parseAst';
 import { plugin as qwikPlugin, qwikClient, qwikLib, qwikServer } from '../src/rolldown';
 import { callBuildStart, callLoad, callOptions, callResolveId, callTransform } from './helpers';
 
@@ -314,6 +315,43 @@ describe('Rolldown runtime integration', () => {
 		const resolved = await callResolveId(plugin, '/src/home.tsx_click_abc.js');
 
 		expect(await callLoad(plugin, (resolved as { id: string }).id)).toContain('segment');
+	});
+
+	test('makes dev HMR segment const props diffable', async () => {
+		optimizerMock.transformModules.mockResolvedValueOnce({
+			modules: [
+				{
+					path: '/workspace/app/src/home.tsx',
+					isEntry: false,
+					code: 'parent',
+					map: null,
+					segment: null,
+					origPath: null,
+				},
+				{
+					path: '/src/home.tsx_component_abc.js',
+					isEntry: false,
+					code: `import { _jsxSorted } from '@qwik.dev/core';\nexport const component = () => _jsxSorted('p', null, { 'data-hmr': 'next' }, 'text', 3, null);`,
+					map: null,
+					segment: { name: 's_component', ctxName: 'component$' },
+					origPath: null,
+				},
+			],
+			diagnostics: [],
+			isTypeScript: true,
+			isJsx: true,
+		});
+		const plugin = qwikClient({ dev: true });
+
+		callBuildStart(plugin, { cwd: '/workspace/app' });
+		await callTransform(plugin, 'export default 1;', '/workspace/app/src/home.tsx');
+		const resolved = await callResolveId(plugin, '/src/home.tsx_component_abc.js');
+		const code = await callLoad(plugin, (resolved as { id: string }).id, { parse: parseAst });
+
+		expect(code).toContain("import { _jsxSplit as __qwikHmrJsxSplit } from '@qwik.dev/core';");
+		expect(code).toContain('{...constProps,...varProps}');
+		expect(code).not.toContain('hmrKey');
+		expect(code).toContain('import.meta.hot.accept(');
 	});
 
 	test('keeps client and server dev segment cache entries isolated', async () => {

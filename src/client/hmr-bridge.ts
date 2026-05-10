@@ -15,6 +15,14 @@ if (import.meta.hot) {
 		document.__hmrDone = 0;
 		for (const host of document.querySelectorAll('[q-d\\\\:q-hmr]')) {
 			host.dataset.qwikInspector ??= data.files?.[0] || '';
+			for (const element of host.querySelectorAll('*')) {
+				delete element._qDispatch;
+				for (const attribute of [...element.attributes]) {
+					if (attribute.name.startsWith('q-e:')) {
+						element.removeAttribute(attribute.name);
+					}
+				}
+			}
 		}
 		document.dispatchEvent(new CustomEvent('qHmr', { detail: data }));
 		timeout = setTimeout(() => {
