@@ -4,6 +4,7 @@ import { outputDefaults } from './build/chunking';
 import type { QwikManifest } from './build/manifest';
 import { plugin as qwikRolldown, type QwikEnvironment, type QwikRolldownOptions } from './rolldown';
 import { qwikViteExternal } from './qwik-external';
+import { createViteHmr } from './vite/hmr';
 
 export interface VitePluginOptions extends QwikRolldownOptions {}
 
@@ -14,11 +15,13 @@ export function qwik(options: VitePluginOptions = {}): Plugin[] {
 	// TODO: Remove this Qwik library noExternal workaround after https://github.com/QwikDev/qwik-evolution/discussions/318.
 	const external = qwikViteExternal(setQwikConfigDefaults);
 	let manifest: QwikManifest | null = null;
+	let serve = false;
 	rolldownOptions.onManifest = (nextManifest) => {
 		manifest = nextManifest;
 		options.onManifest?.(nextManifest);
 	};
 	const basePlugin = qwikRolldown(getBuildEnvironment, rolldownOptions) as Plugin;
+	const hmr = createViteHmr({ enabled: () => serve && options.hmr !== false });
 
 	const qwikPlugin = {
 		...basePlugin,
@@ -29,11 +32,35 @@ export function qwik(options: VitePluginOptions = {}): Plugin[] {
 		},
 		...external,
 		configResolved(resolvedConfig) {
-			rolldownOptions.dev = resolvedConfig.command === 'serve';
+			serve = resolvedConfig.command === 'serve';
+			rolldownOptions.dev = serve;
 			rolldownOptions.rootDir = resolvedConfig.root;
 		},
 		configureServer(server: ViteDevServer) {
 			rolldownOptions.devServer = server;
+		},
+		transformIndexHtml() {
+			return hmr.transformIndexHtml();
+		},
+		resolveId(source, importer, resolveOptions) {
+			const resolved = hmr.resolveId(source);
+			if (resolved) {
+				return resolved;
+			}
+
+			return typeof basePlugin.resolveId === 'function'
+				? basePlugin.resolveId.call(this, source, importer, resolveOptions)
+				: null;
+		},
+		load(id, loadOptions) {
+			const code = hmr.load(id);
+			if (code) {
+				return code;
+			}
+
+			return typeof basePlugin.load === 'function'
+				? basePlugin.load.call(this, id, loadOptions)
+				: null;
 		},
 	} satisfies Plugin & { api: { getManifest: () => QwikManifest | null } };
 
