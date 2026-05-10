@@ -2,8 +2,8 @@ import type { TransformModule } from '@qwik.dev/optimizer';
 import { dirname, normalize, relative, resolve } from 'pathe';
 import type { PluginContext } from 'rolldown';
 import { isEqual, isRelative, parsePath, withLeadingSlash } from 'ufo';
+import { makeConstPropsDiffable } from './hmr/optimizer';
 import type { QwikEnvironment } from './rolldown';
-import { makeConstPropsDiffable } from './vite/optimizer';
 
 export interface QwikDevServer {
 	environments?: Record<string, { transformRequest: (url: string) => Promise<unknown> }>;

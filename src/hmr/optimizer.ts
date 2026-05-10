@@ -1,4 +1,4 @@
-// TODO: Put this in the Qwik optimizer directly. We need to make the const props diffable before HMR shimming. For example, adding the `multiple` attribute to the `select` element and seeing a change without a reload.
+// TODO: Put this in the Qwik optimizer directly.
 
 type Parse = (input: string) => unknown;
 

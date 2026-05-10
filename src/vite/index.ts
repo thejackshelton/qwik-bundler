@@ -1,10 +1,14 @@
 import type { OutputOptions } from 'rolldown';
 import type { ConfigEnv, Plugin, UserConfig, ViteDevServer } from 'vite';
-import { outputDefaults } from './build/chunking';
-import type { QwikManifest } from './build/manifest';
-import { plugin as qwikRolldown, type QwikEnvironment, type QwikRolldownOptions } from './rolldown';
-import { qwikViteExternal } from './qwik-external';
-import { createViteHmr } from './vite/hmr';
+import { outputDefaults } from '../build/chunking';
+import type { QwikManifest } from '../build/manifest';
+import {
+	plugin as qwikRolldown,
+	type QwikEnvironment,
+	type QwikRolldownOptions,
+} from '../rolldown';
+import { qwikViteExternal } from '../qwik-external';
+import { createViteHmr } from './hmr';
 
 export interface VitePluginOptions extends QwikRolldownOptions {}
 

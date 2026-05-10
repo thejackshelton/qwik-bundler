@@ -2,7 +2,7 @@ import { createOptimizer } from '@qwik.dev/optimizer';
 import type { Plugin } from 'vite';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import type { QwikManifest } from '../src/build/manifest';
-import { qwik } from '../src/vite';
+import { qwik } from '../src/vite/index';
 import {
 	callConfigResolved,
 	callLoad,

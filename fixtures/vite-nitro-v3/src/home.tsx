@@ -10,7 +10,15 @@ export default component$(() => {
 			<h1>Nitro v3 Fixture</h1>
 			<p>This app validates the Qwik Vite plugin with the Nitro v3 Vite plugin.</p>
 			<button onClick$={() => count.value++}>Count {count.value}</button>
-			<button onClick$={() => newCount.value++}>New Count {newCount.value}</button>
+			<button
+				onKeyDown$={() => {
+					console.log('KEY');
+				}}
+				onClick$={() => console.log('hey')}
+			>
+				New Count {newCount.value}
+			</button>
+			<div>hey</div>
 		</main>
 	);
 });

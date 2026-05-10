@@ -1,6 +1,6 @@
 import type { EnvironmentOptions, Plugin, UserConfig } from 'vite';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
-import { qwik } from '../src/vite';
+import { qwik } from '../src/vite/index';
 import {
 	callConfig,
 	callConfigEnvironment,

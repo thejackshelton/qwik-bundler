@@ -7,7 +7,7 @@ import type {
 	HotUpdateOptions,
 	ViteDevServer,
 } from 'vite';
-import { QWIK_HMR_BRIDGE_SOURCE } from '../client/hmr-bridge';
+import { QWIK_HMR_BRIDGE_SOURCE } from '../hmr/bridge';
 import type { QwikEnvironment } from '../rolldown';
 
 export const QWIK_HMR_BRIDGE_ID = 'virtual:qwik-hmr-bridge';

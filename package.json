@@ -8,7 +8,7 @@
 	"type": "module",
 	"exports": {
 		"./rolldown": "./dist/rolldown.mjs",
-		"./vite": "./dist/vite.mjs",
+		"./vite": "./dist/vite/index.mjs",
 		"./package.json": "./package.json"
 	},
 	"scripts": {

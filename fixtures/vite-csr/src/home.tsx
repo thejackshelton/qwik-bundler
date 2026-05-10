@@ -5,7 +5,7 @@ export default component$(() => {
 
 	return (
 		<main>
-			<h1>Vite Direct Fixture</h1>
+			<h1>Vite CSR HMR Smoke 1778439415746</h1>
 			<p>This app validates the Vite plugin directly.</p>
 			<button onClick$={() => count.value++}>Count {count.value}</button>
 			<button onClick$={() => count.value++}>Count {count.value}</button>

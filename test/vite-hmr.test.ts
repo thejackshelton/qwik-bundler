@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from 'vitest';
 import { createViteHmr, QWIK_HMR_BRIDGE_ID } from '../src/vite/hmr';
-import { qwik } from '../src/vite';
+import { qwik } from '../src/vite/index';
 import {
 	callConfigResolved,
 	callConfigureServer,
