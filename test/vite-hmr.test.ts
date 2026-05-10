@@ -1,4 +1,6 @@
 import { describe, expect, test, vi } from 'vitest';
+import { createViteHmr, QWIK_HMR_BRIDGE_ID } from '../src/vite/hmr';
+import { callLoad, callResolveId } from './helpers';
 import { callConfigureServer, callHotUpdate, callTransformIndexHtml } from './helpers';
 
 describe('Vite HMR hook helpers', () => {
@@ -19,5 +21,29 @@ describe('Vite HMR hook helpers', () => {
 		expect(configureServer).toHaveBeenCalledWith(server);
 		expect(hotUpdate).toHaveBeenCalledWith(ctx);
 		expect(hotUpdate.mock.instances[0]).toEqual({ environment });
+	});
+});
+
+describe('Vite Qwik HMR bridge module', () => {
+	test('resolves and loads the browser bridge runtime', async () => {
+		const hmr = createViteHmr({ enabled: () => true });
+		const resolved = await callResolveId(hmr, QWIK_HMR_BRIDGE_ID);
+
+		expect(resolved).toEqual({ id: `\0${QWIK_HMR_BRIDGE_ID}`, moduleSideEffects: true });
+
+		const code = await callLoad(hmr, `\0${QWIK_HMR_BRIDGE_ID}`);
+		expect(code).toContain("import.meta.hot.on('qwik:hmr'");
+		expect(code).toContain("CustomEvent('qHmr'");
+		expect(code).toContain('data.t === document.__hmrT');
+		expect(code).toContain('document.__hmrDone !== document.__hmrT');
+		expect(code).toContain('location.reload()');
+		expect(code).not.toContain('node:');
+	});
+
+	test('ignores unknown bridge ids', async () => {
+		const hmr = createViteHmr({ enabled: () => true });
+
+		expect(await callResolveId(hmr, 'virtual:other')).toBeNull();
+		expect(await callLoad(hmr, '\0virtual:other')).toBeNull();
 	});
 });
