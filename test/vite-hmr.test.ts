@@ -72,6 +72,20 @@ describe('Vite Qwik HMR bridge injection', () => {
 		expect(JSON.stringify(tags)).not.toContain('@vite/client');
 	});
 
+	test('injects the Qwik bridge under the configured Vite base', async () => {
+		const plugin = getPlugin(qwik(), 'vite-plugin-qwik');
+
+		callConfigResolved(plugin, { base: '/docs/', command: 'serve', root: '/workspace/app' });
+
+		const tags = await callTransformIndexHtml(plugin, '<html></html>');
+		expect(tags).toEqual([
+			{
+				tag: 'script',
+				attrs: { type: 'module', src: `/docs/@id/${QWIK_HMR_BRIDGE_ID}` },
+			},
+		]);
+	});
+
 	test('does not inject the Qwik bridge when HMR is disabled', async () => {
 		const plugin = getPlugin(qwik({ hmr: false }), 'vite-plugin-qwik');
 
@@ -209,6 +223,36 @@ describe('Vite Qwik HMR transport', () => {
 
 		expect(send).toHaveBeenCalledTimes(1);
 		expect(send).toHaveBeenCalledWith({ type: 'full-reload' });
+		expect(JSON.stringify(send.mock.calls)).not.toContain('qwik:hmr');
+	});
+
+	test('TEST-04 sends full reload when HMR is disabled for non-source updates', async () => {
+		const plugin = getPlugin(qwik({ hmr: false }), 'vite-plugin-qwik');
+		const send = vi.fn();
+		const environment = {
+			name: 'client',
+			moduleGraph: { getModuleById: vi.fn(), invalidateModule: vi.fn() },
+			hot: { send },
+		};
+		const invalidateDevSegments = vi.fn().mockReturnValue([]);
+
+		callConfigResolved(plugin, { command: 'serve', root: '/workspace/app' });
+		Object.assign(plugin, { api: { ...plugin.api, invalidateDevSegments } });
+
+		expect(
+			await callHotUpdate(
+				plugin,
+				{
+					modules: [{ type: 'css', url: '/src/global.css', importers: new Set() }],
+					timestamp: 1112,
+				},
+				{ environment },
+			),
+		).toEqual([]);
+
+		expect(send).toHaveBeenCalledTimes(1);
+		expect(send).toHaveBeenCalledWith({ type: 'full-reload' });
+		expect(invalidateDevSegments).not.toHaveBeenCalled();
 		expect(JSON.stringify(send.mock.calls)).not.toContain('qwik:hmr');
 	});
 
