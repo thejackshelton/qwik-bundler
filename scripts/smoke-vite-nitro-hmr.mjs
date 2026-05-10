@@ -4,6 +4,7 @@ import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 import { createServer } from 'vite';
+import { acquireLock } from './lib/lock.mjs';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const fixtureRoot = resolve(repoRoot, 'fixtures/vite-nitro-v3');
@@ -21,10 +22,12 @@ const replacements = [
 ];
 
 let browser;
+let releaseLock;
 let server;
 let originalHomeSource;
 
 try {
+	releaseLock = await acquireLock('fixture-vite-nitro-v3');
 	originalHomeSource = await readFile(homeFile, 'utf8');
 	const replacement = replacements.find(([target]) => originalHomeSource.includes(target));
 	if (!replacement) {
@@ -93,6 +96,7 @@ try {
 	}
 	await browser?.close();
 	await server?.close();
+	await releaseLock?.();
 }
 
 process.exit(0);

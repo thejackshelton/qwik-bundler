@@ -3,6 +3,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 import { createServer } from 'vite';
+import { acquireLock } from './lib/lock.mjs';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const fixtureRoot = resolve(repoRoot, 'fixtures/vite-csr');
@@ -12,10 +13,12 @@ const marker = `hmr-attr-${Date.now()}`;
 const waitTimeout = 15_000;
 
 let browser;
+let releaseLock;
 let server;
 let originalHomeSource;
 
 try {
+	releaseLock = await acquireLock('fixture-vite-csr');
 	originalHomeSource = await readFile(homeFile, 'utf8');
 	const target = '<p>This app validates the Vite plugin directly.</p>';
 	if (!originalHomeSource.includes(target)) {
@@ -66,4 +69,5 @@ try {
 	if (originalHomeSource !== undefined) await writeFile(homeFile, originalHomeSource);
 	await browser?.close();
 	await server?.close();
+	await releaseLock?.();
 }

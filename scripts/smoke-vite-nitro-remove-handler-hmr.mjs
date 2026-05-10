@@ -4,6 +4,7 @@ import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 import { createServer } from 'vite';
+import { acquireLock } from './lib/lock.mjs';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const fixtureRoot = resolve(repoRoot, 'fixtures/vite-nitro-v3');
@@ -12,10 +13,12 @@ const homeFile = resolve(fixtureRoot, 'src/home.tsx');
 const waitTimeout = 15_000;
 
 let browser;
+let releaseLock;
 let server;
 let originalHomeSource;
 
 try {
+	releaseLock = await acquireLock('fixture-vite-nitro-v3');
 	originalHomeSource = await readFile(homeFile, 'utf8');
 	const nextHomeSource = originalHomeSource.replace(
 		/<button[\s\S]*?onClick\$=\{\(\) => count\.value\+\+\}[\s\S]*?>Count \{count\.value\}<\/button>/,
@@ -61,6 +64,7 @@ try {
 	if (originalHomeSource !== undefined) await writeFile(homeFile, originalHomeSource);
 	await browser?.close();
 	await server?.close();
+	await releaseLock?.();
 }
 
 process.exit(0);

@@ -3,6 +3,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 import { createServer } from 'vite';
+import { acquireLock } from './lib/lock.mjs';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const fixtureRoot = resolve(repoRoot, 'fixtures/vite-csr');
@@ -13,10 +14,12 @@ const marker = `Vite CSR HMR Smoke ${Date.now()}`;
 const waitTimeout = 15_000;
 
 let browser;
+let releaseLock;
 let server;
 let originalHomeSource;
 
 try {
+	releaseLock = await acquireLock('fixture-vite-csr');
 	originalHomeSource = await readFile(homeFile, 'utf8');
 	if (!originalHomeSource.includes(initialText)) {
 		throw new Error(`Expected ${homeFile} to contain ${JSON.stringify(initialText)}.`);
@@ -83,6 +86,7 @@ try {
 	}
 	await browser?.close();
 	await server?.close();
+	await releaseLock?.();
 }
 
 async function expectH1Text(page, text) {
