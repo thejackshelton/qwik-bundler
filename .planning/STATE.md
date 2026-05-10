@@ -4,14 +4,14 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: Completed 01-dev-qrl-segment-core-02-PLAN.md
-last_updated: '2026-05-10T02:54:27.263Z'
+last_updated: '2026-05-10T03:12:43.350Z'
 last_activity: 2026-05-10
 progress:
     total_phases: 4
     completed_phases: 1
     total_plans: 5
-    completed_plans: 3
-    percent: 60
+    completed_plans: 4
+    percent: 80
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-05-09)
 ## Current Position
 
 Phase: 02 (vite-hmr-transport-and-browser-bridge) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-05-10
 
-Progress: [██████░░░░] 60%
+Progress: [████████░░] 80%
 
 ## Performance Metrics
 
@@ -59,6 +59,7 @@ Progress: [██████░░░░] 60%
 _Updated after each plan completion_
 | Phase 01-dev-qrl-segment-core P02 | 16min 08s | 2 tasks | 4 files |
 | Phase 02-vite-hmr-transport-and-browser-bridge P01 | 1min | 3 tasks | 5 files |
+| Phase 02-vite-hmr-transport-and-browser-bridge P02 | 2min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -75,6 +76,8 @@ Recent decisions affecting current work:
 - [Phase 01-dev-qrl-segment-core]: Plan 02: Keep normalization centralized in src/dev.ts using ufo parsePath, pathe normalize, and a small backslash/drive-prefix boundary.
 - [Phase 02-vite-hmr-transport-and-browser-bridge]: Plan 01: Keep Qwik HMR bridge behavior in src/vite/hmr.ts and src/client/hmr-bridge.ts so src/vite.ts remains a thin adapter.
 - [Phase 02-vite-hmr-transport-and-browser-bridge]: Plan 01: Inject only the virtual Qwik bridge script in Vite serve mode and leave @vite/client ownership to Vite.
+- [Phase 02-vite-hmr-transport-and-browser-bridge]: Plan 02: Keep Vite module graph invalidation and hot-channel sending in src/vite/hmr.ts so generic dev segment code stays free of Vite internals.
+- [Phase 02-vite-hmr-transport-and-browser-bridge]: Plan 02: Reuse Phase 1 invalidateDevSegments for client source updates and invalidate only returned segment ids before sending qwik:hmr.
 
 ### Pending Todos
 
@@ -95,6 +98,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-05-10T02:53:56.748Z
+Last session: 2026-05-10T03:12:11.393Z
 Stopped at: Completed 01-dev-qrl-segment-core-02-PLAN.md
 Resume file: None

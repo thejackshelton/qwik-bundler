@@ -64,7 +64,7 @@ Plans:
 
 **Wave 2** _(blocked on Wave 1 completion)_
 
-- [ ] 02-02-PLAN.md — Implement client-environment source transport, generated segment invalidation, and precise custom event payloads.
+- [x] 02-02-PLAN.md — Implement client-environment source transport, generated segment invalidation, and precise custom event payloads.
 
 **Wave 3** _(blocked on Wave 2 completion)_
 

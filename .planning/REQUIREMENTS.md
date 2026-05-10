@@ -28,10 +28,10 @@ Requirements for the HMR implementation milestone. Each maps to exactly one road
 
 - [x] **TRAN-01**: Vite serve mode injects only the Qwik HMR bridge module into dev HTML and does not manually inject `@vite/client`.
 - [x] **TRAN-02**: The Vite HMR plugin exposes a virtual Qwik HMR bridge module that can be resolved and loaded by Vite.
-- [ ] **TRAN-03**: Source updates in the client environment invalidate affected generated segments and send a `qwik:hmr` custom event with normalized source files.
+- [x] **TRAN-03**: Source updates in the client environment invalidate affected generated segments and send a `qwik:hmr` custom event with normalized source files.
 - [ ] **TRAN-04**: Source updates discovered in the SSR environment forward relevant normalized source file changes to the client HMR channel.
-- [ ] **TRAN-05**: Non-source module changes use conservative importer/source fallback behavior instead of broadcasting unrelated updates.
-- [ ] **TRAN-06**: The Vite adapter keeps Vite server internals inside Vite-specific HMR code and passes only narrow callbacks to generic dev segment loading.
+- [x] **TRAN-05**: Non-source module changes use conservative importer/source fallback behavior instead of broadcasting unrelated updates.
+- [x] **TRAN-06**: The Vite adapter keeps Vite server internals inside Vite-specific HMR code and passes only narrow callbacks to generic dev segment loading.
 
 ### Browser Bridge Runtime
 
@@ -100,10 +100,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SEGM-06     | Phase 1 | Complete |
 | TRAN-01     | Phase 2 | Complete |
 | TRAN-02     | Phase 2 | Complete |
-| TRAN-03     | Phase 2 | Pending  |
+| TRAN-03     | Phase 2 | Complete |
 | TRAN-04     | Phase 2 | Pending  |
-| TRAN-05     | Phase 2 | Pending  |
-| TRAN-06     | Phase 2 | Pending  |
+| TRAN-05     | Phase 2 | Complete |
+| TRAN-06     | Phase 2 | Complete |
 | BRDG-01     | Phase 2 | Complete |
 | BRDG-02     | Phase 2 | Complete |
 | BRDG-03     | Phase 2 | Complete |
