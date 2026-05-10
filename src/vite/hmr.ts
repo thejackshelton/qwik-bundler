@@ -1,4 +1,4 @@
-import { parsePath } from 'ufo';
+import { joinURL, parsePath } from 'ufo';
 import { QWIK_HMR_BRIDGE_SOURCE } from '../client/hmr-bridge';
 import type { QwikEnvironment } from '../rolldown';
 
@@ -8,6 +8,7 @@ const RESOLVED_QWIK_HMR_BRIDGE_ID = `\0${QWIK_HMR_BRIDGE_ID}`;
 const QWIK_HMR_BRIDGE_PATH = `/@id/${QWIK_HMR_BRIDGE_ID}`;
 
 interface ViteHmrOptions {
+	base: () => string;
 	enabled: () => boolean;
 	invalidateDevSegments?: (parent: string, environment?: QwikEnvironment) => string[];
 }
@@ -63,7 +64,12 @@ export function createViteHmr(options: ViteHmrOptions) {
 				return undefined;
 			}
 
-			return [{ tag: 'script', attrs: { type: 'module', src: QWIK_HMR_BRIDGE_PATH } }];
+			return [
+				{
+					tag: 'script',
+					attrs: { type: 'module', src: joinURL(options.base(), QWIK_HMR_BRIDGE_PATH) },
+				},
+			];
 		},
 		resolveId(id: string) {
 			if (id !== QWIK_HMR_BRIDGE_ID) {
@@ -78,6 +84,13 @@ export function createViteHmr(options: ViteHmrOptions) {
 		hotUpdate(environment: ViteHotUpdateEnvironment | undefined, ctx: ViteHotUpdateContext) {
 			if (environment?.name !== 'client' && environment?.name !== 'ssr') {
 				return undefined;
+			}
+
+			const hot =
+				environment.name === 'ssr' ? server?.environments?.client?.hot : environment.hot;
+			if (!options.enabled()) {
+				hot?.send?.({ type: 'full-reload' });
+				return [];
 			}
 
 			const files = sourceFiles(ctx.modules ?? []);
@@ -102,17 +115,11 @@ export function createViteHmr(options: ViteHmrOptions) {
 				}
 			}
 
-			const hot =
-				environment.name === 'ssr' ? server?.environments?.client?.hot : environment.hot;
-			if (options.enabled()) {
-				hot?.send?.({
-					type: 'custom',
-					event: 'qwik:hmr',
-					data: { files: [...files], t: ctx.timestamp },
-				});
-			} else {
-				hot?.send?.({ type: 'full-reload' });
-			}
+			hot?.send?.({
+				type: 'custom',
+				event: 'qwik:hmr',
+				data: { files: [...files], t: ctx.timestamp },
+			});
 
 			return [];
 		},

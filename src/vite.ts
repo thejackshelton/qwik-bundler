@@ -16,12 +16,14 @@ export function qwik(options: VitePluginOptions = {}): Plugin[] {
 	const external = qwikViteExternal(setQwikConfigDefaults);
 	let manifest: QwikManifest | null = null;
 	let serve = false;
+	let base = '/';
 	rolldownOptions.onManifest = (nextManifest) => {
 		manifest = nextManifest;
 		options.onManifest?.(nextManifest);
 	};
 	const basePlugin = qwikRolldown(getBuildEnvironment, rolldownOptions) as Plugin;
 	const hmr = createViteHmr({
+		base: () => base,
 		enabled: () => serve && options.hmr !== false,
 		invalidateDevSegments: (parent, environment) =>
 			qwikPlugin.api.invalidateDevSegments(parent, environment),
@@ -38,6 +40,7 @@ export function qwik(options: VitePluginOptions = {}): Plugin[] {
 		...external,
 		configResolved(resolvedConfig) {
 			serve = resolvedConfig.command === 'serve';
+			base = resolvedConfig.base;
 			rolldownOptions.dev = serve;
 			rolldownOptions.rootDir = resolvedConfig.root;
 		},
