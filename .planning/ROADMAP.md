@@ -55,7 +55,20 @@ Plans:
 3. Client source updates invalidate affected generated segments and send normalized source files to the client HMR channel.
 4. SSR-environment source updates forward relevant normalized source files to the client HMR channel, while non-source changes use conservative fallback behavior.
 5. With `hmr: false`, bridge injection, dev segment accept code, and custom Qwik HMR events are disabled, and relevant source updates trigger a Vite full reload.
-   **Plans**: TBD
+   **Plans**: 3 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 02-01-PLAN.md — Create the bridge virtual module, browser runtime, and serve/default HTML injection coverage.
+
+**Wave 2** _(blocked on Wave 1 completion)_
+
+- [ ] 02-02-PLAN.md — Implement client-environment source transport, generated segment invalidation, and precise custom event payloads.
+
+**Wave 3** _(blocked on Wave 2 completion)_
+
+- [ ] 02-03-PLAN.md — Implement SSR-to-client forwarding, `hmr: false` full-reload fallback, and focused regression gates.
 
 ### Phase 3: Serve/Build Gating and Regression Safety
 
