@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: ready_to_plan
-stopped_at: Completed 02-vite-hmr-transport-and-browser-bridge-03-PLAN.md
-last_updated: '2026-05-10T03:16:24.537Z'
+status: complete
+stopped_at: Completed quick task nitro-hmr-regression
+last_updated: '2026-05-10T01:30:00.000Z'
 last_activity: 2026-05-10
 progress:
     total_phases: 4
-    completed_phases: 3
-    total_plans: 5
-    completed_plans: 5
-    percent: 75
+    completed_phases: 4
+    total_plans: 10
+    completed_plans: 10
+    percent: 100
 ---
 
 # Project State
@@ -21,11 +21,11 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-09)
 
 **Core value:** Vite serve mode supports Qwik HMR automatically, while `hmr: false` cleanly opts out and existing CSR, SSR/Nitro, and library behavior remains intact.
-**Current focus:** Phase 02 — vite-hmr-transport-and-browser-bridge
+**Current focus:** Phase 04 — browser-smoke-and-final-verification
 
 ## Current Position
 
-Phase: 3
+Phase: 4
 Plan: Not started
 Status: Ready to plan
 Last activity: 2026-05-10
@@ -36,7 +36,7 @@ Progress: [██████████] 100%
 
 **Velocity:**
 
-- Total plans completed: 5
+- Total plans completed: 8
 - Total plans completed: 1
 - Average duration: 4min 43s
 - Total execution time: 0.08 hours
@@ -46,8 +46,8 @@ Progress: [██████████] 100%
 | Phase                                       | Plans | Total  | Avg/Plan |
 | ------------------------------------------- | ----- | ------ | -------- |
 | 1. Dev QRL Segment Core                     | 2/2   | 20m51s | 10m26s   |
-| 2. Vite HMR Transport and Browser Bridge    | 0/TBD | N/A    | N/A      |
-| 3. Serve/Build Gating and Regression Safety | 0/TBD | N/A    | N/A      |
+| 2. Vite HMR Transport and Browser Bridge    | 3/3   | -      | -        |
+| 3. Serve/Build Gating and Regression Safety | 3/3   | -      | -        |
 | 4. Browser Smoke and Final Verification     | 0/TBD | N/A    | N/A      |
 | 01                                          | 2     | -      | -        |
 | 02                                          | 3     | -      | -        |
@@ -62,6 +62,10 @@ _Updated after each plan completion_
 | Phase 02-vite-hmr-transport-and-browser-bridge P01 | 1min | 3 tasks | 5 files |
 | Phase 02-vite-hmr-transport-and-browser-bridge P02 | 2min | 2 tasks | 3 files |
 | Phase 02-vite-hmr-transport-and-browser-bridge P03 | 1min | 3 tasks | 3 files |
+| Phase 03-serve-build-gating-and-regression-safety P01 | - | 3 tasks | 4 files |
+| Phase 03-serve-build-gating-and-regression-safety P02 | - | 2 tasks | 2 files |
+| Phase 03-serve-build-gating-and-regression-safety P03 | - | 3 tasks | 3 files |
+| Phase 04-browser-smoke-and-final-verification P02 | 14min 09s | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -83,6 +87,17 @@ Recent decisions affecting current work:
 - [Phase 02-vite-hmr-transport-and-browser-bridge]: Plan 03: Forward SSR HMR through the client hot channel. — Browser clients listen on the client environment channel, so SSR graph discoveries must cross to server.environments.client.hot.send.
 - [Phase 02-vite-hmr-transport-and-browser-bridge]: Plan 03: Keep hmr:false full-reload fallback inside the Vite HMR helper. — The helper owns bridge/custom-event gating while preserving Vite's expected full reload behavior when Qwik HMR is disabled.
 - [Phase 02-vite-hmr-transport-and-browser-bridge]: Plan 03: Reuse source/importer filtering for client and SSR HMR payloads. — Conservative JS/TS/MDX filtering prevents unrelated CSS, virtual, or non-source modules from being broadcast to the browser.
+- [Phase 03-serve-build-gating-and-regression-safety]: Production build, SSR/server, library, static HTML, and raw Rolldown regression tests now prove HMR code does not leak outside enabled Vite serve contexts.
+- [Phase 03-serve-build-gating-and-regression-safety]: Fixture artifact leakage scanning is exposed through `pnpm test:hmr-leakage` and covers CSR, Nitro, Vite library, and raw Rolldown library outputs.
+- [Phase 04-browser-smoke-and-final-verification]: Plan 02 treated pnpm check formatting/lint failures as TEST-09 blockers and fixed only formatting plus the unused smoke-script import.
+- [Phase 04-browser-smoke-and-final-verification]: Plan 02 made no new source behavior changes because the final required tests, browser smoke, checks, and fixture builds passed.
+- [Quick nitro-hmr-regression]: Nitro SSR dev responses need host-owned bridge injection because they do not pass through Vite `transformIndexHtml`; `fixtures/vite-nitro-v3` now injects the Qwik HMR bridge only in dev.
+
+## Quick Tasks Completed
+
+| Date       | Slug                 | Status   | Summary                                                                   |
+| ---------- | -------------------- | -------- | ------------------------------------------------------------------------- |
+| 2026-05-10 | nitro-hmr-regression | complete | Added Nitro Vite browser HMR smoke and dev-only fixture bridge injection. |
 
 ### Pending Todos
 
@@ -103,6 +118,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-05-10T03:16:07.299Z
-Stopped at: Completed 02-vite-hmr-transport-and-browser-bridge-03-PLAN.md
+Last session: 2026-05-10T01:30:00.000Z
+Stopped at: Completed quick task nitro-hmr-regression
 Resume file: None

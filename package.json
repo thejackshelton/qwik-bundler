@@ -14,6 +14,9 @@
 	"scripts": {
 		"build": "vp pack",
 		"test": "vp test",
+		"test:hmr-leakage": "pnpm build && pnpm --filter @fixtures/vite-csr build && pnpm --filter @fixtures/vite-nitro-v3 build && pnpm --filter @fixtures/vite-library build && pnpm --filter @fixtures/rolldown-library build && node scripts/check-hmr-leakage.mjs",
+		"test:hmr-browser": "pnpm build && node scripts/smoke-vite-csr-hmr.mjs",
+		"test:hmr-nitro": "pnpm build && node scripts/smoke-vite-nitro-hmr.mjs",
 		"test:watch": "vp test watch",
 		"check": "vp check",
 		"prepare": "vp config"
@@ -26,6 +29,7 @@
 	},
 	"devDependencies": {
 		"@types/node": "^24.10.1",
+		"playwright": "^1.59.1",
 		"rolldown": "^1.0.0-rc.18",
 		"typescript": "^5.9.3",
 		"vite": "^8.0.10",

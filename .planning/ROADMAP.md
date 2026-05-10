@@ -14,8 +14,8 @@ This milestone delivers Qwik HMR in Vite serve mode by first making generated de
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Dev QRL Segment Core** - Generated dev QRL segments resolve, load, self-accept, and invalidate correctly across Vite environments.
-- [ ] **Phase 2: Vite HMR Transport and Browser Bridge** - Vite serve mode injects the Qwik bridge, forwards source updates to the right channel, and supports opt-out reload behavior.
-- [ ] **Phase 3: Serve/Build Gating and Regression Safety** - HMR remains dev-only and existing CSR, SSR/Nitro, static HTML, raw Rolldown, and library behavior stays intact.
+- [x] **Phase 2: Vite HMR Transport and Browser Bridge** - Vite serve mode injects the Qwik bridge, forwards source updates to the right channel, and supports opt-out reload behavior.
+- [x] **Phase 3: Serve/Build Gating and Regression Safety** - HMR remains dev-only and existing CSR, SSR/Nitro, static HTML, raw Rolldown, and library behavior stays intact.
 - [ ] **Phase 4: Browser Smoke and Final Verification** - Real fixture/browser checks and final commands prove the HMR port is complete.
 
 ## Phase Details
@@ -81,7 +81,17 @@ Plans:
 2. Static CSR preloader injection remains isolated and unchanged by HMR work.
 3. SSR/SSG duplicate-preloader avoidance via `q:render="ssr"` and `q:render="ssr-dev"` remains unchanged.
 4. Fixture coverage verifies SSR/Nitro and library builds continue passing without HMR leakage.
-   **Plans**: TBD
+   **Plans**: 3 plans
+
+Plans:
+**Wave 1**
+
+- [x] 03-01-PLAN.md — Add focused build, optimizer-mode, and raw Rolldown no-HMR-leakage regression gates.
+- [x] 03-02-PLAN.md — Strengthen static CSR preloader and SSR/SSG duplicate-preloader marker regression gates.
+
+**Wave 2** _(blocked on Wave 1 completion)_
+
+- [x] 03-03-PLAN.md — Add package-level fixture build and artifact leakage scan command for CSR, SSR/Nitro, Vite library, and raw Rolldown library outputs.
 
 ### Phase 4: Browser Smoke and Final Verification
 
@@ -102,6 +112,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | Phase                                       | Plans Complete | Status      | Completed  |
 | ------------------------------------------- | -------------- | ----------- | ---------- |
 | 1. Dev QRL Segment Core                     | 2/2            | Complete    | 2026-05-09 |
-| 2. Vite HMR Transport and Browser Bridge    | 0/TBD          | Not started | -          |
-| 3. Serve/Build Gating and Regression Safety | 0/TBD          | Not started | -          |
+| 2. Vite HMR Transport and Browser Bridge    | 3/3            | Complete    | 2026-05-10 |
+| 3. Serve/Build Gating and Regression Safety | 3/3            | Complete    | 2026-05-10 |
 | 4. Browser Smoke and Final Verification     | 0/TBD          | Not started | -          |

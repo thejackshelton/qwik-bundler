@@ -20,19 +20,26 @@ describe('static HTML output', () => {
 		expect(html).toContain('href="/build/q-root.js"');
 		expect(html).toContain('href="/build/q-home.js"');
 		expect(html).toContain('href="/build/q-click.js"');
+		expectNoHmrStrings(html);
 	});
 
-	test('does not duplicate preloader markup already emitted by SSR or SSG', async () => {
-		const plugin = qwikClient();
-		const bundle = staticHtmlBundle();
-		const source = bundle['index.html'].source.replace('<html>', '<html q:render="ssr">');
-		bundle['index.html'].source = source;
+	test.each(['ssr', 'ssr-dev'])(
+		'does not duplicate preloader markup already emitted by %s output',
+		async (renderMode) => {
+			const plugin = qwikClient();
+			const bundle = staticHtmlBundle();
+			const source = bundle['index.html'].source.replace(
+				'<html>',
+				`<html q:render="${renderMode}">`,
+			);
+			bundle['index.html'].source = source;
 
-		callBuildStart(plugin, { cwd: '/workspace/app' });
-		await callGenerateBundle(plugin, bundle);
+			callBuildStart(plugin, { cwd: '/workspace/app' });
+			await callGenerateBundle(plugin, bundle);
 
-		expect(bundle['index.html'].source).toBe(source);
-	});
+			expect(bundle['index.html'].source).toBe(source);
+		},
+	);
 
 	test('uses the generated HTML script base for injected URLs', async () => {
 		const plugin = qwikClient();
@@ -62,6 +69,18 @@ describe('static HTML output', () => {
 		expect(bundle['index.html'].source).toContain('href="/build/q-click.js"');
 	});
 });
+
+function expectNoHmrStrings(html: string) {
+	for (const value of [
+		'virtual:qwik-hmr-bridge',
+		'qwik:hmr',
+		'qHmr',
+		'document.__hmrT',
+		'location.reload',
+	]) {
+		expect(html).not.toContain(value);
+	}
+}
 
 function staticHtmlBundle(
 	source = '<html><head><title>App</title><script type="module" src="/build/q-entry.js"></script></head><body><div id="root"></div></body></html>',

@@ -58,6 +58,7 @@ describe('Rolldown runtime integration', () => {
 			'__EXPERIMENTAL__.valibot': 'false',
 			'__EXPERIMENTAL__.webWorker': 'false',
 			'globalThis.qDev': 'true',
+			'globalThis.qInspector': 'false',
 		});
 	});
 
@@ -67,6 +68,7 @@ describe('Rolldown runtime integration', () => {
 		callOptions(qwikClient({ dev: true }), options);
 
 		expect(options).toHaveProperty(['transform', 'define', 'globalThis.qDev'], 'true');
+		expect(options).toHaveProperty(['transform', 'define', 'globalThis.qInspector'], 'true');
 	});
 
 	test('sets client input defaults for Qwik runtime chunk groups', () => {
@@ -184,6 +186,87 @@ describe('Rolldown runtime integration', () => {
 				sourceMaps: true,
 			}),
 		);
+	});
+
+	test('GATE-04 raw client production segments do not append dev HMR accept code', async () => {
+		optimizerMock.transformModules.mockResolvedValueOnce({
+			modules: [
+				{
+					path: '/workspace/app/src/home.tsx',
+					isEntry: false,
+					code: 'parent',
+					map: null,
+					segment: null,
+					origPath: null,
+				},
+				{
+					path: '/workspace/app/src/home.tsx_click_abc.js',
+					isEntry: false,
+					code: 'export const click = () => "click";',
+					map: null,
+					segment: { name: 's_click', ctxName: 'component$' },
+					origPath: null,
+				},
+			],
+			diagnostics: [],
+			isTypeScript: true,
+			isJsx: true,
+		});
+		const plugin = qwikClient();
+
+		callBuildStart(plugin, { cwd: '/workspace/app' });
+		await callTransform(plugin, 'export default 1;', '/workspace/app/src/home.tsx');
+		const resolved = await callResolveId(
+			plugin,
+			'./home.tsx_click_abc.js',
+			'/workspace/app/src/home.tsx',
+		);
+		const code = await callLoad(plugin, resolved as string);
+
+		expect(code).toBe('export const click = () => "click";');
+		expect(code).not.toContain('import.meta.hot.accept(');
+		expect(code).not.toContain("CustomEvent('qHmr'");
+		expect(code).not.toContain('document.__hmrT');
+		expect(code).not.toContain('location.reload');
+		expectTransformModulesNeverCalledWithHmr();
+	});
+
+	test('GATE-04 server and library transforms do not emit HMR runtime strings', async () => {
+		const forbiddenHmrStrings = [
+			'virtual:qwik-hmr-bridge',
+			'qwik:hmr',
+			'import.meta.hot.accept(',
+			"CustomEvent('qHmr'",
+			'document.__hmrT',
+			'location.reload',
+		];
+		const server = qwikServer();
+		const lib = qwikLib();
+
+		callBuildStart(server, { cwd: '/workspace/app' });
+		callBuildStart(lib, { cwd: '/workspace/app' });
+		const serverCode = await callTransform(
+			server,
+			'export default 1;',
+			'/workspace/app/src/server.tsx',
+		);
+		const libCode = await callTransform(
+			lib,
+			'export default 1;',
+			'/workspace/app/src/index.tsx',
+		);
+
+		const output = JSON.stringify([serverCode, libCode]);
+		for (const forbidden of forbiddenHmrStrings) {
+			expect(output).not.toContain(forbidden);
+		}
+		expect(optimizerMock.transformModules).toHaveBeenCalledWith(
+			expect.objectContaining({ isServer: true, mode: 'prod' }),
+		);
+		expect(optimizerMock.transformModules).toHaveBeenCalledWith(
+			expect.objectContaining({ isServer: false, mode: 'lib' }),
+		);
+		expectTransformModulesNeverCalledWithHmr();
 	});
 
 	test('uses dev optimizer mode when HMR is disabled', async () => {
@@ -684,3 +767,9 @@ describe('Rolldown runtime integration', () => {
 		});
 	});
 });
+
+function expectTransformModulesNeverCalledWithHmr() {
+	for (const [options] of optimizerMock.transformModules.mock.calls) {
+		expect(options).not.toEqual(expect.objectContaining({ mode: 'hmr' }));
+	}
+}

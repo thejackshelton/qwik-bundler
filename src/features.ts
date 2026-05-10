@@ -15,6 +15,7 @@ const EXPERIMENTAL_FEATURES = [
 export function defineQwik(input: InputOptions, experimental: string[] = [], dev = false) {
 	const define = ((input.transform ??= {}).define ??= {});
 	define['globalThis.qDev'] ??= String(dev);
+	define['globalThis.qInspector'] ??= String(dev);
 	for (const feature of EXPERIMENTAL_FEATURES) {
 		define[`__EXPERIMENTAL__.${feature}`] ??= String(experimental.includes(feature));
 	}

@@ -7,25 +7,21 @@ import {
 	callHotUpdate,
 	callLoad,
 	callResolveId,
-	callTransformIndexHtml,
 	getPlugin,
 } from './helpers';
 
 describe('Vite HMR hook helpers', () => {
-	test('invokes HTML, server, and hot update hooks with caller-provided values', async () => {
-		const transformIndexHtml = vi.fn().mockReturnValue([{ tag: 'script' }]);
+	test('invokes server and hot update hooks with caller-provided values', async () => {
 		const configureServer = vi.fn();
 		const hotUpdate = vi.fn().mockReturnValue([]);
-		const plugin = { configureServer, hotUpdate, transformIndexHtml };
+		const plugin = { configureServer, hotUpdate };
 		const server = { environments: {} };
 		const environment = { name: 'client' };
 		const ctx = { modules: [], timestamp: 1 };
 
-		expect(await callTransformIndexHtml(plugin, '<html></html>')).toEqual([{ tag: 'script' }]);
 		callConfigureServer(plugin, server);
 		expect(await callHotUpdate(plugin, ctx, { environment })).toEqual([]);
 
-		expect(transformIndexHtml).toHaveBeenCalledWith('<html></html>', undefined);
 		expect(configureServer).toHaveBeenCalledWith(server);
 		expect(hotUpdate).toHaveBeenCalledWith(ctx);
 		expect(hotUpdate.mock.instances[0]).toEqual({ environment });
@@ -42,6 +38,8 @@ describe('Vite Qwik HMR bridge module', () => {
 		const code = await callLoad(hmr, `\0${QWIK_HMR_BRIDGE_ID}`);
 		expect(code).toContain("import.meta.hot.on('qwik:hmr'");
 		expect(code).toContain("CustomEvent('qHmr'");
+		expect(code).toContain('globalThis.qInspector ??= true');
+		expect(code).toContain("document.querySelectorAll('[q-d\\\\:q-hmr]')");
 		expect(code).toContain('data.t === document.__hmrT');
 		expect(code).toContain('document.__hmrDone !== document.__hmrT');
 		expect(code).toContain('location.reload()');
@@ -57,41 +55,104 @@ describe('Vite Qwik HMR bridge module', () => {
 });
 
 describe('Vite Qwik HMR bridge injection', () => {
-	test('injects only the Qwik bridge script in serve mode', async () => {
+	test('injects only the Qwik bridge script through dev HTML middleware', () => {
 		const plugin = getPlugin(qwik(), 'vite-plugin-qwik');
+		const middlewares = createMiddlewares();
 
 		callConfigResolved(plugin, { command: 'serve', root: '/workspace/app' });
+		callConfigureServer(plugin, { middlewares });
 
-		const tags = await callTransformIndexHtml(plugin, '<html></html>');
-		expect(tags).toEqual([
-			{
-				tag: 'script',
-				attrs: { type: 'module', src: `/@id/${QWIK_HMR_BRIDGE_ID}` },
-			},
-		]);
-		expect(JSON.stringify(tags)).not.toContain('@vite/client');
+		const html = runHtmlMiddleware(middlewares, '<html><head></head><body></body></html>');
+		expect(html).toContain('<script>globalThis.qInspector ??= true;</script>');
+		expect(html).toContain(`<script type="module" src="/@id/${QWIK_HMR_BRIDGE_ID}"></script>`);
+		expect(html).not.toContain('@vite/client');
 	});
 
-	test('injects the Qwik bridge under the configured Vite base', async () => {
+	test('prepends middleware and injects when the buffered response ends', () => {
 		const plugin = getPlugin(qwik(), 'vite-plugin-qwik');
+		const middlewares = createMiddlewares();
+
+		callConfigResolved(plugin, { command: 'serve', root: '/workspace/app' });
+		callConfigureServer(plugin, { middlewares });
+
+		expect(middlewares.stack[0]?.handle).toBeTypeOf('function');
+		expect(runHtmlMiddleware(middlewares, '<html><head></head><body>')).toContain(
+			QWIK_HMR_BRIDGE_ID,
+		);
+	});
+
+	test('preserves response end callbacks without treating them as HTML chunks', () => {
+		const plugin = getPlugin(qwik(), 'vite-plugin-qwik');
+		const middlewares = createMiddlewares();
+		const callback = vi.fn();
+
+		callConfigResolved(plugin, { command: 'serve', root: '/workspace/app' });
+		callConfigureServer(plugin, { middlewares });
+
+		expect(runMiddleware(middlewares, (res) => res.end(callback))).toBe('');
+		expect(callback).toHaveBeenCalledTimes(1);
+	});
+
+	test('does not remove content-length after headers are sent', () => {
+		const plugin = getPlugin(qwik(), 'vite-plugin-qwik');
+		const middlewares = createMiddlewares();
+		const removeHeader = vi.fn(() => {
+			throw new Error('headers already sent');
+		});
+
+		callConfigResolved(plugin, { command: 'serve', root: '/workspace/app' });
+		callConfigureServer(plugin, { middlewares });
+
+		const html = runMiddleware(middlewares, (res) => {
+			res.headersSent = true;
+			res.removeHeader = removeHeader;
+			res.write('<html><head></head><body></body></html>');
+			res.end();
+		});
+
+		expect(html).toContain(QWIK_HMR_BRIDGE_ID);
+		expect(removeHeader).not.toHaveBeenCalled();
+	});
+
+	test('injects the Qwik bridge under the configured Vite base', () => {
+		const plugin = getPlugin(qwik(), 'vite-plugin-qwik');
+		const middlewares = createMiddlewares();
 
 		callConfigResolved(plugin, { base: '/docs/', command: 'serve', root: '/workspace/app' });
+		callConfigureServer(plugin, { middlewares });
 
-		const tags = await callTransformIndexHtml(plugin, '<html></html>');
-		expect(tags).toEqual([
-			{
-				tag: 'script',
-				attrs: { type: 'module', src: `/docs/@id/${QWIK_HMR_BRIDGE_ID}` },
-			},
-		]);
+		expect(runHtmlMiddleware(middlewares, '<html><head></head><body></body></html>')).toContain(
+			`<script type="module" src="/docs/@id/${QWIK_HMR_BRIDGE_ID}"></script>`,
+		);
 	});
 
-	test('does not inject the Qwik bridge when HMR is disabled', async () => {
+	test('does not inject the Qwik bridge when HMR is disabled', () => {
 		const plugin = getPlugin(qwik({ hmr: false }), 'vite-plugin-qwik');
+		const middlewares = createMiddlewares();
 
 		callConfigResolved(plugin, { command: 'serve', root: '/workspace/app' });
+		callConfigureServer(plugin, { middlewares });
 
-		expect(await callTransformIndexHtml(plugin, '<html></html>')).toBeUndefined();
+		expect(middlewares.stack).toHaveLength(0);
+	});
+
+	test('does not duplicate bridge injection when HTML already includes it', () => {
+		const plugin = getPlugin(qwik(), 'vite-plugin-qwik');
+		const middlewares = createMiddlewares();
+		const html = `<html><head><script type="module" src="/@id/${QWIK_HMR_BRIDGE_ID}"></script></head></html>`;
+
+		callConfigResolved(plugin, { command: 'serve', root: '/workspace/app' });
+		callConfigureServer(plugin, { middlewares });
+
+		expect(runHtmlMiddleware(middlewares, html)).toBe(html);
+	});
+
+	test('GATE-04 does not expose an HTML transform hook during Vite build', () => {
+		const plugin = getPlugin(qwik(), 'vite-plugin-qwik');
+
+		callConfigResolved(plugin, { command: 'build', root: '/workspace/app' });
+
+		expect(plugin.transformIndexHtml).toBeUndefined();
 	});
 
 	test('delegates bridge resolution and loading through the Vite plugin', async () => {
@@ -332,6 +393,30 @@ describe('Vite Qwik HMR transport', () => {
 		});
 	});
 
+	test('falls back to Vite HMR when no hot channel is available', async () => {
+		const plugin = getPlugin(qwik(), 'vite-plugin-qwik');
+		const invalidateDevSegments = vi.fn().mockReturnValue([]);
+		const environment = {
+			name: 'client',
+			moduleGraph: { getModuleById: vi.fn(), invalidateModule: vi.fn() },
+		};
+
+		callConfigResolved(plugin, { command: 'serve', root: '/workspace/app' });
+		Object.assign(plugin, { api: { ...plugin.api, invalidateDevSegments } });
+
+		expect(
+			await callHotUpdate(
+				plugin,
+				{
+					modules: [{ type: 'js', url: '/src/root.tsx?t=123', importers: new Set() }],
+					timestamp: 1235,
+				},
+				{ environment },
+			),
+		).toBeUndefined();
+		expect(invalidateDevSegments).not.toHaveBeenCalled();
+	});
+
 	test('uses source importers as fallback for non-source module updates', async () => {
 		const plugin = getPlugin(qwik(), 'vite-plugin-qwik');
 		const invalidateDevSegments = vi.fn().mockReturnValue([]);
@@ -387,3 +472,78 @@ describe('Vite Qwik HMR transport', () => {
 		expect(JSON.stringify(send.mock.calls)).not.toContain('virtual:qwik-hmr-bridge');
 	});
 });
+
+function createMiddlewares() {
+	const middlewares = {
+		stack: [] as { route: string; handle: Function }[],
+		use(handle: Function) {
+			middlewares.stack.push({ route: '', handle });
+		},
+	};
+	return middlewares;
+}
+
+function runHtmlMiddleware(middlewares: ReturnType<typeof createMiddlewares>, html: string) {
+	return runMiddleware(middlewares, (res) => {
+		res.write(html);
+		res.end();
+	});
+}
+
+function runMiddleware(
+	middlewares: ReturnType<typeof createMiddlewares>,
+	writeResponse: (res: ReturnType<typeof createResponse>) => void,
+) {
+	const handler = middlewares.stack[0]?.handle;
+	if (typeof handler !== 'function') throw new Error('Expected dev HTML middleware');
+
+	const res = createResponse();
+
+	handler({ method: 'GET', headers: { accept: 'text/html' } }, res, () => writeResponse(res));
+	return res.output;
+}
+
+function createResponse() {
+	const headers = new Map<string, string>([['content-type', 'text/html;charset=utf-8']]);
+	return {
+		headersSent: false,
+		output: '',
+		write(chunk: unknown) {
+			this.output += String(chunk);
+			return true;
+		},
+		writeHead() {
+			this.headersSent = true;
+			return this;
+		},
+		flushHeaders() {
+			this.headersSent = true;
+		},
+		end(chunk?: unknown, encoding?: unknown, callback?: () => void) {
+			if (typeof chunk === 'function') {
+				chunk();
+				return this;
+			}
+			if (typeof encoding === 'function') {
+				encoding();
+			}
+			callback?.();
+			if (chunk !== undefined) this.output += String(chunk);
+			return this;
+		},
+		getHeader(name: string) {
+			return headers.get(name.toLowerCase());
+		},
+		hasHeader(name: string) {
+			return headers.has(name.toLowerCase());
+		},
+		setHeader(name: string, value: string) {
+			headers.set(name.toLowerCase(), value);
+			return this;
+		},
+		removeHeader(name: string) {
+			headers.delete(name.toLowerCase());
+			return this;
+		},
+	};
+}

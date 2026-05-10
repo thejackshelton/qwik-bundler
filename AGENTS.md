@@ -82,7 +82,8 @@ This project implements Qwik Hot Module Replacement support for `qwik-bundler` V
 - **Verification**: Bug fixes and behavior changes need focused failing tests before implementation.
 - **Compatibility**: Existing CSR, SSR/Nitro, and library fixture behavior must be preserved.
 - **Simplicity**: Keep the rewrite easier to read than upstream Qwik Vite unless a fixture or test proves added complexity is necessary.
-    <!-- GSD:project-end -->
+
+<!-- GSD:project-end -->
 
 <!-- GSD:stack-start source:codebase/STACK.md -->
 
@@ -148,7 +149,8 @@ This project implements Qwik Hot Module Replacement support for `qwik-bundler` V
 - Package output is ESM-only under `dist/` with public exports declared in `package.json`.
 - Client builds emit `build/q-[hash].js`, `build/bundle-graph.json`, and `q-manifest.json` from `src/rolldown.ts` and `src/build/chunking.ts`.
 - Server/library host targets are owned by consumers; fixtures demonstrate Node server output in `fixtures/rolldown-h3/server`, `fixtures/rolldown-hono/server`, and Nitro output `.output/server/index.mjs` from `fixtures/vite-nitro-v3/package.json`.
-    <!-- GSD:stack-end -->
+
+<!-- GSD:stack-end -->
 
 <!-- GSD:conventions-start source:CONVENTIONS.md -->
 
@@ -222,7 +224,8 @@ This project implements Qwik Hot Module Replacement support for `qwik-bundler` V
 - Keep implementation helpers file-local unless reused: `scriptBundle` in `src/build/static-html.ts`, `entryStrategy` in `src/rolldown.ts`, `transformDevParent` in `src/dev.ts`.
 - No source barrel files are used. Package exports map directly to built entry modules in `package.json`: `./rolldown` and `./vite`.
 - Add new public entry points by adding a source module under `src/`, updating `vite.config.ts` pack entries, and updating `package.json` exports.
-    <!-- GSD:conventions-end -->
+
+<!-- GSD:conventions-end -->
 
 <!-- GSD:architecture-start source:ARCHITECTURE.md -->
 

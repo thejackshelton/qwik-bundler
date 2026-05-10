@@ -50,7 +50,7 @@ Requirements for the HMR implementation milestone. Each maps to exactly one road
 - [x] **TEST-06**: Focused tests verify generated segment invalidation and parent-transform callback behavior.
 - [ ] **TEST-07**: Fixture or browser smoke coverage verifies CSR Vite HMR updates a component in the browser when practical.
 - [ ] **TEST-08**: Fixture coverage verifies SSR/Nitro and library builds continue to pass without HMR leakage.
-- [ ] **TEST-09**: Final verification runs focused HMR tests, `pnpm test`, `pnpm check`, `pnpm --filter @fixtures/vite-csr build`, and `pnpm --filter @fixtures/vite-nitro-v3 build`.
+- [x] **TEST-09**: Final verification runs focused HMR tests, `pnpm test`, `pnpm check`, `pnpm --filter @fixtures/vite-csr build`, and `pnpm --filter @fixtures/vite-nitro-v3 build`.
 
 ## v2 Requirements
 
@@ -116,7 +116,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TEST-06     | Phase 1 | Complete |
 | TEST-07     | Phase 4 | Pending  |
 | TEST-08     | Phase 3 | Pending  |
-| TEST-09     | Phase 4 | Pending  |
+| TEST-09     | Phase 4 | Complete |
 
 **Coverage:**
 
