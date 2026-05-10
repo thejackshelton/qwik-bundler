@@ -1,4 +1,5 @@
 import { joinURL, parsePath } from 'ufo';
+import type { EnvironmentModuleNode } from 'vite';
 import { QWIK_HMR_BRIDGE_SOURCE } from '../client/hmr-bridge';
 import type { QwikEnvironment } from '../rolldown';
 
@@ -16,10 +17,10 @@ interface ViteHmrOptions {
 type ViteHotUpdateEnvironment = {
 	name?: string;
 	moduleGraph?: {
-		getModuleById?: (id: string) => unknown;
+		getModuleById?: (id: string) => EnvironmentModuleNode | undefined;
 		invalidateModule?: (
-			module: unknown,
-			invalidated?: Set<unknown>,
+			module: EnvironmentModuleNode,
+			invalidated?: Set<EnvironmentModuleNode>,
 			timestamp?: number,
 			isHmr?: boolean,
 		) => void;
@@ -98,7 +99,7 @@ export function createViteHmr(options: ViteHmrOptions) {
 				return undefined;
 			}
 
-			const invalidated = new Set<unknown>();
+			const invalidated = new Set<EnvironmentModuleNode>();
 			for (const file of files) {
 				const segmentIds =
 					options.invalidateDevSegments?.(file, hmrEnvironment(environment)) ?? [];

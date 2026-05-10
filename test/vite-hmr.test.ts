@@ -34,7 +34,7 @@ describe('Vite HMR hook helpers', () => {
 
 describe('Vite Qwik HMR bridge module', () => {
 	test('resolves and loads the browser bridge runtime', async () => {
-		const hmr = createViteHmr({ enabled: () => true });
+		const hmr = createViteHmr({ base: () => '/', enabled: () => true });
 		const resolved = await callResolveId(hmr, QWIK_HMR_BRIDGE_ID);
 
 		expect(resolved).toEqual({ id: `\0${QWIK_HMR_BRIDGE_ID}`, moduleSideEffects: true });
@@ -49,7 +49,7 @@ describe('Vite Qwik HMR bridge module', () => {
 	});
 
 	test('ignores unknown bridge ids', async () => {
-		const hmr = createViteHmr({ enabled: () => true });
+		const hmr = createViteHmr({ base: () => '/', enabled: () => true });
 
 		expect(await callResolveId(hmr, 'virtual:other')).toBeNull();
 		expect(await callLoad(hmr, '\0virtual:other')).toBeNull();
