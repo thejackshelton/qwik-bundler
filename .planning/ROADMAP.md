@@ -68,7 +68,7 @@ Plans:
 
 **Wave 3** _(blocked on Wave 2 completion)_
 
-- [ ] 02-03-PLAN.md — Implement SSR-to-client forwarding, `hmr: false` full-reload fallback, and focused regression gates.
+- [x] 02-03-PLAN.md — Implement SSR-to-client forwarding, `hmr: false` full-reload fallback, and focused regression gates.
 
 ### Phase 3: Serve/Build Gating and Regression Safety
 
