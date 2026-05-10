@@ -1,55 +1,25 @@
-import { parsePath } from 'ufo';
-import type { EnvironmentModuleNode } from 'vite';
+import { joinURL, parsePath } from 'ufo';
+import type {
+	DevEnvironment,
+	EnvironmentModuleNode,
+	FetchableDevEnvironment,
+	HtmlTagDescriptor,
+	HotUpdateOptions,
+	ViteDevServer,
+} from 'vite';
 import { QWIK_HMR_BRIDGE_SOURCE } from '../client/hmr-bridge';
 import type { QwikEnvironment } from '../rolldown';
-import { installHtmlBridge } from './html-bridge';
 
 export const QWIK_HMR_BRIDGE_ID = 'virtual:qwik-hmr-bridge';
 
 const RESOLVED_QWIK_HMR_BRIDGE_ID = `\0${QWIK_HMR_BRIDGE_ID}`;
+const QWIK_HMR_BRIDGE_PATH = `/@id/${QWIK_HMR_BRIDGE_ID}`;
+
 interface ViteHmrOptions {
 	base: () => string;
 	enabled: () => boolean;
 	invalidateDevSegments?: (parent: string, environment?: QwikEnvironment) => string[];
 }
-
-type HotEnv = {
-	name?: string;
-	moduleGraph?: {
-		getModuleById?: (id: string) => EnvironmentModuleNode | undefined;
-		invalidateModule?: (
-			module: EnvironmentModuleNode,
-			invalidated?: Set<EnvironmentModuleNode>,
-			timestamp?: number,
-			isHmr?: boolean,
-		) => void;
-	};
-	hot?: {
-		send?: (payload: unknown) => void;
-	};
-};
-
-type ViteDevServer = {
-	environments?: {
-		client?: {
-			hot?: {
-				send?: (payload: unknown) => void;
-			};
-		};
-	};
-	middlewares?: Parameters<typeof installHtmlBridge>[0]['middlewares'];
-};
-
-type HotModule = {
-	type?: string;
-	url?: string;
-	importers?: Iterable<HotModule>;
-};
-
-type HotCtx = {
-	modules?: HotModule[];
-	timestamp: number;
-};
 
 const SOURCE_FILE_EXTENSION = /\.([mc]?[jt]sx?|mdx)$/;
 
@@ -60,8 +30,11 @@ export function createViteHmr(options: ViteHmrOptions) {
 		configureServer(nextServer: ViteDevServer) {
 			server = nextServer;
 			if (options.enabled()) {
-				installHtmlBridge(nextServer, options.base);
+				installFetchHmrBridge(nextServer, options.base);
 			}
+		},
+		transformIndexHtml() {
+			return options.enabled() ? hmrBridgeTags(options.base()) : undefined;
 		},
 		resolveId(id: string) {
 			if (id !== QWIK_HMR_BRIDGE_ID) {
@@ -73,13 +46,13 @@ export function createViteHmr(options: ViteHmrOptions) {
 		load(id: string) {
 			return id === RESOLVED_QWIK_HMR_BRIDGE_ID ? QWIK_HMR_BRIDGE_SOURCE : null;
 		},
-		hotUpdate(environment: HotEnv | undefined, ctx: HotCtx) {
+		hotUpdate(environment: DevEnvironment | undefined, ctx: HotUpdateOptions) {
 			if (environment?.name !== 'client' && environment?.name !== 'ssr') {
 				return undefined;
 			}
 
-			const hot =
-				environment.name === 'ssr' ? server?.environments?.client?.hot : environment.hot;
+			const env = environment.name === 'ssr' ? 'server' : 'client';
+			const hot = env === 'server' ? server?.environments?.client?.hot : environment.hot;
 			if (!hot?.send) {
 				return undefined;
 			}
@@ -96,9 +69,7 @@ export function createViteHmr(options: ViteHmrOptions) {
 
 			const invalidated = new Set<EnvironmentModuleNode>();
 			for (const file of files) {
-				const segmentIds =
-					options.invalidateDevSegments?.(file, envName(environment)) ?? [];
-				for (const id of segmentIds) {
+				for (const id of options.invalidateDevSegments?.(file, env) ?? []) {
 					const module = environment.moduleGraph?.getModuleById?.(id);
 					if (!module) continue;
 
@@ -122,31 +93,80 @@ export function createViteHmr(options: ViteHmrOptions) {
 	};
 }
 
-function envName(environment: HotEnv): QwikEnvironment {
-	return environment.name === 'ssr' ? 'server' : 'client';
+function installFetchHmrBridge(server: ViteDevServer, base: () => string) {
+	// Some SSR adapters, including Nitro, render final HTML in fetchable Vite
+	// environments instead of Vite's transformIndexHtml hook. Wrap those Response
+	// objects so Node, workerd, and other Fetch-based runtimes share the same path.
+	for (const environment of Object.values(server.environments)) {
+		const fetchEnv = environment as Partial<Pick<FetchableDevEnvironment, 'dispatchFetch'>>;
+		if (!fetchEnv.dispatchFetch) continue;
+
+		const dispatchFetch = fetchEnv.dispatchFetch.bind(fetchEnv);
+		fetchEnv.dispatchFetch = async (request) => {
+			const response = await dispatchFetch(request);
+			if (!response.headers.get('content-type')?.includes('text/html')) return response;
+
+			const html = await response.text();
+			const nextHtml = injectHmrBridge(html, base());
+			const headers = new Headers(response.headers);
+			if (nextHtml !== html) headers.delete('content-length');
+			return new Response(nextHtml, {
+				headers,
+				status: response.status,
+				statusText: response.statusText,
+			});
+		};
+	}
 }
 
-function changedFiles(modules: HotModule[]) {
+function hmrBridgeTags(base: string): HtmlTagDescriptor[] {
+	return [
+		{
+			tag: 'script',
+			children: 'globalThis.qInspector ??= true;',
+			injectTo: 'head',
+		},
+		{
+			tag: 'script',
+			attrs: { type: 'module', src: hmrBridgePath(base) },
+			injectTo: 'head',
+		},
+	];
+}
+
+function injectHmrBridge(html: string, base: string) {
+	if (!html || html.includes(QWIK_HMR_BRIDGE_ID)) return html;
+
+	const tags = hmrBridgeHtml(base);
+	if (html.includes('</head>')) return html.replace('</head>', `${tags}</head>`);
+	if (html.includes('<head>')) return html.replace('<head>', `<head>${tags}`);
+	return html;
+}
+
+function hmrBridgeHtml(base: string) {
+	return (
+		'<script>globalThis.qInspector ??= true;</script>' +
+		`<script type="module" src="${hmrBridgePath(base)}"></script>`
+	);
+}
+
+function hmrBridgePath(base: string) {
+	return joinURL(base, QWIK_HMR_BRIDGE_PATH);
+}
+
+function changedFiles(modules: EnvironmentModuleNode[]) {
 	const files = new Set<string>();
 	for (const module of modules) {
-		const url = sourceUrl(module);
-		if (url) {
-			files.add(url);
-			continue;
-		}
-
-		for (const importer of module.importers ?? []) {
-			const importerUrl = sourceUrl(importer);
-			if (importerUrl) {
-				files.add(importerUrl);
-			}
+		for (const item of [module, ...(module.importers ?? [])]) {
+			const url = sourceUrl(item);
+			if (url) files.add(url);
 		}
 	}
 
 	return files;
 }
 
-function sourceUrl(module: HotModule) {
-	const url = module.url ? parsePath(module.url).pathname : null;
-	return module.type === 'js' && url && SOURCE_FILE_EXTENSION.test(url) ? url : null;
+function sourceUrl(module: EnvironmentModuleNode) {
+	const url = parsePath(module.url).pathname;
+	return module.type === 'js' && SOURCE_FILE_EXTENSION.test(url) ? url : null;
 }

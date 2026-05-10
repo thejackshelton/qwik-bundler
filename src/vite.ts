@@ -48,6 +48,9 @@ export function qwik(options: VitePluginOptions = {}): Plugin[] {
 			rolldownOptions.devServer = server;
 			hmr.configureServer(server);
 		},
+		transformIndexHtml() {
+			return hmr.transformIndexHtml();
+		},
 		resolveId(source, importer, resolveOptions) {
 			const resolved = hmr.resolveId(source);
 			if (resolved) {
