@@ -7,12 +7,15 @@ type PluginHooks = {
 	config?: unknown;
 	configEnvironment?: unknown;
 	configResolved?: unknown;
+	configureServer?: unknown;
 	generateBundle?: unknown;
+	hotUpdate?: unknown;
 	load?: unknown;
 	options?: unknown;
 	outputOptions?: unknown;
 	resolveId?: unknown;
 	transform?: unknown;
+	transformIndexHtml?: unknown;
 };
 type MockFn = ReturnType<typeof vi.fn>;
 
@@ -114,6 +117,18 @@ export function callConfigEnvironment(
 
 export function callConfigResolved(plugin: Pick<VitePlugin, 'configResolved'>, config: unknown) {
 	return getHook(plugin.configResolved, 'configResolved').call({}, config as ResolvedConfig);
+}
+
+export function callConfigureServer(plugin: PluginHooks, server: unknown) {
+	return getHook(plugin.configureServer, 'configureServer').call({}, server);
+}
+
+export function callTransformIndexHtml(plugin: PluginHooks, html: string, context?: unknown) {
+	return getHook(plugin.transformIndexHtml, 'transformIndexHtml').call({}, html, context);
+}
+
+export function callHotUpdate(plugin: PluginHooks, ctx: unknown, context: HookContext = {}) {
+	return getHook(plugin.hotUpdate, 'hotUpdate').call(context, ctx);
 }
 
 export function createViteHookContext(
