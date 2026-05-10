@@ -94,6 +94,157 @@ describe('Vite Qwik HMR bridge injection', () => {
 });
 
 describe('Vite Qwik HMR transport', () => {
+	test('TEST-03 forwards SSR source hot updates through the client hot channel', async () => {
+		const plugin = getPlugin(qwik(), 'vite-plugin-qwik');
+		const ssrModule = { id: '\0qwik:segment:server:/src/root.tsx_symbol.js' };
+		const getModuleById = vi.fn().mockReturnValue(ssrModule);
+		const invalidateModule = vi.fn();
+		const ssrSend = vi.fn();
+		const clientSend = vi.fn();
+		const server = { environments: { client: { hot: { send: clientSend } } } };
+		const environment = {
+			name: 'ssr',
+			moduleGraph: { getModuleById, invalidateModule },
+			hot: { send: ssrSend },
+		};
+		const invalidateDevSegments = vi.fn().mockReturnValue([ssrModule.id]);
+
+		callConfigResolved(plugin, { command: 'serve', root: '/workspace/app' });
+		callConfigureServer(plugin, server);
+		Object.assign(plugin, { api: { ...plugin.api, invalidateDevSegments } });
+
+		expect(
+			await callHotUpdate(
+				plugin,
+				{
+					modules: [
+						{ type: 'js', url: '/src/root.tsx?t=123#hash', importers: new Set() },
+					],
+					timestamp: 9012,
+				},
+				{ environment },
+			),
+		).toEqual([]);
+
+		expect(invalidateDevSegments).toHaveBeenCalledWith('/src/root.tsx', 'server');
+		expect(getModuleById).toHaveBeenCalledWith(ssrModule.id);
+		expect(invalidateModule).toHaveBeenCalledWith(ssrModule, expect.any(Set), 9012, true);
+		expect(clientSend).toHaveBeenCalledWith({
+			type: 'custom',
+			event: 'qwik:hmr',
+			data: { files: ['/src/root.tsx'], t: 9012 },
+		});
+		expect(ssrSend).not.toHaveBeenCalled();
+	});
+
+	test('TEST-03 forwards only SSR source importers for non-source module updates', async () => {
+		const plugin = getPlugin(qwik(), 'vite-plugin-qwik');
+		const invalidateDevSegments = vi.fn().mockReturnValue([]);
+		const clientSend = vi.fn();
+		const server = { environments: { client: { hot: { send: clientSend } } } };
+		const environment = {
+			name: 'ssr',
+			moduleGraph: { getModuleById: vi.fn(), invalidateModule: vi.fn() },
+			hot: { send: vi.fn() },
+		};
+
+		callConfigResolved(plugin, { command: 'serve', root: '/workspace/app' });
+		callConfigureServer(plugin, server);
+		Object.assign(plugin, { api: { ...plugin.api, invalidateDevSegments } });
+
+		expect(
+			await callHotUpdate(
+				plugin,
+				{
+					modules: [
+						{
+							type: 'js',
+							url: '/src/styles.css?inline',
+							importers: new Set([
+								{ type: 'js', url: '/src/entry.ssr.tsx?v=2', importers: new Set() },
+								{ type: 'js', url: '/src/ignored.css?raw', importers: new Set() },
+							]),
+						},
+					],
+					timestamp: 3456,
+				},
+				{ environment },
+			),
+		).toEqual([]);
+
+		expect(invalidateDevSegments).toHaveBeenCalledTimes(1);
+		expect(invalidateDevSegments).toHaveBeenCalledWith('/src/entry.ssr.tsx', 'server');
+		expect(clientSend).toHaveBeenCalledWith({
+			type: 'custom',
+			event: 'qwik:hmr',
+			data: { files: ['/src/entry.ssr.tsx'], t: 3456 },
+		});
+		expect(JSON.stringify(clientSend.mock.calls)).not.toContain('styles.css');
+		expect(JSON.stringify(clientSend.mock.calls)).not.toContain('ignored.css');
+	});
+
+	test('TEST-04 sends client full reload and no custom event when HMR is disabled', async () => {
+		const plugin = getPlugin(qwik({ hmr: false }), 'vite-plugin-qwik');
+		const send = vi.fn();
+		const environment = {
+			name: 'client',
+			moduleGraph: { getModuleById: vi.fn(), invalidateModule: vi.fn() },
+			hot: { send },
+		};
+		const invalidateDevSegments = vi.fn().mockReturnValue([]);
+
+		callConfigResolved(plugin, { command: 'serve', root: '/workspace/app' });
+		Object.assign(plugin, { api: { ...plugin.api, invalidateDevSegments } });
+
+		expect(
+			await callHotUpdate(
+				plugin,
+				{
+					modules: [{ type: 'js', url: '/src/root.tsx?t=123', importers: new Set() }],
+					timestamp: 1111,
+				},
+				{ environment },
+			),
+		).toEqual([]);
+
+		expect(send).toHaveBeenCalledTimes(1);
+		expect(send).toHaveBeenCalledWith({ type: 'full-reload' });
+		expect(JSON.stringify(send.mock.calls)).not.toContain('qwik:hmr');
+	});
+
+	test('TEST-04 sends SSR full reload on the client channel when HMR is disabled', async () => {
+		const plugin = getPlugin(qwik({ hmr: false }), 'vite-plugin-qwik');
+		const ssrSend = vi.fn();
+		const clientSend = vi.fn();
+		const server = { environments: { client: { hot: { send: clientSend } } } };
+		const environment = {
+			name: 'ssr',
+			moduleGraph: { getModuleById: vi.fn(), invalidateModule: vi.fn() },
+			hot: { send: ssrSend },
+		};
+		const invalidateDevSegments = vi.fn().mockReturnValue([]);
+
+		callConfigResolved(plugin, { command: 'serve', root: '/workspace/app' });
+		callConfigureServer(plugin, server);
+		Object.assign(plugin, { api: { ...plugin.api, invalidateDevSegments } });
+
+		expect(
+			await callHotUpdate(
+				plugin,
+				{
+					modules: [{ type: 'js', url: '/src/root.tsx?t=123', importers: new Set() }],
+					timestamp: 2222,
+				},
+				{ environment },
+			),
+		).toEqual([]);
+
+		expect(clientSend).toHaveBeenCalledTimes(1);
+		expect(clientSend).toHaveBeenCalledWith({ type: 'full-reload' });
+		expect(ssrSend).not.toHaveBeenCalled();
+		expect(JSON.stringify(clientSend.mock.calls)).not.toContain('qwik:hmr');
+	});
+
 	test('invalidates client dev segments and sends normalized source files', async () => {
 		const plugin = getPlugin(qwik(), 'vite-plugin-qwik');
 		const segmentModule = { id: '\0qwik:segment:client:/src/root.tsx_symbol.js' };
