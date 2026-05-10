@@ -80,7 +80,7 @@ describe('Rolldown runtime integration', () => {
 		expect(options).toHaveProperty('preserveEntrySignatures', 'allow-extension');
 	});
 
-	test('does not set client-only input defaults for server and library builds', () => {
+	test('does not set server or library input signature defaults', () => {
 		const serverOptions = {};
 		const libOptions = {};
 

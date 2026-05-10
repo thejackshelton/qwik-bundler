@@ -1,5 +1,5 @@
 import type { OutputOptions } from 'rolldown';
-import type { ConfigEnv, Plugin, UserConfig, ViteDevServer } from 'vite';
+import type { ConfigEnv, Plugin, UserConfig, ViteBuilder, ViteDevServer } from 'vite';
 import { outputDefaults } from '../build/chunking';
 import type { QwikManifest } from '../build/manifest';
 import {
@@ -10,7 +10,9 @@ import {
 import { qwikViteExternal } from '../qwik-external';
 import { createViteHmr } from './hmr';
 
-export interface VitePluginOptions extends QwikRolldownOptions {}
+export interface VitePluginOptions extends QwikRolldownOptions {
+	clientEnvironment?: string;
+}
 
 type QwikOutputOptions = OutputOptions | OutputOptions[] | undefined;
 
@@ -48,6 +50,15 @@ export function qwik(options: VitePluginOptions = {}): Plugin[] {
 			rolldownOptions.dev = serve;
 			rolldownOptions.rootDir = resolvedConfig.root;
 		},
+		configEnvironment(name, config) {
+			return external.configEnvironment?.call(this, name, config);
+		},
+		buildApp: {
+			order: 'pre',
+			handler(builder) {
+				return buildQwikClient(builder, options.clientEnvironment);
+			},
+		},
 		configureServer(server: ViteDevServer) {
 			rolldownOptions.devServer = server;
 			hmr.configureServer(server);
@@ -82,7 +93,6 @@ export function qwik(options: VitePluginOptions = {}): Plugin[] {
 
 	return [qwikPlugin];
 }
-
 function setQwikConfigDefaults(config: UserConfig, env: ConfigEnv) {
 	if (config.build?.lib || config.build?.ssr || env.mode === 'ssr') {
 		return;
@@ -93,6 +103,13 @@ function setQwikConfigDefaults(config: UserConfig, env: ConfigEnv) {
 
 	const rolldownOptions = (build.rolldownOptions ??= {});
 	rolldownOptions.output = withQwikOutputDefaults(rolldownOptions.output, 'client');
+}
+
+async function buildQwikClient(builder: ViteBuilder, clientEnvironment: string | undefined) {
+	const environment = builder.environments[clientEnvironment ?? 'client'];
+	if (environment && !environment.isBuilt) {
+		await builder.build(environment);
+	}
 }
 
 function withQwikOutputDefaults(

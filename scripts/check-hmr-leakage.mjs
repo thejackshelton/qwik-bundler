@@ -6,7 +6,7 @@ const scanRoots = [
 	'fixtures/vite-csr/dist',
 	'fixtures/vite-nitro-v3/.output',
 	'fixtures/vite-library/dist',
-	'fixtures/rolldown-library/lib',
+	'fixtures/rolldown-library-consumer/rolldown-library/lib',
 ];
 
 const textExtensions = new Set(['.js', '.mjs', '.cjs', '.html', '.json', '.css', '.map']);

@@ -49,7 +49,7 @@ describe('Vite config integration', () => {
 		expect(config.build!.modulePreload).toBe(false);
 	});
 
-	test('uses vitefu to exclude Qwik deps from optimization and SSR externalization', async () => {
+	test('uses vitefu to optimize and bundle Qwik deps', async () => {
 		vitefuMock.crawlFrameworkPkgs.mockResolvedValueOnce({
 			optimizeDeps: { include: [], exclude: ['@fixtures/qwik-lib'] },
 			ssr: { noExternal: ['@fixtures/qwik-lib'], external: [] },
@@ -64,7 +64,6 @@ describe('Vite config integration', () => {
 
 		expect(result).toEqual({
 			optimizeDeps: { include: [], exclude: ['@fixtures/qwik-lib'] },
-			ssr: { noExternal: ['@fixtures/qwik-lib'], external: [] },
 		});
 		expect(vitefuMock.crawlFrameworkPkgs).toHaveBeenCalledWith(
 			expect.objectContaining({
@@ -92,14 +91,32 @@ describe('Vite config integration', () => {
 		expect(environmentResult).toEqual({
 			resolve: { noExternal: ['existing', '@fixtures/qwik-lib'] },
 		});
-		expect(
-			callConfigEnvironment(plugin, 'ssr', {
-				resolve: { noExternal: ['existing', '@fixtures/qwik-lib'] },
-			}),
-		).toBeUndefined();
-		expect(
-			callConfigEnvironment(plugin, 'ssr', { resolve: { noExternal: true } }),
-		).toBeUndefined();
+
+		const existingQwikConfig: EnvironmentOptions = {
+			resolve: { noExternal: ['existing', '@fixtures/qwik-lib'] },
+		};
+		expect(callConfigEnvironment(plugin, 'ssr', existingQwikConfig)).toBeUndefined();
+
+		const noExternalAllConfig: EnvironmentOptions = { resolve: { noExternal: true } };
+		expect(callConfigEnvironment(plugin, 'ssr', noExternalAllConfig)).toBeUndefined();
+	});
+
+	test('does not emit SSR externalization defaults', async () => {
+		vitefuMock.crawlFrameworkPkgs.mockResolvedValueOnce({
+			optimizeDeps: { include: [], exclude: ['@fixtures/qwik-lib'] },
+			ssr: { noExternal: ['@fixtures/qwik-lib'], external: ['node-only'] },
+		});
+		const plugin = getQwikPlugin();
+		const config: UserConfig = { root: '/workspace/app' };
+
+		const result = await callConfig(plugin, config, {
+			command: 'serve',
+			mode: 'development',
+		});
+
+		expect(result).toEqual({
+			optimizeDeps: { include: [], exclude: ['@fixtures/qwik-lib'] },
+		});
 	});
 
 	test('dispatches output defaults by Vite environment context', () => {
@@ -129,9 +146,6 @@ describe('Vite config integration', () => {
 			dir: 'server',
 			chunkFileNames: 'q-[hash].js',
 			hoistTransitiveImports: false,
-			codeSplitting: {
-				includeDependenciesRecursively: false,
-			},
 		});
 		expect(
 			callOutputOptions(
@@ -157,8 +171,68 @@ describe('Vite config integration', () => {
 
 		expect(config.build!.rolldownOptions!.output).toBeUndefined();
 	});
+
+	test('builds the client environment from a pre buildApp hook', async () => {
+		const plugin = getQwikPlugin();
+		const calls: string[] = [];
+
+		await callBuildApp(plugin, {
+			build: vi.fn(async (environment: { name: string; isBuilt: boolean }) => {
+				calls.push(environment.name);
+				environment.isBuilt = true;
+			}),
+			config: { root: '/workspace/app' },
+			environments: {
+				client: {
+					name: 'client',
+					isBuilt: false,
+					config: {
+						consumer: 'client',
+						build: { rollupOptions: { input: 'src/root.tsx' } },
+					},
+				},
+			},
+		} as never);
+
+		expect(calls).toEqual(['client']);
+	});
+
+	test('can target a custom Qwik client environment name', async () => {
+		const plugin = getQwikPlugin({ clientEnvironment: 'browser' });
+		const calls: string[] = [];
+
+		await callBuildApp(plugin, {
+			build: vi.fn(async (environment: { name: string; isBuilt: boolean }) => {
+				calls.push(environment.name);
+				environment.isBuilt = true;
+			}),
+			config: { root: '/workspace/app' },
+			environments: {
+				ssr: { name: 'ssr', isBuilt: false, config: { consumer: 'server' } },
+				browser: {
+					name: 'browser',
+					isBuilt: false,
+					config: {
+						consumer: 'client',
+						build: { rollupOptions: { input: 'src/root.tsx' } },
+					},
+				},
+			},
+		} as never);
+
+		expect(calls).toEqual(['browser']);
+	});
 });
 
-function getQwikPlugin() {
-	return getPlugin(qwik() as Plugin[], 'vite-plugin-qwik');
+function getQwikPlugin(options?: Parameters<typeof qwik>[0]) {
+	return getPlugin(qwik(options) as Plugin[], 'vite-plugin-qwik');
+}
+
+function callBuildApp(plugin: Plugin, builder: unknown) {
+	const buildApp = plugin.buildApp;
+	if (!buildApp || typeof buildApp === 'function') {
+		throw new Error('Expected buildApp hook object');
+	}
+
+	return buildApp.handler(builder as never);
 }

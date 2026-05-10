@@ -1,5 +1,5 @@
 import { defineConfig } from 'rolldown';
-import { qwikLib } from '../../src/rolldown';
+import { qwikLib } from '../../../src/rolldown';
 
 export default defineConfig({
 	input: 'src/index.tsx',

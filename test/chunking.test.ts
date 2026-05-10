@@ -17,9 +17,6 @@ describe('Qwik chunking defaults', () => {
 			entryFileNames: 'build/q-[hash].js',
 			chunkFileNames: 'build/q-[hash].js',
 			hoistTransitiveImports: false,
-			codeSplitting: {
-				includeDependenciesRecursively: false,
-			},
 		});
 		expect(clientOutput.codeSplitting?.groups?.map((group) => group.name)).toEqual([
 			'qwik-core',
@@ -30,9 +27,6 @@ describe('Qwik chunking defaults', () => {
 			dir: 'server',
 			chunkFileNames: 'q-[hash].js',
 			hoistTransitiveImports: false,
-			codeSplitting: {
-				includeDependenciesRecursively: false,
-			},
 		});
 		expect(callOutputOptions(qwikLib(), { entryFileNames: '[name].js' })).toEqual({
 			entryFileNames: '[name].js',

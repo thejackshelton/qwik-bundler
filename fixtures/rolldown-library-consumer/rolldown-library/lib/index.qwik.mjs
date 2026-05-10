@@ -8,11 +8,11 @@ const Card = /* @__PURE__ */ componentQrl(
 			'section',
 			null,
 			{ class: 'fixture-card' },
-			/* @__PURE__ */ _jsxSorted(Slot, null, null, null, 3, 'St_0'),
+			/* @__PURE__ */ _jsxSorted(Slot, null, null, null, 3, 'WY_0'),
 			1,
-			'St_1',
+			'WY_1',
 		);
-	}, 'Card_component_D8Jm0aJFndY'),
+	}, 'Card_component_R0aKf0RV2Cs'),
 );
 const Badge = /* @__PURE__ */ componentQrl(
 	/* @__PURE__ */ inlinedQrl((_rawProps) => {
@@ -22,9 +22,9 @@ const Badge = /* @__PURE__ */ componentQrl(
 			null,
 			'Rolldown library badge',
 			3,
-			'St_2',
+			'WY_2',
 		);
-	}, 'Badge_component_RWYXgGZf4KY'),
+	}, 'Badge_component_MZBlEqopNao'),
 );
 //#endregion
 export { Badge, Card };

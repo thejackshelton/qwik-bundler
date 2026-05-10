@@ -75,7 +75,7 @@ export function qwikViteExternal(configDefaults: (config: UserConfig, env: Confi
 					isFrameworkPkgByJson: isQwikPackage,
 				});
 				qwikDeps = result.optimizeDeps.exclude;
-				return result;
+				return { optimizeDeps: result.optimizeDeps };
 			},
 		},
 		configEnvironment(_name, config) {

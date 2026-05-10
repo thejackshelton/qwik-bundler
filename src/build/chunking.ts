@@ -54,7 +54,6 @@ function qwikCodeSplitting(codeSplitting: OutputOptions['codeSplitting']) {
 
 	return {
 		...codeSplitting,
-		includeDependenciesRecursively: false,
 		groups: [...QWIK_CODE_SPLITTING_GROUPS, ...(codeSplitting?.groups ?? [])],
 	} satisfies CodeSplittingOptions;
 }
