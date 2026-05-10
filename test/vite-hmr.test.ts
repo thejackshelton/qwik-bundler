@@ -92,3 +92,103 @@ describe('Vite Qwik HMR bridge injection', () => {
 		);
 	});
 });
+
+describe('Vite Qwik HMR transport', () => {
+	test('invalidates client dev segments and sends normalized source files', async () => {
+		const plugin = getPlugin(qwik(), 'vite-plugin-qwik');
+		const segmentModule = { id: '\0qwik:segment:client:/src/root.tsx_symbol.js' };
+		const getModuleById = vi.fn().mockReturnValue(segmentModule);
+		const invalidateModule = vi.fn();
+		const send = vi.fn();
+		const environment = {
+			name: 'client',
+			moduleGraph: { getModuleById, invalidateModule },
+			hot: { send },
+		};
+		const invalidateDevSegments = vi.fn().mockReturnValue([segmentModule.id]);
+
+		callConfigResolved(plugin, { command: 'serve', root: '/workspace/app' });
+		Object.assign(plugin, { api: { ...plugin.api, invalidateDevSegments } });
+
+		await expect(
+			callHotUpdate(
+				plugin,
+				{
+					modules: [
+						{
+							type: 'js',
+							url: '/src/root.tsx?t=123#hash',
+							importers: new Set(),
+						},
+					],
+					timestamp: 1234,
+				},
+				{ environment },
+			),
+		).resolves.toEqual([]);
+
+		expect(invalidateDevSegments).toHaveBeenCalledWith('/src/root.tsx', 'client');
+		expect(getModuleById).toHaveBeenCalledWith(segmentModule.id);
+		expect(invalidateModule).toHaveBeenCalledWith(segmentModule, expect.any(Set), 1234, true);
+		expect(send).toHaveBeenCalledWith({
+			type: 'custom',
+			event: 'qwik:hmr',
+			data: { files: ['/src/root.tsx'], t: 1234 },
+		});
+	});
+
+	test('uses source importers as fallback for non-source module updates', async () => {
+		const plugin = getPlugin(qwik(), 'vite-plugin-qwik');
+		const invalidateDevSegments = vi.fn().mockReturnValue([]);
+		const send = vi.fn();
+		const environment = {
+			name: 'client',
+			moduleGraph: { getModuleById: vi.fn(), invalidateModule: vi.fn() },
+			hot: { send },
+		};
+
+		callConfigResolved(plugin, { command: 'serve', root: '/workspace/app' });
+		Object.assign(plugin, { api: { ...plugin.api, invalidateDevSegments } });
+
+		await expect(
+			callHotUpdate(
+				plugin,
+				{
+					modules: [
+						{
+							type: 'js',
+							url: '/src/styles.css?inline',
+							importers: new Set([
+								{ type: 'js', url: '/src/entry.tsx?v=2', importers: new Set() },
+								{ type: 'js', url: '/src/ignored.css?raw', importers: new Set() },
+							]),
+						},
+						{
+							type: 'css',
+							url: '/src/global.css',
+							importers: new Set(),
+						},
+						{
+							type: 'js',
+							url: '\0virtual:qwik-hmr-bridge',
+							importers: new Set(),
+						},
+					],
+					timestamp: 5678,
+				},
+				{ environment },
+			),
+		).resolves.toEqual([]);
+
+		expect(invalidateDevSegments).toHaveBeenCalledTimes(1);
+		expect(invalidateDevSegments).toHaveBeenCalledWith('/src/entry.tsx', 'client');
+		expect(send).toHaveBeenCalledWith({
+			type: 'custom',
+			event: 'qwik:hmr',
+			data: { files: ['/src/entry.tsx'], t: 5678 },
+		});
+		expect(JSON.stringify(send.mock.calls)).not.toContain('styles.css');
+		expect(JSON.stringify(send.mock.calls)).not.toContain('ignored.css');
+		expect(JSON.stringify(send.mock.calls)).not.toContain('virtual:qwik-hmr-bridge');
+	});
+});
