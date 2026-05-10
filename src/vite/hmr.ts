@@ -28,6 +28,16 @@ type ViteHotUpdateEnvironment = {
 	};
 };
 
+type ViteDevServer = {
+	environments?: {
+		client?: {
+			hot?: {
+				send?: (payload: unknown) => void;
+			};
+		};
+	};
+};
+
 type ViteHotUpdateModule = {
 	type?: string;
 	url?: string;
@@ -42,7 +52,12 @@ type ViteHotUpdateContext = {
 const SOURCE_FILE_EXTENSION = /\.([mc]?[jt]sx?|mdx)$/;
 
 export function createViteHmr(options: ViteHmrOptions) {
+	let server: ViteDevServer | undefined;
+
 	return {
+		configureServer(nextServer: ViteDevServer) {
+			server = nextServer;
+		},
 		transformIndexHtml() {
 			if (!options.enabled()) {
 				return undefined;
@@ -61,7 +76,7 @@ export function createViteHmr(options: ViteHmrOptions) {
 			return id === RESOLVED_QWIK_HMR_BRIDGE_ID ? QWIK_HMR_BRIDGE_SOURCE : null;
 		},
 		hotUpdate(environment: ViteHotUpdateEnvironment | undefined, ctx: ViteHotUpdateContext) {
-			if (environment?.name !== 'client') {
+			if (environment?.name !== 'client' && environment?.name !== 'ssr') {
 				return undefined;
 			}
 
@@ -72,7 +87,8 @@ export function createViteHmr(options: ViteHmrOptions) {
 
 			const invalidated = new Set<unknown>();
 			for (const file of files) {
-				const segmentIds = options.invalidateDevSegments?.(file, 'client') ?? [];
+				const segmentIds =
+					options.invalidateDevSegments?.(file, hmrEnvironment(environment)) ?? [];
 				for (const id of segmentIds) {
 					const module = environment.moduleGraph?.getModuleById?.(id);
 					if (!module) continue;
@@ -86,17 +102,25 @@ export function createViteHmr(options: ViteHmrOptions) {
 				}
 			}
 
+			const hot =
+				environment.name === 'ssr' ? server?.environments?.client?.hot : environment.hot;
 			if (options.enabled()) {
-				environment.hot?.send?.({
+				hot?.send?.({
 					type: 'custom',
 					event: 'qwik:hmr',
 					data: { files: [...files], t: ctx.timestamp },
 				});
+			} else {
+				hot?.send?.({ type: 'full-reload' });
 			}
 
 			return [];
 		},
 	};
+}
+
+function hmrEnvironment(environment: ViteHotUpdateEnvironment): QwikEnvironment {
+	return environment.name === 'ssr' ? 'server' : 'client';
 }
 
 function sourceFiles(modules: ViteHotUpdateModule[]) {

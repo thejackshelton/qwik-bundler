@@ -43,6 +43,7 @@ export function qwik(options: VitePluginOptions = {}): Plugin[] {
 		},
 		configureServer(server: ViteDevServer) {
 			rolldownOptions.devServer = server;
+			hmr.configureServer(server);
 		},
 		transformIndexHtml() {
 			return hmr.transformIndexHtml();
