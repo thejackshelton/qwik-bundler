@@ -3,16 +3,20 @@ import { vi } from 'vitest';
 
 type FunctionHook = (this: unknown, ...args: unknown[]) => unknown;
 type PluginHooks = {
+	buildApp?: unknown;
 	buildStart?: unknown;
 	config?: unknown;
 	configEnvironment?: unknown;
 	configResolved?: unknown;
+	configureServer?: unknown;
 	generateBundle?: unknown;
+	hotUpdate?: unknown;
 	load?: unknown;
 	options?: unknown;
 	outputOptions?: unknown;
 	resolveId?: unknown;
 	transform?: unknown;
+	transformIndexHtml?: unknown;
 };
 type MockFn = ReturnType<typeof vi.fn>;
 
@@ -44,8 +48,19 @@ export function callOutputOptions(
 	return getHook(plugin.outputOptions, 'outputOptions').call(context, outputOptions);
 }
 
-export function callBuildStart(plugin: PluginHooks, options: { cwd: string }) {
-	return getHook(plugin.buildStart, 'buildStart').call({}, options);
+export function callBuildStart(
+	plugin: PluginHooks,
+	options: { cwd: string },
+	context: HookContext = {},
+) {
+	return getHook(plugin.buildStart, 'buildStart').call(
+		{ emitFile: vi.fn(), ...context },
+		options,
+	);
+}
+
+export function callBuildApp(plugin: PluginHooks, builder: unknown) {
+	return getHook(plugin.buildApp, 'buildApp').call({}, builder);
 }
 
 export function callTransform(
@@ -114,6 +129,18 @@ export function callConfigEnvironment(
 
 export function callConfigResolved(plugin: Pick<VitePlugin, 'configResolved'>, config: unknown) {
 	return getHook(plugin.configResolved, 'configResolved').call({}, config as ResolvedConfig);
+}
+
+export function callConfigureServer(plugin: PluginHooks, server: unknown) {
+	return getHook(plugin.configureServer, 'configureServer').call({}, server);
+}
+
+export function callTransformIndexHtml(plugin: PluginHooks, html: string, context?: unknown) {
+	return getHook(plugin.transformIndexHtml, 'transformIndexHtml').call({}, html, context);
+}
+
+export function callHotUpdate(plugin: PluginHooks, ctx: unknown, context: HookContext = {}) {
+	return getHook(plugin.hotUpdate, 'hotUpdate').call(context, ctx);
 }
 
 export function createViteHookContext(

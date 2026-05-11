@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
-import { qwikClient, qwikLib, qwikServer } from '../src/rolldown';
+import { parseAst } from 'rolldown/parseAst';
+import { plugin as qwikPlugin, qwikClient, qwikLib, qwikServer } from '../src/rolldown';
 import { callBuildStart, callLoad, callOptions, callResolveId, callTransform } from './helpers';
 
 const optimizerMock = vi.hoisted(() => ({
@@ -58,6 +59,11 @@ describe('Rolldown runtime integration', () => {
 			'__EXPERIMENTAL__.valibot': 'false',
 			'__EXPERIMENTAL__.webWorker': 'false',
 			'globalThis.qDev': 'true',
+			'globalThis.qInspector': 'false',
+			'import.meta.env.BASE_URL': "'/'",
+			'import.meta.env.DEV': 'false',
+			'import.meta.env.MODE': "'production'",
+			'import.meta.env.TEST': 'false',
 		});
 	});
 
@@ -67,6 +73,7 @@ describe('Rolldown runtime integration', () => {
 		callOptions(qwikClient({ dev: true }), options);
 
 		expect(options).toHaveProperty(['transform', 'define', 'globalThis.qDev'], 'true');
+		expect(options).toHaveProperty(['transform', 'define', 'globalThis.qInspector'], 'true');
 	});
 
 	test('sets client input defaults for Qwik runtime chunk groups', () => {
@@ -77,7 +84,7 @@ describe('Rolldown runtime integration', () => {
 		expect(options).toHaveProperty('preserveEntrySignatures', 'allow-extension');
 	});
 
-	test('does not set client-only input defaults for server and library builds', () => {
+	test('does not set server or library input signature defaults', () => {
 		const serverOptions = {};
 		const libOptions = {};
 
@@ -88,61 +95,24 @@ describe('Rolldown runtime integration', () => {
 		expect(libOptions).not.toHaveProperty('preserveEntrySignatures');
 	});
 
-	test('emits Qwik runtime entries as resolved client chunks', async () => {
+	test('emits Qwik runtime entries as client build chunks', async () => {
 		const plugin = qwikClient();
 		const emitFile = vi.fn();
-		const resolve = vi.fn((id: string) => Promise.resolve({ id }));
 
-		await callResolveId(plugin, '@qwik.dev/core', '/workspace/app/src/root.tsx', {
-			resolve,
-			emitFile,
-		});
+		callBuildStart(plugin, { cwd: '/workspace/app' }, { emitFile });
 
-		expect(resolve).toHaveBeenNthCalledWith(
-			1,
-			'@qwik.dev/core/handlers.mjs',
-			'/workspace/app/src/root.tsx',
-			{
-				skipSelf: true,
-			},
-		);
-		expect(resolve).toHaveBeenNthCalledWith(
-			2,
-			'@qwik.dev/core/preloader',
-			'/workspace/app/src/root.tsx',
-			{
-				skipSelf: true,
-			},
-		);
 		expect(emitFile).toHaveBeenNthCalledWith(1, {
 			type: 'chunk',
-			id: '@qwik.dev/core/handlers.mjs',
+			id: 'qwik:handlers',
 			name: 'handlers',
 			preserveSignature: 'allow-extension',
 		});
 		expect(emitFile).toHaveBeenNthCalledWith(2, {
 			type: 'chunk',
-			id: '@qwik.dev/core/preloader',
+			id: 'qwik:preloader',
 			name: 'preloader',
 			preserveSignature: 'allow-extension',
 		});
-	});
-
-	test('errors when required Qwik runtime entries cannot be resolved', async () => {
-		const plugin = qwikClient();
-		const resolve = vi.fn().mockResolvedValue(null);
-		const error = vi.fn((value: unknown) => {
-			throw value instanceof Error ? value : new Error(String(value));
-		});
-
-		await expect(
-			callResolveId(plugin, '@qwik.dev/core', '/workspace/app/src/root.tsx', {
-				resolve,
-				emitFile: vi.fn(),
-				error,
-			}),
-		).rejects.toThrow('Failed to resolve @qwik.dev/core/handlers.mjs');
-		expect(error).toHaveBeenCalledTimes(1);
 	});
 
 	test('serves dev Qwik handlers without emitting build chunks', async () => {
@@ -166,7 +136,7 @@ describe('Rolldown runtime integration', () => {
 		expect(emitFile).not.toHaveBeenCalled();
 	});
 
-	test('uses dev optimizer mode and root-relative dev paths in dev mode', async () => {
+	test('uses HMR optimizer mode and root-relative dev paths in dev mode', async () => {
 		const plugin = qwikClient({ dev: true });
 
 		callBuildStart(plugin, { cwd: '/workspace/app' });
@@ -180,6 +150,101 @@ describe('Rolldown runtime integration', () => {
 						path: '/workspace/app/src/root.tsx',
 					}),
 				],
+				mode: 'hmr',
+				sourceMaps: true,
+			}),
+		);
+	});
+
+	test('GATE-04 raw client production segments do not append dev HMR accept code', async () => {
+		optimizerMock.transformModules.mockResolvedValueOnce({
+			modules: [
+				{
+					path: '/workspace/app/src/home.tsx',
+					isEntry: false,
+					code: 'parent',
+					map: null,
+					segment: null,
+					origPath: null,
+				},
+				{
+					path: '/workspace/app/src/home.tsx_click_abc.js',
+					isEntry: false,
+					code: 'export const click = () => "click";',
+					map: null,
+					segment: { name: 's_click', ctxName: 'component$' },
+					origPath: null,
+				},
+			],
+			diagnostics: [],
+			isTypeScript: true,
+			isJsx: true,
+		});
+		const plugin = qwikClient();
+
+		callBuildStart(plugin, { cwd: '/workspace/app' });
+		await callTransform(plugin, 'export default 1;', '/workspace/app/src/home.tsx');
+		const resolved = await callResolveId(
+			plugin,
+			'./home.tsx_click_abc.js',
+			'/workspace/app/src/home.tsx',
+		);
+		const code = await callLoad(plugin, resolved as string);
+
+		expect(code).toBe('export const click = () => "click";');
+		expect(code).not.toContain('import.meta.hot.accept(');
+		expect(code).not.toContain("CustomEvent('qHmr'");
+		expect(code).not.toContain('document.__hmrT');
+		expect(code).not.toContain('location.reload');
+		expectTransformModulesNeverCalledWithHmr();
+	});
+
+	test('GATE-04 server and library transforms do not emit HMR runtime strings', async () => {
+		const forbiddenHmrStrings = [
+			'virtual:qwik-hmr-bridge',
+			'qwik:hmr',
+			'import.meta.hot.accept(',
+			"CustomEvent('qHmr'",
+			'document.__hmrT',
+			'location.reload',
+		];
+		const server = qwikServer();
+		const lib = qwikLib();
+
+		callBuildStart(server, { cwd: '/workspace/app' });
+		callBuildStart(lib, { cwd: '/workspace/app' });
+		const serverCode = await callTransform(
+			server,
+			'export default 1;',
+			'/workspace/app/src/server.tsx',
+		);
+		const libCode = await callTransform(
+			lib,
+			'export default 1;',
+			'/workspace/app/src/index.tsx',
+		);
+
+		const output = JSON.stringify([serverCode, libCode]);
+		for (const forbidden of forbiddenHmrStrings) {
+			expect(output).not.toContain(forbidden);
+		}
+		expect(optimizerMock.transformModules).toHaveBeenCalledWith(
+			expect.objectContaining({ isServer: true, mode: 'prod' }),
+		);
+		expect(optimizerMock.transformModules).toHaveBeenCalledWith(
+			expect.objectContaining({ isServer: false, mode: 'lib' }),
+		);
+		expectTransformModulesNeverCalledWithHmr();
+	});
+
+	test('uses dev optimizer mode when HMR is disabled', async () => {
+		const plugin = qwikClient({ dev: true, hmr: false });
+
+		callBuildStart(plugin, { cwd: '/workspace/app' });
+		await callTransform(plugin, 'export const answer = 42;', '/workspace/app/src/root.tsx');
+
+		expect(optimizerMock.transformModules).toHaveBeenCalledWith(
+			expect.objectContaining({
 				mode: 'dev',
 				sourceMaps: true,
 			}),
@@ -216,7 +281,405 @@ describe('Rolldown runtime integration', () => {
 		await callTransform(plugin, 'export default 1;', '/workspace/app/src/home.tsx');
 		const resolved = await callResolveId(plugin, '/src/home.tsx_click_abc.js');
 
-		expect(await callLoad(plugin, (resolved as { id: string }).id)).toBe('segment');
+		expect(await callLoad(plugin, (resolved as { id: string }).id)).toContain('segment');
+	});
+
+	test('makes dev HMR segment const props diffable', async () => {
+		optimizerMock.transformModules.mockResolvedValueOnce({
+			modules: [
+				{
+					path: '/workspace/app/src/home.tsx',
+					isEntry: false,
+					code: 'parent',
+					map: null,
+					segment: null,
+					origPath: null,
+				},
+				{
+					path: '/src/home.tsx_component_abc.js',
+					isEntry: false,
+					code: `import { _jsxSorted } from '@qwik.dev/core';\nexport const component = () => _jsxSorted('p', null, { 'data-hmr': 'next' }, 'text', 3, null);`,
+					map: null,
+					segment: { name: 's_component', ctxName: 'component$' },
+					origPath: null,
+				},
+			],
+			diagnostics: [],
+			isTypeScript: true,
+			isJsx: true,
+		});
+		const plugin = qwikClient({ dev: true });
+
+		callBuildStart(plugin, { cwd: '/workspace/app' });
+		await callTransform(plugin, 'export default 1;', '/workspace/app/src/home.tsx');
+		const resolved = await callResolveId(plugin, '/src/home.tsx_component_abc.js');
+		const code = await callLoad(plugin, (resolved as { id: string }).id, { parse: parseAst });
+
+		expect(code).toContain("import { _jsxSplit as __qwikHmrJsxSplit } from '@qwik.dev/core';");
+		expect(code).toContain('{...constProps,...varProps}');
+		expect(code).not.toContain('hmrKey');
+		expect(code).toContain('import.meta.hot.accept(');
+	});
+
+	test('keeps client and server dev segment cache entries isolated', async () => {
+		optimizerMock.transformModules
+			.mockResolvedValueOnce({
+				modules: [
+					{
+						path: '/workspace/app/src/shared.tsx',
+						isEntry: false,
+						code: 'client parent',
+						map: null,
+						segment: null,
+						origPath: null,
+					},
+					{
+						path: '/src/shared.tsx_click_abc.js',
+						isEntry: false,
+						code: 'export const env = "client";',
+						map: null,
+						segment: { name: 's_click', ctxName: 'component$' },
+						origPath: null,
+					},
+				],
+				diagnostics: [],
+				isTypeScript: true,
+				isJsx: true,
+			})
+			.mockResolvedValueOnce({
+				modules: [
+					{
+						path: '/workspace/app/src/shared.tsx',
+						isEntry: false,
+						code: 'server parent',
+						map: null,
+						segment: null,
+						origPath: null,
+					},
+					{
+						path: '/src/shared.tsx_click_abc.js',
+						isEntry: false,
+						code: 'export const env = "server";',
+						map: null,
+						segment: { name: 's_click', ctxName: 'component$' },
+						origPath: null,
+					},
+				],
+				diagnostics: [],
+				isTypeScript: true,
+				isJsx: true,
+			});
+		const plugin = qwikPlugin(
+			(context) => {
+				return (context as { environment?: { config?: { consumer?: string } } }).environment
+					?.config?.consumer === 'server'
+					? 'server'
+					: 'client';
+			},
+			{ dev: true },
+		);
+		const clientContext = { environment: { config: { consumer: 'client' } } };
+		const serverContext = { environment: { config: { consumer: 'server' } } };
+
+		callBuildStart(plugin, { cwd: '/workspace/app' });
+		await callTransform(
+			plugin,
+			'export default 1;',
+			'/workspace/app/src/shared.tsx',
+			clientContext,
+		);
+		await callTransform(
+			plugin,
+			'export default 1;',
+			'/workspace/app/src/shared.tsx',
+			serverContext,
+		);
+		const client = await callResolveId(
+			plugin,
+			'/src/shared.tsx_click_abc.js',
+			undefined,
+			clientContext,
+		);
+		const server = await callResolveId(
+			plugin,
+			'/src/shared.tsx_click_abc.js',
+			undefined,
+			serverContext,
+		);
+
+		expect(client).toHaveProperty('id', '\0qwik:segment:client:/src/shared.tsx_click_abc.js');
+		expect(server).toHaveProperty('id', '\0qwik:segment:server:/src/shared.tsx_click_abc.js');
+		expect(await callLoad(plugin, (client as { id: string }).id, clientContext)).toContain(
+			'"client"',
+		);
+		expect(await callLoad(plugin, (server as { id: string }).id, serverContext)).toContain(
+			'"server"',
+		);
+	});
+
+	test('invalidates generated dev segments derived from a parent source', async () => {
+		const transformRequest = vi.fn(async () => {
+			await callTransform(plugin, 'export default 2;', '/workspace/app/src/home.tsx');
+		});
+		const plugin = qwikClient({
+			dev: true,
+			devServer: { environments: { client: { transformRequest } }, transformRequest },
+		});
+		optimizerMock.transformModules
+			.mockResolvedValueOnce({
+				modules: [
+					{
+						path: '/workspace/app/src/home.tsx',
+						isEntry: false,
+						code: 'parent v1',
+						map: null,
+						segment: null,
+						origPath: null,
+					},
+					{
+						path: '/src/home.tsx_click_abc.js',
+						isEntry: false,
+						code: 'export const version = "old";',
+						map: null,
+						segment: { name: 's_click', ctxName: 'component$' },
+						origPath: null,
+					},
+				],
+				diagnostics: [],
+				isTypeScript: true,
+				isJsx: true,
+			})
+			.mockResolvedValueOnce({
+				modules: [
+					{
+						path: '/workspace/app/src/home.tsx',
+						isEntry: false,
+						code: 'parent v2',
+						map: null,
+						segment: null,
+						origPath: null,
+					},
+					{
+						path: '/src/home.tsx_click_abc.js',
+						isEntry: false,
+						code: 'export const version = "new";',
+						map: null,
+						segment: { name: 's_click', ctxName: 'component$' },
+						origPath: null,
+					},
+				],
+				diagnostics: [],
+				isTypeScript: true,
+				isJsx: true,
+			});
+
+		callBuildStart(plugin, { cwd: '/workspace/app' });
+		await callTransform(plugin, 'export default 1;', '/workspace/app/src/home.tsx');
+		const resolved = await callResolveId(plugin, '/src/home.tsx_click_abc.js');
+		expect(await callLoad(plugin, (resolved as { id: string }).id)).toContain('"old"');
+
+		const deleted = (
+			plugin as { api: { invalidateDevSegments: typeof vi.fn } }
+		).api.invalidateDevSegments('/src/home.tsx', 'client');
+
+		expect(deleted).toContain('\0qwik:segment:client:/src/home.tsx_click_abc.js');
+		expect(await callLoad(plugin, (resolved as { id: string }).id)).toContain('"new"');
+		expect(transformRequest).toHaveBeenCalledWith('/src/home.tsx');
+	});
+
+	test('normalizes dev QRL URL forms to consistent segment identity', async () => {
+		optimizerMock.transformModules.mockResolvedValueOnce({
+			modules: [
+				{
+					path: '/workspace/app/src/home.tsx',
+					isEntry: false,
+					code: 'parent',
+					map: null,
+					segment: null,
+					origPath: null,
+				},
+				{
+					path: '/workspace/app/src/home.tsx_click_abc.js',
+					isEntry: false,
+					code: 'export const click = () => "normalized";',
+					map: null,
+					segment: { name: 's_click', ctxName: 'component$' },
+					origPath: null,
+				},
+			],
+			diagnostics: [],
+			isTypeScript: true,
+			isJsx: true,
+		});
+		const plugin = qwikClient({ dev: true });
+		const requests = [
+			'/src/home.tsx_click_abc.js?v=123',
+			'/src/home.tsx_click_abc.js',
+			'/workspace/app/src/home.tsx_click_abc.js',
+			'C:\\workspace\\app\\src\\home.tsx_click_abc.js',
+		];
+
+		callBuildStart(plugin, { cwd: '/workspace/app' });
+		await callTransform(plugin, 'export default 1;', '/workspace/app/src/home.tsx');
+
+		for (const request of requests) {
+			const resolved = await callResolveId(plugin, request);
+
+			expect(await callLoad(plugin, (resolved as { id: string }).id)).toContain(
+				'"normalized"',
+			);
+		}
+	});
+
+	test('appends literal self-accept code to non-worker dev QRL segments', async () => {
+		optimizerMock.transformModules.mockResolvedValueOnce({
+			modules: [
+				{
+					path: '/workspace/app/src/home.tsx',
+					isEntry: false,
+					code: 'parent',
+					map: null,
+					segment: null,
+					origPath: null,
+				},
+				{
+					path: '/src/home.tsx_click_abc.js',
+					isEntry: false,
+					code: 'export const click = () => "click";',
+					map: null,
+					segment: { name: 's_click', ctxName: 'component$' },
+					origPath: null,
+				},
+			],
+			diagnostics: [],
+			isTypeScript: true,
+			isJsx: true,
+		});
+		const plugin = qwikClient({ dev: true });
+
+		callBuildStart(plugin, { cwd: '/workspace/app' });
+		await callTransform(plugin, 'export default 1;', '/workspace/app/src/home.tsx');
+		const resolved = await callResolveId(plugin, '/src/home.tsx_click_abc.js');
+		const code = await callLoad(plugin, (resolved as { id: string }).id);
+
+		expect(code).toContain('export const click = () => "click";');
+		expect(code).toContain('import.meta.hot.accept(');
+		expect(code).toContain("document.dispatchEvent(new CustomEvent('qHmr'");
+		expect(code).toContain('files:["/src/home.tsx"]');
+		expect(code).toContain('t:document.__hmrT');
+		expect(code).toContain("typeof document !== 'undefined'");
+	});
+
+	test('does not append self-accept code to worker dev QRL segments', async () => {
+		optimizerMock.transformModules.mockResolvedValueOnce({
+			modules: [
+				{
+					path: '/workspace/app/src/home.tsx',
+					isEntry: false,
+					code: 'parent',
+					map: null,
+					segment: null,
+					origPath: null,
+				},
+				{
+					path: '/src/home.tsx_worker_abc.js',
+					isEntry: false,
+					code: 'export const worker = () => "worker";',
+					map: null,
+					segment: { name: 's_worker', ctxName: 'worker$' },
+					origPath: null,
+				},
+			],
+			diagnostics: [],
+			isTypeScript: true,
+			isJsx: true,
+		});
+		const plugin = qwikClient({ dev: true });
+
+		callBuildStart(plugin, { cwd: '/workspace/app' });
+		await callTransform(plugin, 'export default 1;', '/workspace/app/src/home.tsx');
+		const resolved = await callResolveId(plugin, '/src/home.tsx_worker_abc.js');
+		const code = await callLoad(plugin, (resolved as { id: string }).id);
+
+		expect(code).toBe('export const worker = () => "worker";');
+		expect(code).not.toContain('import.meta.hot.accept(');
+		expect(code).not.toContain("typeof document !== 'undefined'");
+	});
+
+	test('does not append self-accept code when HMR is disabled', async () => {
+		optimizerMock.transformModules.mockResolvedValueOnce({
+			modules: [
+				{
+					path: '/workspace/app/src/home.tsx',
+					isEntry: false,
+					code: 'parent',
+					map: null,
+					segment: null,
+					origPath: null,
+				},
+				{
+					path: '/src/home.tsx_click_abc.js',
+					isEntry: false,
+					code: 'export const click = () => "click";',
+					map: null,
+					segment: { name: 's_click', ctxName: 'component$' },
+					origPath: null,
+				},
+			],
+			diagnostics: [],
+			isTypeScript: true,
+			isJsx: true,
+		});
+		const plugin = qwikClient({ dev: true, hmr: false });
+
+		callBuildStart(plugin, { cwd: '/workspace/app' });
+		await callTransform(plugin, 'export default 1;', '/workspace/app/src/home.tsx');
+		const resolved = await callResolveId(plugin, '/src/home.tsx_click_abc.js');
+		const code = await callLoad(plugin, (resolved as { id: string }).id);
+
+		expect(code).toBe('export const click = () => "click";');
+		expect(code).not.toContain('import.meta.hot.accept(');
+		expect(code).not.toContain("typeof document !== 'undefined'");
+	});
+
+	test('transforms dev QRL parents on demand before loading generated code', async () => {
+		const transformRequest = vi.fn(async () => {
+			await callTransform(plugin, 'export default 1;', '/workspace/app/src/home.tsx');
+		});
+		const plugin = qwikClient({
+			dev: true,
+			devServer: { environments: { client: { transformRequest } }, transformRequest },
+		});
+		optimizerMock.transformModules.mockResolvedValueOnce({
+			modules: [
+				{
+					path: '/workspace/app/src/home.tsx',
+					isEntry: false,
+					code: 'parent',
+					map: null,
+					segment: null,
+					origPath: null,
+				},
+				{
+					path: '/src/home.tsx_click_abc.js',
+					isEntry: false,
+					code: 'export const click = () => "click";',
+					map: null,
+					segment: { name: 's_click', ctxName: 'component$' },
+					origPath: null,
+				},
+			],
+			diagnostics: [],
+			isTypeScript: true,
+			isJsx: true,
+		});
+
+		callBuildStart(plugin, { cwd: '/workspace/app' });
+		const resolved = await callResolveId(plugin, '/src/home.tsx_click_abc.js');
+		const code = await callLoad(plugin, (resolved as { id: string }).id);
+
+		expect(transformRequest).toHaveBeenCalledWith('/src/home.tsx');
+		expect(code).toContain('export const click = () => "click";');
 	});
 
 	test('transforms dev QRL parents on demand', async () => {
@@ -230,6 +693,21 @@ describe('Rolldown runtime integration', () => {
 		await callLoad(plugin, (resolved as { id: string }).id);
 
 		expect(transformRequest).toHaveBeenCalledWith('/src/home.tsx');
+	});
+
+	test('resolves relative dev QRLs against their source importer', async () => {
+		const plugin = qwikClient({ dev: true });
+
+		const resolved = await callResolveId(
+			plugin,
+			'./home.tsx_home_component_abc.js',
+			'\0qwik:segment:client:/workspace/app/src/root.tsx_root_component_def.js',
+		);
+
+		expect(resolved).toEqual({
+			id: '\0qwik:segment:client:/workspace/app/src/home.tsx_home_component_abc.js',
+			moduleSideEffects: false,
+		});
 	});
 
 	test('resolves and loads QRL segment modules emitted by the optimizer', async () => {
@@ -294,3 +772,9 @@ describe('Rolldown runtime integration', () => {
 		});
 	});
 });
+
+function expectTransformModulesNeverCalledWithHmr() {
+	for (const [options] of optimizerMock.transformModules.mock.calls) {
+		expect(options).not.toEqual(expect.objectContaining({ mode: 'hmr' }));
+	}
+}

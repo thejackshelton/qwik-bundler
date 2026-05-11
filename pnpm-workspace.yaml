@@ -1,3 +1,4 @@
 packages:
     - .
     - fixtures/*
+    - fixtures/rolldown-library-consumer/rolldown-library

@@ -1,8 +1,7 @@
 import { createOptimizer } from '@qwik.dev/optimizer';
-import type { Plugin } from 'vite';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import type { QwikManifest } from '../src/build/manifest';
-import { qwik } from '../src/vite';
+import { qwik } from '../src/vite/index';
 import {
 	callConfigResolved,
 	callLoad,
@@ -47,10 +46,8 @@ beforeEach(() => {
 
 describe('Vite plugin hooks', () => {
 	test('exposes the Vite plugin identity expected by Qwik Router', () => {
-		const plugin = getQwikPlugin() as Plugin & {
-			api?: {
-				getManifest?: () => QwikManifest | null;
-			};
+		const plugin = getQwikPlugin() as ReturnType<typeof getQwikPlugin> & {
+			api?: { getManifest?: () => QwikManifest | null };
 		};
 
 		expect(plugin.name).toBe('vite-plugin-qwik');
@@ -109,6 +106,34 @@ describe('Vite plugin hooks', () => {
 				entryStrategy: { type: 'hoist' },
 			}),
 		);
+		expectTransformModulesNeverCalledWithHmr();
+	});
+
+	test('GATE-04 uses production optimizer mode for Vite client builds', async () => {
+		const plugin = getQwikPlugin();
+
+		callConfigResolved(plugin, {
+			command: 'build',
+			root: '/workspace/app',
+			build: {
+				rolldownOptions: { input: 'src/root.tsx' },
+				rollupOptions: {},
+			},
+		});
+		await callTransform(
+			plugin,
+			'export default 1;',
+			'/workspace/app/src/root.tsx',
+			createViteHookContext(),
+		);
+
+		expect(optimizerMock.transformModules).toHaveBeenCalledWith(
+			expect.objectContaining({
+				isServer: false,
+				mode: 'prod',
+			}),
+		);
+		expectTransformModulesNeverCalledWithHmr();
 	});
 
 	test('uses Vite library context for Qwik library transforms', async () => {
@@ -134,6 +159,7 @@ describe('Vite plugin hooks', () => {
 				entryStrategy: { type: 'inline' },
 			}),
 		);
+		expectTransformModulesNeverCalledWithHmr();
 	});
 
 	test('resolves and loads QRL segment modules emitted by the optimizer', async () => {
@@ -218,4 +244,10 @@ describe('Vite plugin hooks', () => {
 
 function getQwikPlugin() {
 	return getPlugin(qwik() as Plugin[], 'vite-plugin-qwik');
+}
+
+function expectTransformModulesNeverCalledWithHmr() {
+	for (const [options] of optimizerMock.transformModules.mock.calls) {
+		expect(options).not.toEqual(expect.objectContaining({ mode: 'hmr' }));
+	}
 }

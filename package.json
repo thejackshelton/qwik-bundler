@@ -8,12 +8,18 @@
 	"type": "module",
 	"exports": {
 		"./rolldown": "./dist/rolldown.mjs",
-		"./vite": "./dist/vite.mjs",
+		"./vite": "./dist/vite/index.mjs",
 		"./package.json": "./package.json"
 	},
 	"scripts": {
 		"build": "vp pack",
 		"test": "vp test",
+		"test:hmr-leakage": "pnpm build && pnpm --filter @fixtures/vite-csr build && pnpm --filter @fixtures/vite-nitro-v3 build && pnpm --filter @fixtures/vite-library build && pnpm --filter @fixtures/rolldown-library build && node scripts/check-hmr-leakage.mjs",
+		"test:hmr-browser": "node scripts/with-lock.mjs hmr-smoke \"pnpm build && node scripts/smoke-vite-csr-hmr.mjs\"",
+		"test:hmr-attribute": "node scripts/with-lock.mjs hmr-smoke \"pnpm build && node scripts/smoke-vite-csr-attribute-hmr.mjs\"",
+		"test:hmr-remove-handler": "node scripts/with-lock.mjs hmr-smoke \"pnpm build && node scripts/smoke-vite-nitro-remove-handler-hmr.mjs\"",
+		"test:hmr-nitro": "node scripts/with-lock.mjs hmr-smoke \"pnpm build && node scripts/smoke-vite-nitro-hmr.mjs\"",
+		"test:workerd": "pnpm build && pnpm --dir fixtures/vite-workerd build && node scripts/smoke-vite-workerd-hmr.mjs",
 		"test:watch": "vp test watch",
 		"check": "vp check",
 		"prepare": "vp config"
@@ -26,6 +32,7 @@
 	},
 	"devDependencies": {
 		"@types/node": "^24.10.1",
+		"playwright": "^1.59.1",
 		"rolldown": "^1.0.0-rc.18",
 		"typescript": "^5.9.3",
 		"vite": "^8.0.10",

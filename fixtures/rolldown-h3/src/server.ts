@@ -1,11 +1,11 @@
 import { renderToString } from '@qwik.dev/core/server';
-import { createApp, eventHandler, html, serveStatic } from 'h3';
+import { H3, eventHandler, html, serveStatic } from 'h3';
 import { toNodeHandler } from 'h3/node';
 import { readFile, stat } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { createDocument } from './root';
 
-export const app = createApp();
+export const app = new H3();
 const distUrl = new URL('../dist/', import.meta.url);
 
 function getAssetUrl(id: string) {
@@ -28,7 +28,7 @@ app.use(
 app.use(
 	'/',
 	eventHandler(async (event) => {
-		const url = event.node.req.url ?? '/';
+		const url = event.url.pathname + event.url.search;
 		const result = await renderToString(createDocument(url), {
 			containerAttributes: { lang: 'en-us' },
 		});

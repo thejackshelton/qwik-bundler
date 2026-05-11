@@ -1,0 +1,20 @@
+{
+	"name": "@fixtures/vite-workerd",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "vite",
+		"build": "vite build",
+		"smoke": "node ../../scripts/smoke-vite-workerd-hmr.mjs"
+	},
+	"dependencies": {
+		"@qwik.dev/core": "https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@1f3647c"
+	},
+	"devDependencies": {
+		"@cloudflare/vite-plugin": "^1.17.0",
+		"qwik-bundler": "workspace:*",
+		"typescript": "^5.9.3",
+		"vite": "^8.0.10",
+		"wrangler": "^4.50.0"
+	}
+}
