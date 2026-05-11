@@ -19,6 +19,7 @@ export default component$(() => {
 				New Count {newCount.value}
 			</button>
 			<div>hey</div>
+			yooo
 		</main>
 	);
 });

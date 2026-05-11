@@ -3,6 +3,7 @@ import { vi } from 'vitest';
 
 type FunctionHook = (this: unknown, ...args: unknown[]) => unknown;
 type PluginHooks = {
+	buildApp?: unknown;
 	buildStart?: unknown;
 	config?: unknown;
 	configEnvironment?: unknown;
@@ -56,6 +57,10 @@ export function callBuildStart(
 		{ emitFile: vi.fn(), ...context },
 		options,
 	);
+}
+
+export function callBuildApp(plugin: PluginHooks, builder: unknown) {
+	return getHook(plugin.buildApp, 'buildApp').call({}, builder);
 }
 
 export function callTransform(

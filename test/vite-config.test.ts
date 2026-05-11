@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { qwik } from '../src/vite/index';
 import {
 	callConfig,
+	callBuildApp,
 	callConfigEnvironment,
 	callOutputOptions,
 	createViteHookContext,
@@ -75,6 +76,24 @@ describe('Vite config integration', () => {
 			},
 		});
 		expect(callConfigEnvironment(plugin, 'vite_workerd_fixture', workerConfig)).toBeUndefined();
+	});
+
+	test('does not rebuild the client environment after Qwik prebuilds it', async () => {
+		const plugin = getQwikPlugin();
+		const client = { name: 'client', isBuilt: false };
+		const build = vi.fn(async (environment: typeof client) => {
+			environment.isBuilt = true;
+			return [];
+		});
+		const builder = {
+			environments: { client },
+			build,
+		};
+
+		await callBuildApp(plugin, builder);
+		await builder.build(client);
+
+		expect(build).toHaveBeenCalledTimes(1);
 	});
 
 	test('uses vitefu to optimize and bundle Qwik deps', async () => {

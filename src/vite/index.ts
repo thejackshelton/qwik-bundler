@@ -1,5 +1,7 @@
 import type {
+	BuildEnvironment,
 	ConfigEnv,
+	Environment,
 	EnvironmentOptions,
 	Plugin,
 	UserConfig,
@@ -22,6 +24,7 @@ export interface VitePluginOptions extends QwikRolldownOptions {
 }
 
 type QwikOutputOptions = OutputOptions | OutputOptions[] | undefined;
+const QWIK_SKIP_DUPLICATE_CLIENT_BUILD = Symbol('qwik-skip-duplicate-client-build');
 
 export function qwik(options: VitePluginOptions = {}): Plugin[] {
 	let manifest: QwikManifest | null = null;
@@ -119,10 +122,28 @@ export function qwik(options: VitePluginOptions = {}): Plugin[] {
 }
 
 async function buildQwikClient(builder: ViteBuilder, clientEnvironment: string | undefined) {
-	const environment = builder.environments[clientEnvironment ?? 'client'];
+	const name = clientEnvironment ?? 'client';
+	const environment = builder.environments[name];
 	if (environment && !environment.isBuilt) {
+		skipDuplicateClientBuilds(builder, name);
 		await builder.build(environment);
 	}
+}
+
+function skipDuplicateClientBuilds(builder: ViteBuilder, name: string) {
+	const guarded = builder as ViteBuilder & { [QWIK_SKIP_DUPLICATE_CLIENT_BUILD]?: true };
+	if (guarded[QWIK_SKIP_DUPLICATE_CLIENT_BUILD]) {
+		return;
+	}
+
+	guarded[QWIK_SKIP_DUPLICATE_CLIENT_BUILD] = true;
+	const build = builder.build.bind(builder);
+	builder.build = (environment: BuildEnvironment) => {
+		if (environment.name === name && environment.isBuilt) {
+			return Promise.resolve([]);
+		}
+		return build(environment);
+	};
 }
 
 function configDefaults(config: UserConfig, env: ConfigEnv) {
@@ -153,23 +174,13 @@ function emptyConfig(config: EnvironmentOptions) {
 	return Object.keys(config).length === 0;
 }
 
-type ViteHookContext = {
-	environment?: {
-		name?: string;
-		config?: {
-			consumer?: 'client' | 'server';
-			build?: { lib?: unknown };
-		};
-	};
-};
-
 type QwikPluginApi = {
 	invalidateDevSegments: (parent: string, environment?: QwikEnvironment) => string[];
 	getManifest?: () => QwikManifest | null;
 };
 
 function getBuildEnvironment(context: unknown): QwikEnvironment {
-	const pluginContext = context as ViteHookContext;
+	const pluginContext = context as { environment?: Environment };
 	const environment = pluginContext.environment;
 	const config = environment?.config;
 	if (!config) {

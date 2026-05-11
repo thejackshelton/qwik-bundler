@@ -36,17 +36,36 @@ Patching server output after the fact is not enough for SSG if static HTML has a
 
 ## Vite Environment Strategy
 
-For Vite builder builds, the Qwik Vite plugin owns this invariant when the host exposes a canonical client input before render execution:
+For Vite builder builds, the Qwik Vite plugin owns this invariant through plugin ordering:
 
 ```text
-canonical client build -> Qwik client manifest -> server/SSG render
+adapter environment setup -> canonical client build -> Qwik client manifest -> server/worker/SSG render
 ```
 
-The plugin builds the canonical Vite `client` environment from a `buildApp` hook when that environment has an explicit input. This hook intentionally runs after adapter `order: 'pre'` preparation hooks, so adapters can clean or prepare output directories before the client bundle is written, but before framework `order: 'post'` SSR/prerender hooks. This matches Vite and adapter conventions: public asset handling, asset manifests, and deployment plugins usually key browser output from `builder.environments.client`.
+The Vite plugin uses `enforce: 'post'` and a `buildApp` hook with `order: 'pre'`.
+
+`enforce: 'post'` lets adapter and framework plugins such as Nitro or Cloudflare configure Vite environments, entries, and output directories before Qwik decides what to build. `buildApp.order: 'pre'` then builds the canonical client environment early in the Vite builder phase, before server, worker, or prerender code needs `globalThis.__QWIK_MANIFEST__`.
+
+This ordering is intentional. Running Qwik earlier can race adapter environment setup. Running Qwik later can make the initial server or worker build execute without a client manifest.
 
 The plugin does not build every environment with `consumer === 'client'`. Auxiliary client-like environments may exist, and adapters should own those build steps. Later attempts to build the canonical `client` environment reuse the prebuild result so the same bundle is not built twice.
 
-The plugin does not guess application entries such as `index.html`, `src/root.tsx`, or router-specific files. If the canonical `client` environment has no explicit `rolldownOptions.input` or `rollupOptions.input`, Qwik skips the prebuild rather than triggering Vite's implicit `index.html` fallback.
+The plugin does not guess application entries such as `src/root.tsx`, `src/entry.ssr.tsx`, or router-specific files. The app or adapter still owns entries and framework conventions. Plain Vite apps may use Vite's normal client defaults such as `index.html`; framework adapters that need non-standard entries should configure the canonical `client` environment before Qwik's `buildApp` hook runs.
+
+## Runtime Chunk Requirements
+
+Qwik's browser runtime imports exact export names from manifest-mapped chunks. These names are part of Qwik's runtime contract, not arbitrary implementation details.
+
+Important examples:
+
+- The preloader chunk must export `g`, `l`, and `p`.
+- The handlers chunk must export names such as `_run`, `_chk`, `_task`, and `_val`.
+
+If Rolldown merges these modules into a larger chunk and rewrites the public exports, the browser can fail with errors such as `l is not a function`, `p is not a function`, or `_run not in ...`.
+
+The plugin avoids that by emitting small client runtime facade chunks for the preloader and handlers. Those facades preserve the export names Qwik imports while allowing the larger core/preloader implementation chunks to remain optimized behind them.
+
+Client output defaults are also client-only. Browser chunks should be emitted under `build/q-[hash].js` so manifest paths, static HTML preload paths, and Qwik runtime dynamic imports all agree. Do not apply those client output defaults globally; server and worker environments may inherit top-level Vite build settings, and client-only chunk splitting options can be invalid for those builds.
 
 ## Adapter Expectations
 
@@ -56,7 +75,7 @@ Adapters that prerender during Vite build should run prerendering from `buildApp
 
 Adapters may still own framework-specific entry discovery. If they synthesize client entries, those entries must be present in the canonical Vite client configuration before Qwik SSR/SSG render execution.
 
-Some frameworks discover client inputs dynamically during a server/prerender analysis build. Astro is the important example: hydrated/client-only inputs are discovered during its SSR/prerender build, then Astro mutates the canonical client input, builds the client bundle, and only then generates final pages. That model is compatible with Qwik only if the framework provides a pre-render barrier where the canonical client build can run and produce the Qwik manifest before HTML is rendered.
+Some frameworks discover client inputs dynamically during a server/prerender analysis build. Astro is the important example: hydrated/client-only inputs may be discovered during SSR/prerender analysis, then Astro mutates the canonical client input, builds the client bundle, and only then generates final pages. That model is compatible with Qwik only if the framework provides a pre-render barrier where the canonical client build can run and produce the Qwik manifest before HTML is rendered.
 
 Nitro is different. Nitro's documented Vite examples require explicit canonical `client` and `ssr` inputs. Nitro's `?assets=client` imports are asset references for a configured client build; they are not a replacement for the top-level client input. Qwik + Nitro SSR fixtures should declare `environments.client.build.rollupOptions.input` until Nitro reads `rolldownOptions.input` at the same point.
 
@@ -67,6 +86,8 @@ Nitro is different. Nitro's documented Vite examples require explicit canonical 
 - Do not build every Vite environment with `consumer === 'client'`; unrelated client environments may exist.
 - Do not add app/router defaults such as `src/root.tsx` in the core bundler plugin.
 - Do not use a private `qwik_client` environment as the primary manifest producer; adapters commonly key browser assets from the canonical `client` environment.
+- Do not apply Qwik client output defaults to top-level Vite build config; scope them to the actual client environment.
+- Do not let Qwik runtime handler or preloader exports be renamed away from the names the browser loader imports.
 
 ## Verification Fixtures
 
