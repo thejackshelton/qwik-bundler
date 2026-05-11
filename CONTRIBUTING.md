@@ -48,7 +48,9 @@ The Vite plugin uses `enforce: 'post'` and a `buildApp` hook with `order: 'pre'`
 
 This ordering is intentional. Running Qwik earlier can race adapter environment setup. Running Qwik later can make the initial server or worker build execute without a client manifest.
 
-The plugin does not build every environment with `consumer === 'client'`. Auxiliary client-like environments may exist, and adapters should own those build steps. Later attempts to build the canonical `client` environment reuse the prebuild result so the same bundle is not built twice.
+The plugin does not build every environment with `consumer === 'client'`. Auxiliary client-like environments may exist, and adapters should own those build steps.
+
+Some adapters still call `builder.build(client)` from their own build orchestration after Qwik has already prebuilt the canonical client environment. Cloudflare's Vite plugin does this: it builds workers, then builds the client again so imported assets can be moved into the client output. Qwik keeps that adapter flow intact, but skips the duplicate client build if the canonical client environment is already built. This preserves adapter behavior without wasting a second identical client build.
 
 The plugin does not guess application entries such as `src/root.tsx`, `src/entry.ssr.tsx`, or router-specific files. The app or adapter still owns entries and framework conventions. Plain Vite apps may use Vite's normal client defaults such as `index.html`; framework adapters that need non-standard entries should configure the canonical `client` environment before Qwik's `buildApp` hook runs.
 
@@ -88,9 +90,10 @@ Nitro is different. Nitro's documented Vite examples require explicit canonical 
 - Do not use a private `qwik_client` environment as the primary manifest producer; adapters commonly key browser assets from the canonical `client` environment.
 - Do not apply Qwik client output defaults to top-level Vite build config; scope them to the actual client environment.
 - Do not let Qwik runtime handler or preloader exports be renamed away from the names the browser loader imports.
+- Do not remove the duplicate-client-build skip without checking Workerd/Cloudflare; their build app may ask Vite to build `client` again after Qwik's manifest prebuild.
 
 ## Verification Fixtures
 
-- `fixtures/vite-workerd` verifies a server/worker-first adapter still receives Qwik client assets before server output uses the manifest.
+- `fixtures/vite-workerd` verifies a server/worker-first adapter receives Qwik client assets before worker output uses the manifest, and that the adapter does not rebuild the client after Qwik's prebuild.
 - `fixtures/vite-ssg` verifies a post-`buildApp` prerender step sees `client` already built and renders HTML with Qwik manifest/preload assets.
-- `fixtures/vite-nitro-v3` verifies Nitro works when the app follows Nitro's documented canonical client-input contract.
+- `fixtures/vite-nitro-v3` verifies Nitro works when the app follows Nitro's documented canonical client-input contract, including dev/HMR bridge injection and production `/build/q-[hash].js` runtime paths.
