@@ -10,7 +10,7 @@ That manifest connects three things:
 
 - Optimizer output: Qwik's extracted lazy chunks and runtime entries.
 - Bundler output: final hashed browser files such as `build/q-BYduuXnN.js`.
-- Render output: SSR, SSG, or worker HTML that hydrates and resumes in the browser.
+- Render output: SSR, SSG, or worker HTML that later resumes in the browser.
 
 Because hashed browser filenames are only known after the client build, rendering must happen after the client manifest exists.
 
