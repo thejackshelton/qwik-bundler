@@ -16,8 +16,8 @@ const RESOLVED_QWIK_HMR_BRIDGE_ID = `\0${QWIK_HMR_BRIDGE_ID}`;
 const QWIK_HMR_BRIDGE_PATH = `/@id/${QWIK_HMR_BRIDGE_ID}`;
 
 interface ViteHmrOptions {
-	base: () => string;
-	enabled: () => boolean;
+	base: string;
+	enabled: boolean;
 	invalidateDevSegments?: (parent: string, environment?: QwikEnvironment) => string[];
 }
 
@@ -29,12 +29,12 @@ export function createViteHmr(options: ViteHmrOptions) {
 	return {
 		configureServer(nextServer: ViteDevServer) {
 			server = nextServer;
-			if (options.enabled()) {
-				installFetchHmrBridge(nextServer, options.base);
+			if (options.enabled) {
+				installFetchHmrBridge(nextServer, options);
 			}
 		},
 		transformIndexHtml() {
-			return options.enabled() ? hmrBridgeTags(options.base()) : undefined;
+			return options.enabled ? hmrBridgeTags(options.base) : undefined;
 		},
 		resolveId(id: string) {
 			if (id !== QWIK_HMR_BRIDGE_ID) {
@@ -57,7 +57,7 @@ export function createViteHmr(options: ViteHmrOptions) {
 				return undefined;
 			}
 
-			if (!options.enabled()) {
+			if (!options.enabled) {
 				hot.send({ type: 'full-reload' });
 				return [];
 			}
@@ -93,7 +93,7 @@ export function createViteHmr(options: ViteHmrOptions) {
 	};
 }
 
-function installFetchHmrBridge(server: ViteDevServer, base: () => string) {
+function installFetchHmrBridge(server: ViteDevServer, options: ViteHmrOptions) {
 	// Some SSR adapters, including Nitro, render final HTML in fetchable Vite
 	// environments instead of Vite's transformIndexHtml hook. Wrap those Response
 	// objects so Node, workerd, and other Fetch-based runtimes share the same path.
@@ -107,7 +107,7 @@ function installFetchHmrBridge(server: ViteDevServer, base: () => string) {
 			if (!response.headers.get('content-type')?.includes('text/html')) return response;
 
 			const html = await response.text();
-			const nextHtml = injectHmrBridge(html, base());
+			const nextHtml = injectHmrBridge(html, options.base);
 			const headers = new Headers(response.headers);
 			if (nextHtml !== html) headers.delete('content-length');
 			return new Response(nextHtml, {

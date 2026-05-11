@@ -47,8 +47,15 @@ export function callOutputOptions(
 	return getHook(plugin.outputOptions, 'outputOptions').call(context, outputOptions);
 }
 
-export function callBuildStart(plugin: PluginHooks, options: { cwd: string }) {
-	return getHook(plugin.buildStart, 'buildStart').call({}, options);
+export function callBuildStart(
+	plugin: PluginHooks,
+	options: { cwd: string },
+	context: HookContext = {},
+) {
+	return getHook(plugin.buildStart, 'buildStart').call(
+		{ emitFile: vi.fn(), ...context },
+		options,
+	);
 }
 
 export function callTransform(

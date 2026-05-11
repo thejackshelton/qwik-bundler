@@ -1,5 +1,12 @@
+import type {
+	ConfigEnv,
+	EnvironmentOptions,
+	Plugin,
+	UserConfig,
+	ViteBuilder,
+	ViteDevServer,
+} from 'vite';
 import type { OutputOptions } from 'rolldown';
-import type { ConfigEnv, Plugin, UserConfig, ViteBuilder, ViteDevServer } from 'vite';
 import { outputDefaults } from '../build/chunking';
 import type { QwikManifest } from '../build/manifest';
 import {
@@ -17,41 +24,58 @@ export interface VitePluginOptions extends QwikRolldownOptions {
 type QwikOutputOptions = OutputOptions | OutputOptions[] | undefined;
 
 export function qwik(options: VitePluginOptions = {}): Plugin[] {
-	const rolldownOptions = { ...options };
-	// TODO: Remove this Qwik library noExternal workaround after https://github.com/QwikDev/qwik-evolution/discussions/318.
-	const external = qwikViteExternal(setQwikConfigDefaults);
 	let manifest: QwikManifest | null = null;
-	let serve = false;
-	let base = '/';
+	const rolldownOptions = { ...options };
 	rolldownOptions.onManifest = (nextManifest) => {
 		manifest = nextManifest;
 		options.onManifest?.(nextManifest);
 	};
-	const basePlugin = qwikRolldown(getBuildEnvironment, rolldownOptions) as Plugin;
-	const hmr = createViteHmr({
-		base: () => base,
-		enabled: () => serve && options.hmr !== false,
-		invalidateDevSegments: (parent, environment) =>
+	const hmrOptions = {
+		base: '/',
+		enabled: false,
+		invalidateDevSegments: (parent: string, environment?: QwikEnvironment) =>
 			qwikPlugin.api.invalidateDevSegments(parent, environment),
-	});
+	};
+
+	// TODO: Remove this Qwik library noExternal workaround after https://github.com/QwikDev/qwik-evolution/discussions/318.
+	const external = qwikViteExternal(configDefaults);
+	const basePlugin = qwikRolldown(getBuildEnvironment, rolldownOptions) as Plugin;
+	const hmr = createViteHmr(hmrOptions);
 
 	const qwikPlugin = {
 		...basePlugin,
 		name: 'vite-plugin-qwik',
-		enforce: 'pre',
+		enforce: 'post',
 		api: {
 			...(basePlugin.api as QwikPluginApi),
 			getManifest: () => manifest,
 		},
 		...external,
 		configResolved(resolvedConfig) {
-			serve = resolvedConfig.command === 'serve';
-			base = resolvedConfig.base;
+			const serve = resolvedConfig.command === 'serve';
+			hmrOptions.base = resolvedConfig.base;
+			hmrOptions.enabled = serve && options.hmr !== false;
 			rolldownOptions.dev = serve;
 			rolldownOptions.rootDir = resolvedConfig.root;
 		},
 		configEnvironment(name, config) {
-			return external.configEnvironment?.call(this, name, config);
+			const externalConfig = external.configEnvironment?.call(this, name, config) ?? {};
+			if (name !== (options.clientEnvironment ?? 'client') || config.build?.lib) {
+				return emptyConfig(externalConfig) ? undefined : externalConfig;
+			}
+
+			const build = config.build ?? {};
+			const rolldownOptions = build.rolldownOptions ?? {};
+			return {
+				...externalConfig,
+				build: {
+					...build,
+					rolldownOptions: {
+						...rolldownOptions,
+						output: withOutputDefaults(rolldownOptions.output, 'client'),
+					},
+				},
+			};
 		},
 		buildApp: {
 			order: 'pre',
@@ -89,20 +113,9 @@ export function qwik(options: VitePluginOptions = {}): Plugin[] {
 		hotUpdate(ctx) {
 			return hmr.hotUpdate(this.environment, ctx);
 		},
-	} satisfies Plugin & { api: QwikPluginApi & { getManifest: () => QwikManifest | null } };
+	} satisfies Plugin & { api: QwikPluginApi };
 
 	return [qwikPlugin];
-}
-function setQwikConfigDefaults(config: UserConfig, env: ConfigEnv) {
-	if (config.build?.lib || config.build?.ssr || env.mode === 'ssr') {
-		return;
-	}
-
-	const build = (config.build ??= {});
-	build.modulePreload ??= false;
-
-	const rolldownOptions = (build.rolldownOptions ??= {});
-	rolldownOptions.output = withQwikOutputDefaults(rolldownOptions.output, 'client');
 }
 
 async function buildQwikClient(builder: ViteBuilder, clientEnvironment: string | undefined) {
@@ -112,7 +125,16 @@ async function buildQwikClient(builder: ViteBuilder, clientEnvironment: string |
 	}
 }
 
-function withQwikOutputDefaults(
+function configDefaults(config: UserConfig, env: ConfigEnv) {
+	if (config.build?.lib || config.build?.ssr || env.mode === 'ssr') {
+		return;
+	}
+
+	const build = (config.build ??= {});
+	build.modulePreload ??= false;
+}
+
+function withOutputDefaults(
 	output: QwikOutputOptions,
 	environment: QwikEnvironment,
 ): OutputOptions | OutputOptions[] {
@@ -127,8 +149,13 @@ function withQwikOutputDefaults(
 	return outputDefaults(output, environment);
 }
 
+function emptyConfig(config: EnvironmentOptions) {
+	return Object.keys(config).length === 0;
+}
+
 type ViteHookContext = {
 	environment?: {
+		name?: string;
 		config?: {
 			consumer?: 'client' | 'server';
 			build?: { lib?: unknown };
@@ -138,11 +165,13 @@ type ViteHookContext = {
 
 type QwikPluginApi = {
 	invalidateDevSegments: (parent: string, environment?: QwikEnvironment) => string[];
+	getManifest?: () => QwikManifest | null;
 };
 
 function getBuildEnvironment(context: unknown): QwikEnvironment {
 	const pluginContext = context as ViteHookContext;
-	const config = pluginContext.environment?.config;
+	const environment = pluginContext.environment;
+	const config = environment?.config;
 	if (!config) {
 		return 'client';
 	}
@@ -152,6 +181,9 @@ function getBuildEnvironment(context: unknown): QwikEnvironment {
 	}
 
 	if (config.consumer === 'server') {
+		return 'server';
+	}
+	if (environment?.name && environment.name !== 'client' && config.consumer !== 'client') {
 		return 'server';
 	}
 

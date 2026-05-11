@@ -35,25 +35,34 @@ export function outputDefaults(output: OutputOptions, environment: QwikEnvironme
 	const next: OutputOptions = { ...output, hoistTransitiveImports: false };
 	if (environment === 'server') {
 		next.chunkFileNames ??= 'q-[hash].js';
-		next.codeSplitting = qwikCodeSplitting(next.codeSplitting);
+		next.codeSplitting = qwikCodeSplitting(next.codeSplitting, false);
 		return next;
 	}
 
 	next.entryFileNames ??= `${Q_BUILD_PREFIX}q-[hash].js`;
 	next.chunkFileNames ??= `${Q_BUILD_PREFIX}q-[hash].js`;
-	next.codeSplitting = qwikCodeSplitting(next.codeSplitting);
+	next.minifyInternalExports = false;
+	next.strictExecutionOrder = true;
+	next.codeSplitting = qwikCodeSplitting(next.codeSplitting, true);
 	return next;
 }
 
-function qwikCodeSplitting(codeSplitting: OutputOptions['codeSplitting']) {
+function qwikCodeSplitting(
+	codeSplitting: OutputOptions['codeSplitting'],
+	separateRuntimeEntries: boolean,
+) {
 	if (typeof codeSplitting === 'boolean') {
 		throw new Error(
 			'Qwik requires output.codeSplitting to be an object so runtime chunks can be grouped.',
 		);
 	}
 
-	return {
+	const next = {
 		...codeSplitting,
 		groups: [...QWIK_CODE_SPLITTING_GROUPS, ...(codeSplitting?.groups ?? [])],
 	} satisfies CodeSplittingOptions;
+	if (separateRuntimeEntries) {
+		next.includeDependenciesRecursively = false;
+	}
+	return next;
 }

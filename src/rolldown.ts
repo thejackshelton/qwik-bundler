@@ -7,12 +7,12 @@ import {
 	type TransformModule,
 } from '@qwik.dev/optimizer';
 import { dirname, normalize, resolve } from 'pathe';
-import type { Plugin, RolldownError } from 'rolldown';
+import type { Plugin, RolldownError, TransformPluginContext } from 'rolldown';
 import { isRelative, parsePath } from 'ufo';
 import { outputDefaults, Q_BUNDLE_GRAPH, Q_BUILD_PREFIX, QWIK_BUILD } from './build/chunking';
 import { injectQwikPreloaderTags } from './build/static-html';
 import { createQwikDev, type QwikDevServer } from './dev';
-import { defineQwik, replaceExperimental } from './features';
+import { comptimeConfig, replaceExperimental } from './features';
 import {
 	createManifest,
 	injectManifest,
@@ -37,17 +37,13 @@ export interface QwikRolldownOptions {
 	rootDir?: string;
 }
 
-type EmitFile = (file: { type: 'chunk'; id: string }) => string;
-type TransformContext = {
-	emitFile: EmitFile;
-	error: (error: RolldownError) => never;
-	warn: (warning: RolldownError) => void;
-};
+type TransformContext = Pick<TransformPluginContext, 'emitFile' | 'error' | 'warn'>;
 type Environment = QwikEnvironment | ((context: unknown) => QwikEnvironment);
 
-const QWIK_CORE = '@qwik.dev/core';
 const QWIK_HANDLERS = '@qwik.dev/core/handlers.mjs';
 const QWIK_PRELOADER = '@qwik.dev/core/preloader';
+const QWIK_HANDLERS_ENTRY = 'qwik:handlers';
+const QWIK_PRELOADER_ENTRY = 'qwik:preloader';
 const SEGMENT = '\0qwik:segment:';
 const JS_OR_TS_SOURCE_FILE = /\.[cm]?[jt]sx?$/;
 const QWIK_LIBRARY_SOURCE_FILE = /\.qwik\.[cm]?[jt]sx?$/;
@@ -66,7 +62,6 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 	let manifest: QwikManifest | ServerQwikManifest | null = null;
 	let optimizer: ReturnType<typeof createOptimizer> | undefined;
 	let root = options.rootDir;
-	let handlers = false;
 	let missingManifestWarned = false;
 	let name = 'qwik:rolldown';
 
@@ -101,7 +96,7 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 		},
 		name,
 		options(input) {
-			const next = defineQwik(input, options.experimental, options.dev);
+			const next = comptimeConfig(input, options.experimental, options.dev);
 			const currentEnvironment = getEnvironment(this);
 			if (currentEnvironment === 'client') {
 				next.preserveEntrySignatures ??= 'allow-extension';
@@ -115,8 +110,21 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 				root = options.rootDir ?? input.cwd;
 			}
 
-			handlers = false;
 			missingManifestWarned = false;
+			if (!dev.isEnabled() && getEnvironment(this) === 'client') {
+				for (const [id, name] of [
+					[QWIK_HANDLERS_ENTRY, 'handlers'],
+					[QWIK_PRELOADER_ENTRY, 'preloader'],
+				] as const) {
+					this.emitFile({
+						type: 'chunk',
+						id,
+						name,
+						preserveSignature: 'allow-extension',
+					});
+				}
+			}
+
 			if (options.manifestInput) {
 				manifest = options.manifestInput;
 				return;
@@ -144,6 +152,9 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 			if (source === QWIK_BUILD) {
 				return QWIK_BUILD;
 			}
+			if (source === QWIK_HANDLERS_ENTRY || source === QWIK_PRELOADER_ENTRY) {
+				return source;
+			}
 
 			if (source.startsWith(SEGMENT)) {
 				return source;
@@ -157,34 +168,6 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 			);
 			if (externalResolution) {
 				return externalResolution;
-			}
-
-			if (
-				!dev.isEnabled() &&
-				currentEnvironment === 'client' &&
-				source === QWIK_CORE &&
-				!handlers
-			) {
-				handlers = true;
-				const entries = [
-					[QWIK_HANDLERS, 'handlers'],
-					[QWIK_PRELOADER, 'preloader'],
-				] as const;
-				for (const [id, name] of entries) {
-					const resolved = await this.resolve(id, importer, { skipSelf: true });
-					if (!resolved) {
-						this.error(
-							createPluginError(importer ?? source, `Failed to resolve ${id}`),
-						);
-					}
-
-					this.emitFile({
-						type: 'chunk',
-						id: resolved.id,
-						name,
-						preserveSignature: 'allow-extension',
-					});
-				}
 			}
 
 			if (!importer || !isRelative(source)) {
@@ -213,6 +196,12 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 				const server = getEnvironment(this) === 'server';
 				const isDev = dev.isEnabled();
 				return `globalThis.qDev=${isDev};export const isServer=${server};export const isBrowser=${!server};export const isDev=${isDev};`;
+			}
+			if (id === QWIK_HANDLERS_ENTRY) {
+				return `export { _chk, _rsc, _res, _run, _task, _val, _eaC, _eaT, _suC, _suT } from '${QWIK_HANDLERS}';`;
+			}
+			if (id === QWIK_PRELOADER_ENTRY) {
+				return `export { g, l, p } from '${QWIK_PRELOADER}';`;
 			}
 
 			const devCode = await dev.load(id, this.parse);
@@ -333,7 +322,7 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 			if (currentEnvironment === 'client') {
 				symbols.set(module.segment.name, module.segment);
 				if (!dev.isEnabled()) {
-					context.emitFile({ type: 'chunk', id });
+					context.emitFile({ type: 'chunk', id, preserveSignature: 'strict' });
 				}
 			}
 		}

@@ -17,6 +17,8 @@ describe('Qwik chunking defaults', () => {
 			entryFileNames: 'build/q-[hash].js',
 			chunkFileNames: 'build/q-[hash].js',
 			hoistTransitiveImports: false,
+			minifyInternalExports: false,
+			strictExecutionOrder: true,
 		});
 		expect(clientOutput.codeSplitting?.groups?.map((group) => group.name)).toEqual([
 			'qwik-core',

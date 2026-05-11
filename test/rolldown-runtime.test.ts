@@ -60,6 +60,10 @@ describe('Rolldown runtime integration', () => {
 			'__EXPERIMENTAL__.webWorker': 'false',
 			'globalThis.qDev': 'true',
 			'globalThis.qInspector': 'false',
+			'import.meta.env.BASE_URL': "'/'",
+			'import.meta.env.DEV': 'false',
+			'import.meta.env.MODE': "'production'",
+			'import.meta.env.TEST': 'false',
 		});
 	});
 
@@ -91,61 +95,24 @@ describe('Rolldown runtime integration', () => {
 		expect(libOptions).not.toHaveProperty('preserveEntrySignatures');
 	});
 
-	test('emits Qwik runtime entries as resolved client chunks', async () => {
+	test('emits Qwik runtime entries as client build chunks', async () => {
 		const plugin = qwikClient();
 		const emitFile = vi.fn();
-		const resolve = vi.fn((id: string) => Promise.resolve({ id }));
 
-		await callResolveId(plugin, '@qwik.dev/core', '/workspace/app/src/root.tsx', {
-			resolve,
-			emitFile,
-		});
+		callBuildStart(plugin, { cwd: '/workspace/app' }, { emitFile });
 
-		expect(resolve).toHaveBeenNthCalledWith(
-			1,
-			'@qwik.dev/core/handlers.mjs',
-			'/workspace/app/src/root.tsx',
-			{
-				skipSelf: true,
-			},
-		);
-		expect(resolve).toHaveBeenNthCalledWith(
-			2,
-			'@qwik.dev/core/preloader',
-			'/workspace/app/src/root.tsx',
-			{
-				skipSelf: true,
-			},
-		);
 		expect(emitFile).toHaveBeenNthCalledWith(1, {
 			type: 'chunk',
-			id: '@qwik.dev/core/handlers.mjs',
+			id: 'qwik:handlers',
 			name: 'handlers',
 			preserveSignature: 'allow-extension',
 		});
 		expect(emitFile).toHaveBeenNthCalledWith(2, {
 			type: 'chunk',
-			id: '@qwik.dev/core/preloader',
+			id: 'qwik:preloader',
 			name: 'preloader',
 			preserveSignature: 'allow-extension',
 		});
-	});
-
-	test('errors when required Qwik runtime entries cannot be resolved', async () => {
-		const plugin = qwikClient();
-		const resolve = vi.fn().mockResolvedValue(null);
-		const error = vi.fn((value: unknown) => {
-			throw value instanceof Error ? value : new Error(String(value));
-		});
-
-		await expect(
-			callResolveId(plugin, '@qwik.dev/core', '/workspace/app/src/root.tsx', {
-				resolve,
-				emitFile: vi.fn(),
-				error,
-			}),
-		).rejects.toThrow('Failed to resolve @qwik.dev/core/handlers.mjs');
-		expect(error).toHaveBeenCalledTimes(1);
 	});
 
 	test('serves dev Qwik handlers without emitting build chunks', async () => {

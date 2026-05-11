@@ -40,13 +40,41 @@ describe('Vite config integration', () => {
 
 		expect(config.build!.rolldownOptions).toMatchObject({
 			external: ['external-dependency'],
-			output: {
-				entryFileNames: 'build/q-[hash].js',
-				chunkFileNames: 'build/q-[hash].js',
-				hoistTransitiveImports: false,
+		});
+		expect(config.build!.rolldownOptions!.output).toBeUndefined();
+		expect(config.build!.modulePreload).toBe(false);
+	});
+
+	test('sets output defaults on the Vite client environment only', async () => {
+		const plugin = getQwikPlugin();
+		const clientConfig: EnvironmentOptions = {
+			build: {
+				rolldownOptions: {
+					output: { dir: 'dist/client' },
+				},
+			},
+		};
+		const workerConfig: EnvironmentOptions = {
+			build: {
+				rolldownOptions: {
+					output: { dir: 'dist/worker' },
+				},
+			},
+		};
+
+		expect(callConfigEnvironment(plugin, 'client', clientConfig)).toMatchObject({
+			build: {
+				rolldownOptions: {
+					output: {
+						dir: 'dist/client',
+						entryFileNames: 'build/q-[hash].js',
+						chunkFileNames: 'build/q-[hash].js',
+						hoistTransitiveImports: false,
+					},
+				},
 			},
 		});
-		expect(config.build!.modulePreload).toBe(false);
+		expect(callConfigEnvironment(plugin, 'vite_workerd_fixture', workerConfig)).toBeUndefined();
 	});
 
 	test('uses vitefu to optimize and bundle Qwik deps', async () => {
@@ -171,68 +199,8 @@ describe('Vite config integration', () => {
 
 		expect(config.build!.rolldownOptions!.output).toBeUndefined();
 	});
-
-	test('builds the client environment from a pre buildApp hook', async () => {
-		const plugin = getQwikPlugin();
-		const calls: string[] = [];
-
-		await callBuildApp(plugin, {
-			build: vi.fn(async (environment: { name: string; isBuilt: boolean }) => {
-				calls.push(environment.name);
-				environment.isBuilt = true;
-			}),
-			config: { root: '/workspace/app' },
-			environments: {
-				client: {
-					name: 'client',
-					isBuilt: false,
-					config: {
-						consumer: 'client',
-						build: { rollupOptions: { input: 'src/root.tsx' } },
-					},
-				},
-			},
-		} as never);
-
-		expect(calls).toEqual(['client']);
-	});
-
-	test('can target a custom Qwik client environment name', async () => {
-		const plugin = getQwikPlugin({ clientEnvironment: 'browser' });
-		const calls: string[] = [];
-
-		await callBuildApp(plugin, {
-			build: vi.fn(async (environment: { name: string; isBuilt: boolean }) => {
-				calls.push(environment.name);
-				environment.isBuilt = true;
-			}),
-			config: { root: '/workspace/app' },
-			environments: {
-				ssr: { name: 'ssr', isBuilt: false, config: { consumer: 'server' } },
-				browser: {
-					name: 'browser',
-					isBuilt: false,
-					config: {
-						consumer: 'client',
-						build: { rollupOptions: { input: 'src/root.tsx' } },
-					},
-				},
-			},
-		} as never);
-
-		expect(calls).toEqual(['browser']);
-	});
 });
 
 function getQwikPlugin(options?: Parameters<typeof qwik>[0]) {
 	return getPlugin(qwik(options) as Plugin[], 'vite-plugin-qwik');
-}
-
-function callBuildApp(plugin: Plugin, builder: unknown) {
-	const buildApp = plugin.buildApp;
-	if (!buildApp || typeof buildApp === 'function') {
-		throw new Error('Expected buildApp hook object');
-	}
-
-	return buildApp.handler(builder as never);
 }

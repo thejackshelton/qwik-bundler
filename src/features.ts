@@ -12,8 +12,12 @@ const EXPERIMENTAL_FEATURES = [
 	'insights',
 ] as const;
 
-export function defineQwik(input: InputOptions, experimental: string[] = [], dev = false) {
+export function comptimeConfig(input: InputOptions, experimental: string[] = [], dev = false) {
 	const define = ((input.transform ??= {}).define ??= {});
+	define['import.meta.env.BASE_URL'] ??= "'/'";
+	define['import.meta.env.DEV'] ??= String(dev);
+	define['import.meta.env.MODE'] ??= dev ? "'development'" : "'production'";
+	define['import.meta.env.TEST'] ??= 'false';
 	define['globalThis.qDev'] ??= String(dev);
 	define['globalThis.qInspector'] ??= String(dev);
 	for (const feature of EXPERIMENTAL_FEATURES) {
