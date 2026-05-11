@@ -1,42 +1,41 @@
 # Contributing
 
-## What The Qwik Manifest Is
+## Architecture Goal
 
-Qwik splits application code into many small browser chunks. Server-rendered HTML does not directly contain all of the JavaScript needed for every interactive component. Instead, the HTML contains Qwik markers that tell the browser which symbol to load later when the user interacts with the page.
+This package is the bundling layer for Qwik. It should make Qwik's optimizer, runtime chunks, manifest, and Vite/Rolldown integration work across frameworks without owning app-framework conventions.
 
-The Qwik manifest is the lookup table for those markers.
+The central contract is simple: the browser assets and the server-rendered HTML must agree on the same **Qwik manifest**. The manifest is the build-time map that tells Qwik which generated browser files contain each lazy component, event handler, runtime helper, preload relationship, and bundle graph entry.
 
-For example, after the browser sees a click handler marker, Qwik needs to answer questions like:
+That manifest connects three things:
 
-- Which browser chunk contains this handler?
-- What URL should be imported for that chunk?
-- Which Qwik runtime chunk should be preloaded?
-- Which bundle graph file describes reachable chunks?
+- Optimizer output: Qwik's extracted lazy chunks and runtime entries.
+- Bundler output: final hashed browser files such as `build/q-BYduuXnN.js`.
+- Render output: SSR, SSG, or worker HTML that hydrates and resumes in the browser.
 
-Those answers are only known after the client bundle is built, because the bundler decides final chunk names such as `build/q-BYduuXnN.js`.
+Because hashed browser filenames are only known after the client build, rendering must happen after the client manifest exists.
 
-So the important rule is:
+The high-level pipeline is:
 
 ```text
-Build Qwik client chunks -> create manifest -> run SSR/SSG rendering
+client build -> Qwik manifest -> SSR/worker/SSG render -> browser resume (on interaction by the user)
 ```
 
-`q-manifest.json` is one file representation of this data, but the JSON file is not the important part. The important part is the manifest data produced by the client build.
+`q-manifest.json` is just one serialized form of this data. The architecture depends on the manifest data itself, not on reading the JSON file from disk at runtime.
 
 ## Why Build Order Matters
 
-Production SSR and SSG need the manifest while rendering HTML. If rendering happens before the client build, Qwik cannot know the final browser chunk URLs yet.
+Production SSR, workers, and SSG need the manifest while rendering HTML. If rendering happens before the client build, Qwik cannot know the final browser chunk URLs yet.
 
 This breaks pages in two common ways:
 
-- SSR/SSG HTML may reference missing chunks.
+- Rendered HTML may reference missing chunks.
 - Browser interactivity may fail because dynamic imports return 404s.
 
-Patching server output after the fact is not enough for SSG if static HTML has already been rendered. The hard barrier is not necessarily "before every server bundle build"; it is "before Qwik SSR/SSG render execution".
+Patching server output after the fact is not enough if static HTML has already been rendered. The hard barrier is not necessarily "before every server bundle build"; it is "before Qwik render execution".
 
 ## Vite Environment Strategy
 
-For Vite builder builds, the Qwik Vite plugin owns this invariant through plugin ordering:
+For Vite builder builds, the Qwik Vite plugin enforces the required build sequence through plugin ordering:
 
 ```text
 adapter environment setup -> canonical client build -> Qwik client manifest -> server/worker/SSG render
