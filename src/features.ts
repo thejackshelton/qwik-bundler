@@ -1,5 +1,5 @@
 import type { InputOptions } from 'rolldown';
-import type { QwikEnvironment } from './rolldown';
+import type { QwikEnvironment } from './types';
 
 const EXPERIMENTAL_FEATURES = [
 	'each',

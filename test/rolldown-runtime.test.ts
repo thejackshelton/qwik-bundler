@@ -140,7 +140,11 @@ describe('Rolldown runtime integration', () => {
 		const plugin = qwikClient({ dev: true });
 
 		callBuildStart(plugin, { cwd: '/workspace/app' });
-		await callTransform(plugin, 'export const answer = 42;', '/workspace/app/src/root.tsx');
+		await callTransform(
+			plugin,
+			"import { component$ } from '@qwik.dev/core'; export const answer = 42;",
+			'/workspace/app/src/root.tsx',
+		);
 
 		expect(optimizerMock.transformModules).toHaveBeenCalledWith(
 			expect.objectContaining({
@@ -183,7 +187,11 @@ describe('Rolldown runtime integration', () => {
 		const plugin = qwikClient();
 
 		callBuildStart(plugin, { cwd: '/workspace/app' });
-		await callTransform(plugin, 'export default 1;', '/workspace/app/src/home.tsx');
+		await callTransform(
+			plugin,
+			"import { component$ } from '@qwik.dev/core'; export default 1;",
+			'/workspace/app/src/home.tsx',
+		);
 		const resolved = await callResolveId(
 			plugin,
 			'./home.tsx_click_abc.js',
@@ -215,12 +223,12 @@ describe('Rolldown runtime integration', () => {
 		callBuildStart(lib, { cwd: '/workspace/app' });
 		const serverCode = await callTransform(
 			server,
-			'export default 1;',
+			"import { renderToString } from '@qwik.dev/core/server'; export default 1;",
 			'/workspace/app/src/server.tsx',
 		);
 		const libCode = await callTransform(
 			lib,
-			'export default 1;',
+			"import { component$ } from '@qwik.dev/core'; export default 1;",
 			'/workspace/app/src/index.tsx',
 		);
 
@@ -241,7 +249,11 @@ describe('Rolldown runtime integration', () => {
 		const plugin = qwikClient({ dev: true, hmr: false });
 
 		callBuildStart(plugin, { cwd: '/workspace/app' });
-		await callTransform(plugin, 'export const answer = 42;', '/workspace/app/src/root.tsx');
+		await callTransform(
+			plugin,
+			"import { component$ } from '@qwik.dev/core'; export const answer = 42;",
+			'/workspace/app/src/root.tsx',
+		);
 
 		expect(optimizerMock.transformModules).toHaveBeenCalledWith(
 			expect.objectContaining({
@@ -278,7 +290,11 @@ describe('Rolldown runtime integration', () => {
 		const plugin = qwikClient({ dev: true });
 
 		callBuildStart(plugin, { cwd: '/workspace/app' });
-		await callTransform(plugin, 'export default 1;', '/workspace/app/src/home.tsx');
+		await callTransform(
+			plugin,
+			"import { component$ } from '@qwik.dev/core'; export default 1;",
+			'/workspace/app/src/home.tsx',
+		);
 		const resolved = await callResolveId(plugin, '/src/home.tsx_click_abc.js');
 
 		expect(await callLoad(plugin, (resolved as { id: string }).id)).toContain('segment');
@@ -311,7 +327,11 @@ describe('Rolldown runtime integration', () => {
 		const plugin = qwikClient({ dev: true });
 
 		callBuildStart(plugin, { cwd: '/workspace/app' });
-		await callTransform(plugin, 'export default 1;', '/workspace/app/src/home.tsx');
+		await callTransform(
+			plugin,
+			"import { component$ } from '@qwik.dev/core'; export default 1;",
+			'/workspace/app/src/home.tsx',
+		);
 		const resolved = await callResolveId(plugin, '/src/home.tsx_component_abc.js');
 		const code = await callLoad(plugin, (resolved as { id: string }).id, { parse: parseAst });
 
@@ -384,13 +404,13 @@ describe('Rolldown runtime integration', () => {
 		callBuildStart(plugin, { cwd: '/workspace/app' });
 		await callTransform(
 			plugin,
-			'export default 1;',
+			"import { component$ } from '@qwik.dev/core'; export default 1;",
 			'/workspace/app/src/shared.tsx',
 			clientContext,
 		);
 		await callTransform(
 			plugin,
-			'export default 1;',
+			"import { renderToString } from '@qwik.dev/core/server'; export default 1;",
 			'/workspace/app/src/shared.tsx',
 			serverContext,
 		);
@@ -419,7 +439,11 @@ describe('Rolldown runtime integration', () => {
 
 	test('invalidates generated dev segments derived from a parent source', async () => {
 		const transformRequest = vi.fn(async () => {
-			await callTransform(plugin, 'export default 2;', '/workspace/app/src/home.tsx');
+			await callTransform(
+				plugin,
+				"import { component$ } from '@qwik.dev/core'; export default 2;",
+				'/workspace/app/src/home.tsx',
+			);
 		});
 		const plugin = qwikClient({
 			dev: true,
@@ -474,7 +498,11 @@ describe('Rolldown runtime integration', () => {
 			});
 
 		callBuildStart(plugin, { cwd: '/workspace/app' });
-		await callTransform(plugin, 'export default 1;', '/workspace/app/src/home.tsx');
+		await callTransform(
+			plugin,
+			"import { component$ } from '@qwik.dev/core'; export default 1;",
+			'/workspace/app/src/home.tsx',
+		);
 		const resolved = await callResolveId(plugin, '/src/home.tsx_click_abc.js');
 		expect(await callLoad(plugin, (resolved as { id: string }).id)).toContain('"old"');
 
@@ -520,7 +548,11 @@ describe('Rolldown runtime integration', () => {
 		];
 
 		callBuildStart(plugin, { cwd: '/workspace/app' });
-		await callTransform(plugin, 'export default 1;', '/workspace/app/src/home.tsx');
+		await callTransform(
+			plugin,
+			"import { component$ } from '@qwik.dev/core'; export default 1;",
+			'/workspace/app/src/home.tsx',
+		);
 
 		for (const request of requests) {
 			const resolved = await callResolveId(plugin, request);
@@ -558,7 +590,11 @@ describe('Rolldown runtime integration', () => {
 		const plugin = qwikClient({ dev: true });
 
 		callBuildStart(plugin, { cwd: '/workspace/app' });
-		await callTransform(plugin, 'export default 1;', '/workspace/app/src/home.tsx');
+		await callTransform(
+			plugin,
+			"import { component$ } from '@qwik.dev/core'; export default 1;",
+			'/workspace/app/src/home.tsx',
+		);
 		const resolved = await callResolveId(plugin, '/src/home.tsx_click_abc.js');
 		const code = await callLoad(plugin, (resolved as { id: string }).id);
 
@@ -597,7 +633,11 @@ describe('Rolldown runtime integration', () => {
 		const plugin = qwikClient({ dev: true });
 
 		callBuildStart(plugin, { cwd: '/workspace/app' });
-		await callTransform(plugin, 'export default 1;', '/workspace/app/src/home.tsx');
+		await callTransform(
+			plugin,
+			"import { component$ } from '@qwik.dev/core'; export default 1;",
+			'/workspace/app/src/home.tsx',
+		);
 		const resolved = await callResolveId(plugin, '/src/home.tsx_worker_abc.js');
 		const code = await callLoad(plugin, (resolved as { id: string }).id);
 
@@ -633,7 +673,11 @@ describe('Rolldown runtime integration', () => {
 		const plugin = qwikClient({ dev: true, hmr: false });
 
 		callBuildStart(plugin, { cwd: '/workspace/app' });
-		await callTransform(plugin, 'export default 1;', '/workspace/app/src/home.tsx');
+		await callTransform(
+			plugin,
+			"import { component$ } from '@qwik.dev/core'; export default 1;",
+			'/workspace/app/src/home.tsx',
+		);
 		const resolved = await callResolveId(plugin, '/src/home.tsx_click_abc.js');
 		const code = await callLoad(plugin, (resolved as { id: string }).id);
 
@@ -644,7 +688,11 @@ describe('Rolldown runtime integration', () => {
 
 	test('transforms dev QRL parents on demand before loading generated code', async () => {
 		const transformRequest = vi.fn(async () => {
-			await callTransform(plugin, 'export default 1;', '/workspace/app/src/home.tsx');
+			await callTransform(
+				plugin,
+				"import { component$ } from '@qwik.dev/core'; export default 1;",
+				'/workspace/app/src/home.tsx',
+			);
 		});
 		const plugin = qwikClient({
 			dev: true,
@@ -750,7 +798,11 @@ describe('Rolldown runtime integration', () => {
 
 		const plugin = qwikClient();
 		callBuildStart(plugin, { cwd: '/workspace/app' });
-		await callTransform(plugin, 'source', '/workspace/app/src/root.tsx');
+		await callTransform(
+			plugin,
+			"import { component$ } from '@qwik.dev/core';",
+			'/workspace/app/src/root.tsx',
+		);
 
 		const resolvedId = await callResolveId(
 			plugin,

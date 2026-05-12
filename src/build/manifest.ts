@@ -1,75 +1,67 @@
 import type { SegmentAnalysis } from '@qwik.dev/optimizer';
 import { relative } from 'pathe';
 import type { OutputBundle, OutputChunk } from 'rolldown';
-
-export interface QwikManifest {
-	manifestHash: string;
-	symbols: Record<string, QwikSymbol>;
-	mapping: Record<string, string>;
-	bundles: Record<string, QwikBundle>;
-	assets?: Record<string, QwikAsset>;
-	bundleGraph?: QwikBundleGraph;
-	bundleGraphAsset?: string;
-	preloader?: string;
-	core?: string;
-	qwikLoader?: string;
-	injections?: GlobalInjections[];
-	version: string;
-}
-
-export type ServerQwikManifest = Pick<
+import type {
+	BundleGraphAdder,
+	QwikBundle,
 	QwikManifest,
-	| 'manifestHash'
-	| 'injections'
-	| 'bundleGraph'
-	| 'bundleGraphAsset'
-	| 'mapping'
-	| 'preloader'
-	| 'core'
-	| 'qwikLoader'
->;
-
-export type QwikBundleGraph = Array<string | number>;
-
-export type QwikSymbol = Partial<SegmentAnalysis> & {
-	origin: string;
-	displayName: string;
-	hash: string;
-};
-
-export interface QwikBundle {
-	size: number;
-	total: number;
-	symbols?: string[];
-	imports?: string[];
-	dynamicImports?: string[];
-	origins?: string[];
-}
-
-export type QwikAsset = { name: string | undefined; size: number };
-
-export type GlobalInjections = {
-	tag: string;
-	attributes?: Record<string, string>;
-	location: 'head' | 'body';
-};
+	QwikSymbol,
+	ServerQwikManifest,
+} from '../types';
+import { convertManifestToBundleGraph } from './bundle-graph';
 
 export const QWIK_MANIFEST = 'globalThis.__QWIK_MANIFEST__';
 export const Q_MANIFEST_FILE = 'q-manifest.json';
 
-const HANDLERS = ['_chk', '_rsc', '_res', '_run', '_task', '_val', '_eaC', '_eaT', '_suC', '_suT'];
+const HANDLERS = [
+	'_chk',
+	'_rsc',
+	'_res',
+	'_run',
+	'_task',
+	'_val',
+	'_eaC',
+	'_eaT',
+	'_suC',
+	'_suT',
+	'_reR',
+	'_reC',
+	'_reT',
+];
 const HANDLER_SET = new Set(HANDLERS);
 const PRELOADER_RE = /[/\\](core|qwik)[/\\]dist[/\\]preloader\.(|c|m)js$/;
 const CORE_RE = /[/\\](core|qwik)[/\\]dist[/\\]core(\.min|\.prod)?\.(|c|m)js$/;
 const QWIK_LOADER_RE = /[/\\](core|qwik)[/\\](dist[/\\])?qwikloader(\.debug)?\.[^/\\]*js$/;
 const QWIK_LIBRARY_MODULE_RE = /\.qwik\.mjs$/;
 const LIBRARY_QRL_SYMBOL_RE = /["']([A-Za-z_$][\w$.-]*_[A-Za-z0-9_-]{8,})["']/g;
+const FUNCTION_INTERACTIVITY: Record<string, number> = {
+	component$: 2,
+	useStyles$: 2,
+	useStylesScoped$: 2,
+	useAsync$: 3,
+	useComputed$: 3,
+	useResource$: 3,
+	useTask$: 3,
+	useVisibleTask$: 3,
+	useOn: 3,
+	useOnDocument: 3,
+	useOnWindow: 3,
+};
+const RUNTIME_BUNDLES = [
+	['preloader', 'preloader', PRELOADER_RE],
+	['core', 'core', CORE_RE],
+	['qwikLoader', 'qwik-loader', QWIK_LOADER_RE],
+] as const;
 
 export function createManifest(
 	bundle: OutputBundle,
 	segments: Map<string, SegmentAnalysis>,
 	root: string | undefined,
-	options: { bundleGraphAsset?: string; canonPath?: (fileName: string) => string } = {},
+	options: {
+		bundleGraphAsset?: string;
+		bundleGraphAdders?: Set<BundleGraphAdder>;
+		canonPath?: (fileName: string) => string;
+	} = {},
 ) {
 	const canonPath = options.canonPath ?? ((fileName: string) => fileName);
 	const manifest: QwikManifest = {
@@ -89,8 +81,8 @@ export function createManifest(
 			}
 
 			manifest.assets![item.fileName] = {
-				name: item.names[0] ?? item.name,
-				size: assetSize(item.source),
+				name: item.names[0],
+				size: item.source.length,
 			};
 			continue;
 		}
@@ -151,6 +143,13 @@ export function createManifest(
 		symbols.push(symbolName);
 		manifest.symbols[symbolName] = segment;
 	}
+	for (const qwikBundle of Object.values(manifest.bundles)) {
+		const interactivity = getBundleInteractivity(qwikBundle, manifest);
+		if (interactivity > 0) {
+			qwikBundle.interactivity = interactivity;
+		}
+	}
+	computeTotals(manifest.bundles);
 
 	if (manifest.core) {
 		for (const symbol of HANDLERS) {
@@ -162,7 +161,7 @@ export function createManifest(
 	sortManifest(manifest);
 
 	if (options.bundleGraphAsset) {
-		manifest.bundleGraph = convertManifestToBundleGraph(manifest);
+		manifest.bundleGraph = convertManifestToBundleGraph(manifest, options.bundleGraphAdders);
 		manifest.bundleGraphAsset = options.bundleGraphAsset;
 		manifest.assets![options.bundleGraphAsset] = {
 			name: 'bundle-graph.json',
@@ -208,59 +207,6 @@ export function injectManifest(code: string, manifest: QwikManifest | ServerQwik
 	return code.replaceAll(`!${QWIK_MANIFEST}`, 'false').replaceAll(QWIK_MANIFEST, value);
 }
 
-export function convertManifestToBundleGraph(manifest: QwikManifest): QwikBundleGraph {
-	const graph: Record<string, QwikBundle> = { ...manifest.bundles };
-	for (const [symbol, bundleName] of Object.entries(manifest.mapping)) {
-		if (symbol.startsWith('_') && symbol.length < 10) {
-			continue;
-		}
-
-		const symbolHash = getSymbolHash(symbol);
-		if (symbolHash) {
-			graph[symbolHash] = { size: 0, total: 0, dynamicImports: [bundleName] };
-		}
-	}
-
-	for (const bundleName of Object.keys(graph)) {
-		const qwikBundle = graph[bundleName];
-		if (!qwikBundle) {
-			continue;
-		}
-
-		const imports = qwikBundle.imports?.filter((dep) => graph[dep]) ?? [];
-		const dynamicImports = qwikBundle.dynamicImports?.filter((dep) => graph[dep]) ?? [];
-
-		graph[bundleName] = { ...qwikBundle, imports, dynamicImports };
-	}
-
-	const nodes = Object.keys(graph)
-		.sort()
-		.map((name) => graphNode(name, graph));
-	const indexes = new Map<string, number>();
-	let index = 0;
-	for (const node of nodes) {
-		indexes.set(node.name, index);
-		index += 1 + node.deps.length;
-	}
-
-	const bundleGraph: QwikBundleGraph = [];
-	for (const node of nodes) {
-		bundleGraph.push(node.name);
-		for (const dep of node.deps) {
-			if (typeof dep === 'number') {
-				bundleGraph.push(dep);
-				continue;
-			}
-
-			const depIndex = indexes.get(dep);
-			if (depIndex !== undefined) {
-				bundleGraph.push(depIndex);
-			}
-		}
-	}
-	return bundleGraph;
-}
-
 function mapBundleNames(
 	bundle: OutputBundle,
 	names: string[],
@@ -274,12 +220,8 @@ function mapBundleNames(
 
 function getOrigins(item: OutputChunk, root: string | undefined) {
 	return item.moduleIds
-		.flatMap((id) => {
-			if (id.startsWith('\0')) {
-				return [];
-			}
-			return root ? [relative(root, id)] : [id];
-		})
+		.filter((id) => !id.startsWith('\0'))
+		.map((id) => (root ? relative(root, id) : id))
 		.sort();
 }
 
@@ -290,31 +232,17 @@ function detectQwikCoreBundles(
 	bundleFileName: string,
 ) {
 	const candidates = [item.name, item.facadeModuleId ?? '', ...item.moduleIds, ...origins];
-	if (
-		!manifest.preloader &&
-		candidates.some((value) => value === 'preloader' || PRELOADER_RE.test(value))
-	) {
-		manifest.preloader = bundleFileName;
-	}
-	if (!manifest.core && candidates.some((value) => value === 'core' || CORE_RE.test(value))) {
-		manifest.core = bundleFileName;
-	}
-	if (
-		!manifest.qwikLoader &&
-		candidates.some((value) => value === 'qwik-loader' || QWIK_LOADER_RE.test(value))
-	) {
-		manifest.qwikLoader = bundleFileName;
+	for (const [field, name, pattern] of RUNTIME_BUNDLES) {
+		if (!manifest[field] && candidates.some((value) => value === name || pattern.test(value))) {
+			manifest[field] = bundleFileName;
+		}
 	}
 }
 
 function filterRuntimeImports(manifest: QwikManifest) {
-	const ignored = new Set<string>();
-	if (manifest.core) {
-		ignored.add(manifest.core);
-	}
-	if (manifest.preloader) {
-		ignored.add(manifest.preloader);
-	}
+	const ignored = new Set(
+		[manifest.core, manifest.preloader].filter((name): name is string => !!name),
+	);
 	if (ignored.size === 0) {
 		return;
 	}
@@ -331,11 +259,38 @@ function filterRuntimeImports(manifest: QwikManifest) {
 	}
 }
 
-function assetSize(source: string | Uint8Array) {
-	if (typeof source === 'string') {
-		return source.length;
+function getBundleInteractivity(bundle: QwikBundle, manifest: QwikManifest) {
+	let maxScore = 0;
+	for (const symbolName of bundle.symbols ?? []) {
+		const symbol = manifest.symbols[symbolName];
+		let score = 0;
+		if (symbol?.ctxKind === 'eventHandler') {
+			score = 5;
+		} else if (symbol?.ctxKind === 'function') {
+			score = symbol.ctxName ? (FUNCTION_INTERACTIVITY[symbol.ctxName] ?? 1) : 1;
+		} else if (symbol) {
+			score = 1;
+		}
+		maxScore = Math.max(maxScore, score);
 	}
-	return source.byteLength;
+	return maxScore;
+}
+
+function computeTotals(bundles: Record<string, QwikBundle>) {
+	const collect = (name: string, seen: Set<string>) => {
+		const bundle = bundles[name];
+		if (!bundle || seen.has(name)) return;
+		seen.add(name);
+		for (const dep of bundle.imports ?? []) {
+			collect(dep, seen);
+		}
+	};
+
+	for (const name of Object.keys(bundles)) {
+		const seen = new Set<string>();
+		collect(name, seen);
+		bundles[name]!.total = [...seen].reduce((sum, dep) => sum + (bundles[dep]?.size ?? 0), 0);
+	}
 }
 
 function sortManifest(manifest: QwikManifest) {
@@ -343,12 +298,7 @@ function sortManifest(manifest: QwikManifest) {
 	manifest.symbols = sortRecord(manifest.symbols);
 	manifest.bundles = sortRecord(manifest.bundles);
 	manifest.assets = sortRecord(manifest.assets ?? {});
-	for (const name of Object.keys(manifest.bundles)) {
-		const bundle = manifest.bundles[name];
-		if (!bundle) {
-			continue;
-		}
-
+	for (const bundle of Object.values(manifest.bundles)) {
 		bundle.imports?.sort();
 		bundle.dynamicImports?.sort();
 		bundle.origins?.sort();
@@ -365,28 +315,6 @@ function sortRecord<T>(record: Record<string, T>) {
 		}
 	}
 	return next;
-}
-
-function graphNode(name: string, graph: Record<string, QwikBundle>) {
-	const bundle = graph[name];
-	if (!bundle) {
-		return { name, deps: [] };
-	}
-
-	const deps: Array<string | number> = [...new Set(bundle.imports ?? [])].sort();
-	const dynamicImports = [...new Set(bundle.dynamicImports ?? [])].sort();
-	if (dynamicImports.length > 0) {
-		deps.push(-5, ...dynamicImports);
-	}
-	return { name, deps };
-}
-
-function getSymbolHash(symbolName: string) {
-	const index = symbolName.lastIndexOf('_');
-	if (index > -1) {
-		return symbolName.slice(index + 1);
-	}
-	return symbolName;
 }
 
 function hash(value: string) {

@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
-import { QWIK_MANIFEST, type QwikManifest } from '../src/build/manifest';
+import { convertManifestToBundleGraph } from '../src/build/bundle-graph';
+import { createManifest, QWIK_MANIFEST } from '../src/build/manifest';
 import { qwikClient, qwikServer } from '../src/rolldown';
+import type { QwikBundleGraph, QwikManifest } from '../src/types';
 import { callBuildStart, callGenerateBundle, callTransform } from './helpers';
 
 const optimizerMock = vi.hoisted(() => ({
@@ -79,7 +81,11 @@ describe('Qwik manifest output', () => {
 		const emitFile = vi.fn();
 
 		callBuildStart(plugin, { cwd: '/workspace/app' });
-		await callTransform(plugin, 'source', '/workspace/app/src/root.tsx');
+		await callTransform(
+			plugin,
+			"import { component$ } from '@qwik.dev/core';",
+			'/workspace/app/src/root.tsx',
+		);
 		await callGenerateBundle(
 			plugin,
 			{
@@ -124,7 +130,7 @@ describe('Qwik manifest output', () => {
 					fileName: 'build/q-handlers.js',
 					name: 'handlers',
 					code: 'export const _run = 1;',
-					exports: ['_run'],
+					exports: ['_run', '_reR'],
 					imports: ['build/q-core.js'],
 					dynamicImports: [],
 					moduleIds: ['/workspace/app/node_modules/@qwik.dev/core/handlers.mjs'],
@@ -151,6 +157,7 @@ describe('Qwik manifest output', () => {
 		expect(manifest?.mapping.s_abc).toBe('q-symbol.js');
 		expect(manifest?.mapping._chk).toBe('q-core.js');
 		expect(manifest?.mapping._run).toBe('q-handlers.js');
+		expect(manifest?.mapping._reR).toBe('q-handlers.js');
 		expect(manifest?.symbols.s_abc).toMatchObject({ displayName: 'root.tsx_root_component' });
 		expect(manifest?.bundles['q-entry.js']).toMatchObject({
 			imports: ['q-symbol.js'],
@@ -167,6 +174,166 @@ describe('Qwik manifest output', () => {
 		expect(emitFile).toHaveBeenCalledWith(
 			expect.objectContaining({ type: 'asset', fileName: 'q-manifest.json' }),
 		);
+	});
+
+	test('computes bundle total size from static import graph', async () => {
+		let manifest: QwikManifest | undefined;
+		const plugin = qwikClient({ onManifest: (nextManifest) => (manifest = nextManifest) });
+
+		callBuildStart(plugin, { cwd: '/workspace/app' });
+		await callGenerateBundle(plugin, {
+			'build/q-entry.js': {
+				type: 'chunk',
+				fileName: 'build/q-entry.js',
+				name: 'entry',
+				code: '12345',
+				exports: [],
+				imports: ['build/q-a.js'],
+				dynamicImports: [],
+				moduleIds: ['/workspace/app/src/entry.tsx'],
+				facadeModuleId: '/workspace/app/src/entry.tsx',
+			},
+			'build/q-a.js': {
+				type: 'chunk',
+				fileName: 'build/q-a.js',
+				name: 'a',
+				code: '123',
+				exports: [],
+				imports: ['build/q-b.js'],
+				dynamicImports: [],
+				moduleIds: ['/workspace/app/src/a.ts'],
+				facadeModuleId: '/workspace/app/src/a.ts',
+			},
+			'build/q-b.js': {
+				type: 'chunk',
+				fileName: 'build/q-b.js',
+				name: 'b',
+				code: '12',
+				exports: [],
+				imports: [],
+				dynamicImports: [],
+				moduleIds: ['/workspace/app/src/b.ts'],
+				facadeModuleId: '/workspace/app/src/b.ts',
+			},
+		});
+
+		expect(manifest?.bundles['q-entry.js']?.total).toBe(10);
+		expect(manifest?.bundles['q-a.js']?.total).toBe(5);
+		expect(manifest?.bundles['q-b.js']?.total).toBe(2);
+	});
+
+	test.each([
+		['onSubmit$', 'Form_onSubmit_abc12345', 'Form_onSubmit'],
+		['customHandler$', 'Widget_customSignal_abc12345', 'Widget_customSignal'],
+	])(
+		'scores event handler interactivity from ctxKind for %s',
+		async (ctxName, symbolName, displayName) => {
+			optimizerMock.transformModules.mockResolvedValueOnce({
+				modules: [
+					{
+						path: '/workspace/app/src/widget.tsx',
+						isEntry: false,
+						code: 'optimized',
+						map: null,
+						segment: null,
+						origPath: null,
+					},
+					{
+						path: '/workspace/app/src/widget.tsx_event_abc12345.js',
+						isEntry: false,
+						code: `export const ${symbolName} = () => {};`,
+						map: null,
+						segment: {
+							origin: '/workspace/app/src/widget.tsx',
+							name: symbolName,
+							entry: null,
+							displayName,
+							hash: 'abc12345',
+							canonicalFilename: 'widget.tsx_event_abc12345',
+							extension: 'js',
+							parent: null,
+							ctxKind: 'eventHandler',
+							ctxName,
+							captures: false,
+							loc: [0, 0],
+						},
+						origPath: null,
+					},
+				],
+				diagnostics: [],
+				isTypeScript: true,
+				isJsx: true,
+			});
+			let manifest: QwikManifest | undefined;
+			const plugin = qwikClient({ onManifest: (nextManifest) => (manifest = nextManifest) });
+
+			callBuildStart(plugin, { cwd: '/workspace/app' });
+			await callTransform(
+				plugin,
+				"import { component$ } from '@qwik.dev/core';",
+				'/workspace/app/src/widget.tsx',
+			);
+			await callGenerateBundle(plugin, {
+				'build/q-event.js': {
+					type: 'chunk',
+					fileName: 'build/q-event.js',
+					name: 'event',
+					code: `export const ${symbolName} = () => {};`,
+					exports: [symbolName],
+					imports: [],
+					dynamicImports: [],
+					moduleIds: ['/workspace/app/src/widget.tsx_event_abc12345.js'],
+					facadeModuleId: '/workspace/app/src/widget.tsx_event_abc12345.js',
+				},
+			});
+
+			expect(manifest?.bundles['q-event.js']?.interactivity).toBe(5);
+		},
+	);
+
+	test.each([
+		['component$', 2],
+		['useAsync$', 3],
+		['useUnknown$', 1],
+	])('scores function interactivity from explicit ctxName table for %s', (ctxName, expected) => {
+		const symbolName = `Widget_${ctxName.replace(/\W/g, '')}_abc12345`;
+		const manifest = createManifest(
+			{
+				'build/q-function.js': {
+					type: 'chunk',
+					fileName: 'build/q-function.js',
+					name: 'function',
+					code: `export const ${symbolName} = () => {};`,
+					exports: [symbolName],
+					imports: [],
+					dynamicImports: [],
+					moduleIds: ['/workspace/app/src/widget.tsx'],
+					facadeModuleId: '/workspace/app/src/widget.tsx',
+				},
+			} as never,
+			new Map([
+				[
+					symbolName,
+					{
+						origin: '/workspace/app/src/widget.tsx',
+						name: symbolName,
+						entry: null,
+						displayName: `Widget_${ctxName}`,
+						hash: 'abc12345',
+						canonicalFilename: 'widget.tsx_function_abc12345',
+						extension: 'js',
+						parent: null,
+						ctxKind: 'function',
+						ctxName,
+						captures: false,
+						loc: [0, 0],
+					},
+				],
+			]),
+			'/workspace/app',
+		);
+
+		expect(manifest.bundles['build/q-function.js']?.interactivity).toBe(expected);
 	});
 
 	test('maps inlined QRL symbols from library modules', async () => {
@@ -194,6 +361,7 @@ describe('Qwik manifest output', () => {
 		expect(manifest?.mapping.Card_component_D8Jm0aJFndY).toBe('q-lib.js');
 		expect(manifest?.symbols.Card_component_D8Jm0aJFndY).toBeUndefined();
 		expect(manifest?.bundles['q-lib.js']?.symbols).toBeUndefined();
+		expect(manifest?.bundles['q-lib.js']?.interactivity).toBeUndefined();
 		expect(manifest?.bundleGraph).toContain('D8Jm0aJFndY');
 	});
 
@@ -218,6 +386,192 @@ describe('Qwik manifest output', () => {
 
 		expect(manifest?.mapping.NotAQrl_12345678).toBeUndefined();
 		expect(manifest?.bundleGraph).not.toContain('12345678');
+	});
+
+	test('includes symbol bundle static imports on symbol graph nodes for render-time preload', () => {
+		const manifest = {
+			bundles: {
+				'q-click.js': {
+					size: 100,
+					total: 100,
+					imports: ['q-handlers.js'],
+					symbols: ['Button_onClick_abc12345'],
+				},
+				'q-handlers.js': {
+					size: 50,
+					total: 50,
+				},
+			},
+			mapping: { Button_onClick_abc12345: 'q-click.js' },
+			symbols: {},
+			manifestHash: '',
+			version: '1',
+		} as QwikManifest;
+
+		const graph = convertManifestToBundleGraph(manifest);
+
+		expect(graphDeps(graph, 'abc12345')).toEqual(
+			expect.arrayContaining(['q-click.js', 'q-handlers.js']),
+		);
+	});
+
+	test('treats the handlers bundle as an event handler preload dependency', () => {
+		const manifest = {
+			bundles: {
+				'q-click.js': { size: 100, total: 100, symbols: ['Button_onClick_abc12345'] },
+				'q-handlers.js': { size: 50, total: 50 },
+			},
+			mapping: { _run: 'q-handlers.js', Button_onClick_abc12345: 'q-click.js' },
+			symbols: { Button_onClick_abc12345: { ctxKind: 'eventHandler' } },
+			manifestHash: '',
+			version: '1',
+		} as QwikManifest;
+
+		const graph = convertManifestToBundleGraph(manifest);
+
+		expect(graphDeps(graph, 'q-click.js')).toContain('q-handlers.js');
+	});
+
+	test('prunes transitive static preload dependencies from bundle graph nodes', () => {
+		const manifest = {
+			bundles: {
+				'q-entry.js': {
+					size: 100,
+					total: 100,
+					imports: ['q-a.js', 'q-b.js', 'q-c.js'],
+				},
+				'q-a.js': { size: 50, total: 50, imports: ['q-b.js'] },
+				'q-b.js': { size: 50, total: 50, imports: ['q-c.js'] },
+				'q-c.js': { size: 50, total: 50 },
+			},
+			mapping: {},
+			symbols: {},
+			manifestHash: '',
+			version: '1',
+		} as QwikManifest;
+
+		const graph = convertManifestToBundleGraph(manifest);
+
+		expect(graphDeps(graph, 'q-entry.js')).toEqual(['q-a.js']);
+	});
+
+	test('rejects cyclic static preload dependencies', () => {
+		const manifest = {
+			bundles: {
+				'q-a.js': { size: 50, total: 50, imports: ['q-b.js'] },
+				'q-b.js': { size: 50, total: 50, imports: ['q-a.js'] },
+			},
+			mapping: {},
+			symbols: {},
+			manifestHash: '',
+			version: '1',
+		} as QwikManifest;
+
+		expect(() => convertManifestToBundleGraph(manifest)).toThrow(/Circular dependency/);
+	});
+
+	test('applies bundle graph adders for route and insights preload entries', () => {
+		const manifest = {
+			bundles: {
+				'q-entry.js': { size: 100, total: 100 },
+				'q-route.js': { size: 50, total: 50, symbols: ['Route_component_abc12345'] },
+			},
+			mapping: { Route_component_abc12345: 'q-route.js' },
+			symbols: {},
+			manifestHash: '',
+			version: '1',
+		} as QwikManifest;
+
+		const graph = (convertManifestToBundleGraph as any)(
+			manifest,
+			new Set([() => ({ '/dashboard/': { dynamicImports: ['q-route.js'] } })]),
+		);
+
+		expect(graphDynamicDeps(graph, '/dashboard/')).toEqual(['q-route.js']);
+	});
+
+	test('filters non-Qwik dynamic imports from bundle graph nodes', () => {
+		const manifest = {
+			bundles: {
+				'q-entry.js': {
+					size: 100,
+					total: 100,
+					dynamicImports: ['q-symbol.js', 'q-source.js', 'q-language.js'],
+				},
+				'q-symbol.js': { size: 50, total: 50, symbols: ['Symbol_component_abc12345'] },
+				'q-source.js': { size: 50, total: 50, origins: ['src/entry.tsx'] },
+				'q-language.js': { size: 50, total: 50, origins: ['node_modules/shiki/lang.js'] },
+			},
+			mapping: {},
+			symbols: {},
+			manifestHash: '',
+			version: '1',
+		} as QwikManifest;
+
+		const graph = convertManifestToBundleGraph(manifest);
+
+		expect(graphDynamicDeps(graph, 'q-entry.js')).toEqual(['q-symbol.js']);
+	});
+
+	test('uses probability buckets for dynamic preload dependencies', () => {
+		const manifest = {
+			bundles: {
+				'q-entry.js': {
+					size: 100,
+					total: 100,
+					dynamicImports: ['q-later.js', 'q-click.js', 'q-small.js'],
+					origins: ['src/root.tsx'],
+				},
+				'q-click.js': {
+					size: 500,
+					total: 500,
+					interactivity: 5,
+					symbols: ['Button_onClick_abc12345'],
+					origins: ['src/root.tsx_click_abc12345.js'],
+				},
+				'q-small.js': {
+					size: 100,
+					total: 100,
+					symbols: ['Small_component_abc12345'],
+				},
+				'q-later.js': {
+					size: 20_000,
+					total: 20_000,
+					symbols: ['Later_component_abc12345'],
+				},
+			},
+			mapping: {},
+			symbols: {},
+			manifestHash: '',
+			version: '1',
+		} as QwikManifest;
+
+		const graph = convertManifestToBundleGraph(manifest);
+
+		expect(graphDynamicDeps(graph, 'q-entry.js')).toEqual([
+			'q-click.js',
+			'q-small.js',
+			'q-later.js',
+		]);
+		expect(graphDynamicMarkers(graph, 'q-entry.js')).toEqual([-10, -7, -5]);
+	});
+
+	test('removes isolated unused bundles from the bundle graph', () => {
+		const manifest = {
+			bundles: {
+				'q-entry.js': { size: 100, total: 100, imports: ['q-used.js'] },
+				'q-used.js': { size: 50, total: 50 },
+				'q-unused.js': { size: 50, total: 50 },
+			},
+			mapping: {},
+			symbols: {},
+			manifestHash: '',
+			version: '1',
+		} as QwikManifest;
+
+		const graph = convertManifestToBundleGraph(manifest);
+
+		expect(graph).not.toContain('q-unused.js');
 	});
 
 	test('warns when server manifest injection has no manifest available', async () => {
@@ -297,3 +651,61 @@ describe('Qwik manifest output', () => {
 		expect(optimizerMock.transformModules).not.toHaveBeenCalled();
 	});
 });
+
+function graphDeps(graph: QwikBundleGraph, nodeName: string) {
+	const nodeIndex = graph.indexOf(nodeName);
+	if (nodeIndex < 0) {
+		throw new Error(`Expected graph node ${nodeName}`);
+	}
+
+	const deps: string[] = [];
+	for (let index = nodeIndex + 1; index < graph.length; index++) {
+		const value = graph[index];
+		if (typeof value === 'string') break;
+		if (typeof value !== 'number' || value < 0) continue;
+		const dep = graph[value];
+		if (typeof dep === 'string') {
+			deps.push(dep);
+		}
+	}
+	return deps;
+}
+
+function graphDynamicDeps(graph: QwikBundleGraph, nodeName: string) {
+	const nodeIndex = graph.indexOf(nodeName);
+	if (nodeIndex < 0) {
+		throw new Error(`Expected graph node ${nodeName}`);
+	}
+
+	const deps: string[] = [];
+	let dynamic = false;
+	for (let index = nodeIndex + 1; index < graph.length; index++) {
+		const value = graph[index];
+		if (typeof value === 'string') break;
+		if (typeof value !== 'number') continue;
+		if (value < 0) {
+			dynamic = true;
+			continue;
+		}
+		if (!dynamic) continue;
+		const dep = graph[value];
+		if (typeof dep === 'string') deps.push(dep);
+	}
+	return deps;
+}
+
+function graphDynamicMarkers(graph: QwikBundleGraph, nodeName: string) {
+	const nodeIndex = graph.indexOf(nodeName);
+	if (nodeIndex < 0) {
+		throw new Error(`Expected graph node ${nodeName}`);
+	}
+
+	const markers: number[] = [];
+	for (let index = nodeIndex + 1; index < graph.length; index++) {
+		const value = graph[index];
+		if (typeof value === 'string') break;
+		if (typeof value === 'number' && value < 0) markers.push(value);
+	}
+	if (markers.length > 0) return markers;
+	throw new Error(`Expected graph node ${nodeName} to have dynamic dependencies`);
+}

@@ -43,14 +43,19 @@ describe('Rolldown optimizer transforms', () => {
 		callBuildStart(plugin, { cwd: '/workspace/app' });
 		const result = await callTransform(
 			plugin,
-			'export const answer = 42;',
+			"import { component$ } from '@qwik.dev/core'; export const answer = 42;",
 			'/workspace/app/src/root.tsx',
 		);
 
 		expect(createOptimizer).toHaveBeenCalledWith(undefined);
 		expect(optimizerMock.transformModules).toHaveBeenCalledWith(
 			expect.objectContaining({
-				input: [{ code: 'export const answer = 42;', path: '/workspace/app/src/root.tsx' }],
+				input: [
+					{
+						code: "import { component$ } from '@qwik.dev/core'; export const answer = 42;",
+						path: '/workspace/app/src/root.tsx',
+					},
+				],
 				rootDir: '/workspace/app',
 				srcDir: '/workspace/app',
 				isServer: false,
@@ -109,10 +114,15 @@ describe('Rolldown optimizer transforms', () => {
 		const error = vi.fn();
 
 		callBuildStart(plugin, { cwd: '/workspace/app' });
-		await callTransform(plugin, 'export default 1;', '/workspace/app/src/root.tsx', {
-			warn,
-			error,
-		});
+		await callTransform(
+			plugin,
+			"import { component$ } from '@qwik.dev/core'; export default 1;",
+			'/workspace/app/src/root.tsx',
+			{
+				warn,
+				error,
+			},
+		);
 
 		expect(warn).toHaveBeenCalledTimes(1);
 		expect(error).toHaveBeenCalledTimes(1);
@@ -140,7 +150,11 @@ describe('Rolldown optimizer transforms', () => {
 		const plugin = qwikServer();
 
 		callBuildStart(plugin, { cwd: '/workspace/app' });
-		await callTransform(plugin, 'export default 1;', '/workspace/app/src/server.ts');
+		await callTransform(
+			plugin,
+			"import { renderToString } from '@qwik.dev/core/server'; export default 1;",
+			'/workspace/app/src/server.ts',
+		);
 
 		expect(optimizerMock.transformModules).toHaveBeenCalledWith(
 			expect.objectContaining({
@@ -149,6 +163,37 @@ describe('Rolldown optimizer transforms', () => {
 				entryStrategy: { type: 'hoist' },
 			}),
 		);
+	});
+
+	test('optimizes plain JavaScript source files', async () => {
+		const plugin = qwikClient();
+
+		callBuildStart(plugin, { cwd: '/workspace/app' });
+		await callTransform(
+			plugin,
+			"import { component$ } from '@qwik.dev/core'; export const value = 1;",
+			'/workspace/app/src/component.js',
+		);
+
+		expect(optimizerMock.transformModules).toHaveBeenCalledWith(
+			expect.objectContaining({
+				input: [expect.objectContaining({ path: '/workspace/app/src/component.js' })],
+			}),
+		);
+	});
+
+	test('skips generated JavaScript without Qwik imports', async () => {
+		const plugin = qwikClient();
+
+		callBuildStart(plugin, { cwd: '/workspace/app' });
+		const result = await callTransform(
+			plugin,
+			'globalThis.__qwik = {}; export const runtime = true;',
+			'/workspace/app/.nitro/vite/services/ssr/assets/qwik-core.js',
+		);
+
+		expect(result).toBeNull();
+		expect(optimizerMock.transformModules).not.toHaveBeenCalled();
 	});
 
 	test('replaces experimental globals in non-source Qwik modules', async () => {
@@ -161,20 +206,6 @@ describe('Rolldown optimizer transforms', () => {
 		);
 
 		expect(result).toEqual({ code: 'export const flags = [true, false];', map: null });
-		expect(optimizerMock.transformModules).not.toHaveBeenCalled();
-	});
-
-	test('skips non-Qwik node_modules source such as Nitro generated service chunks', async () => {
-		const plugin = qwikServer();
-
-		callBuildStart(plugin, { cwd: '/workspace/app' });
-		const result = await callTransform(
-			plugin,
-			'export const alreadyOptimized = true;',
-			'/workspace/app/node_modules/.nitro/vite/services/ssr/build/q-core.js',
-		);
-
-		expect(result).toBeNull();
 		expect(optimizerMock.transformModules).not.toHaveBeenCalled();
 	});
 
@@ -203,7 +234,11 @@ describe('Rolldown optimizer transforms', () => {
 		const plugin = qwikLib();
 
 		callBuildStart(plugin, { cwd: '/workspace/app' });
-		await callTransform(plugin, 'export default 1;', '/workspace/app/src/index.tsx');
+		await callTransform(
+			plugin,
+			"import { component$ } from '@qwik.dev/core'; export default 1;",
+			'/workspace/app/src/index.tsx',
+		);
 
 		expect(optimizerMock.transformModules).toHaveBeenCalledWith(
 			expect.objectContaining({

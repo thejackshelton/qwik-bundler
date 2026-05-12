@@ -73,6 +73,7 @@ export function callTransform(
 		{
 			emitFile: vi.fn(),
 			error: vi.fn(),
+			parse: vi.fn(parseImports),
 			warn: vi.fn(),
 			...context,
 		},
@@ -80,6 +81,16 @@ export function callTransform(
 		id,
 		undefined,
 	);
+}
+
+function parseImports(code: string) {
+	const body = [
+		...code.matchAll(/(?:import|export)\s+(?:[^'";]+\s+from\s+)?['"]([^'"]+)['"]/g),
+	].map((match) => ({
+		type: match[0].startsWith('import') ? 'ImportDeclaration' : 'ExportNamedDeclaration',
+		source: { value: match[1] },
+	}));
+	return { body };
 }
 
 export function callResolveId(

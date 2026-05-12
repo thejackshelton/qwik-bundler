@@ -1,5 +1,5 @@
 import type { CodeSplittingOptions, OutputOptions } from 'rolldown';
-import type { QwikEnvironment } from '../rolldown';
+import type { QwikEnvironment } from '../types';
 
 export const QWIK_BUILD = '@qwik.dev/core/build';
 export const Q_BUILD_DIR = 'build';

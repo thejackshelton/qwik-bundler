@@ -6,7 +6,7 @@
 import type { OutputBundle } from 'rolldown';
 import { joinURL } from 'ufo';
 import { Q_BUILD_PREFIX } from './chunking';
-import type { QwikManifest } from './manifest';
+import type { QwikManifest } from '../types';
 
 const MODULE_SCRIPT_TAG =
 	/<script\b(?=[^>]*\btype\s*=\s*(['"])module\1)[^>]*\bsrc\s*=\s*(['"])(.*?)\2[^>]*>/gi;

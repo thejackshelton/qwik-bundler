@@ -8,7 +8,7 @@ import type {
 	ViteDevServer,
 } from 'vite';
 import { QWIK_HMR_BRIDGE_SOURCE } from '../hmr/bridge';
-import type { QwikEnvironment } from '../rolldown';
+import type { QwikEnvironment } from '../types';
 
 export const QWIK_HMR_BRIDGE_ID = 'virtual:qwik-hmr-bridge';
 
@@ -47,11 +47,15 @@ export function createViteHmr(options: ViteHmrOptions) {
 			return id === RESOLVED_QWIK_HMR_BRIDGE_ID ? QWIK_HMR_BRIDGE_SOURCE : null;
 		},
 		hotUpdate(environment: DevEnvironment | undefined, ctx: HotUpdateOptions) {
-			if (environment?.name !== 'client' && environment?.name !== 'ssr') {
+			if (!environment) {
 				return undefined;
 			}
 
-			const env = environment.name === 'ssr' ? 'server' : 'client';
+			const env = environment.config.consumer;
+			if (env !== 'client' && env !== 'server') {
+				return undefined;
+			}
+
 			const hot = env === 'server' ? server?.environments?.client?.hot : environment.hot;
 			if (!hot?.send) {
 				return undefined;
@@ -63,6 +67,15 @@ export function createViteHmr(options: ViteHmrOptions) {
 			}
 
 			const files = changedFiles(ctx.modules ?? []);
+			const root = server?.config?.root;
+			if (ctx.file && SOURCE_FILE_EXTENSION.test(ctx.file)) {
+				const prefix = root && `${root}/`;
+				files.add(
+					prefix && ctx.file.startsWith(prefix)
+						? `/${ctx.file.slice(prefix.length)}`
+						: ctx.file,
+				);
+			}
 			if (!files.size) {
 				return undefined;
 			}
