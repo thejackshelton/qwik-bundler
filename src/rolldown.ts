@@ -2,7 +2,6 @@ import {
 	createOptimizer,
 	type Diagnostic,
 	type EntryStrategy,
-	type OptimizerOptions,
 	type SegmentAnalysis,
 	type TransformModule,
 } from '@qwik.dev/optimizer';
@@ -11,36 +10,35 @@ import type { Plugin, RolldownError, TransformPluginContext } from 'rolldown';
 import { isRelative, parsePath } from 'ufo';
 import { outputDefaults, Q_BUNDLE_GRAPH, Q_BUILD_PREFIX, QWIK_BUILD } from './build/chunking';
 import { injectQwikPreloaderTags } from './build/static-html';
-import { createQwikDev, type QwikDevServer } from './dev';
+import { createQwikDev } from './dev';
 import { comptimeConfig, replaceExperimental } from './features';
-import {
-	createManifest,
-	injectManifest,
-	Q_MANIFEST_FILE,
-	QWIK_MANIFEST,
-	type QwikManifest,
-	type ServerQwikManifest,
-} from './build/manifest';
-import type { BundleGraphAdder } from './build/bundle-graph';
+import { createManifest, injectManifest, Q_MANIFEST_FILE, QWIK_MANIFEST } from './build/manifest';
 import { qwikExternal } from './qwik-external';
+import type {
+	QwikEnvironment,
+	QwikManifest,
+	QwikRolldownOptions,
+	ServerQwikManifest,
+} from './types';
 
-export type QwikEnvironment = 'client' | 'server' | 'lib';
-
-export interface QwikRolldownOptions {
-	dev?: boolean;
-	devServer?: QwikDevServer;
-	entryStrategy?: EntryStrategy;
-	experimental?: string[];
-	hmr?: boolean;
-	bundleGraphAdders?: Set<BundleGraphAdder>;
-	manifestInput?: QwikManifest | ServerQwikManifest;
-	onManifest?: (manifest: QwikManifest) => void;
-	optimizerOptions?: OptimizerOptions;
-	rootDir?: string;
-}
+export type {
+	BundleGraphAdder,
+	GlobalInjections,
+	QwikAsset,
+	QwikBundle,
+	QwikBundleGraph,
+	QwikDevServer,
+	QwikEnvironment,
+	QwikManifest,
+	QwikRolldownOptions,
+	QwikSymbol,
+	ServerQwikManifest,
+} from './types';
 
 type TransformContext = Pick<TransformPluginContext, 'emitFile' | 'error' | 'warn'>;
 type Environment = QwikEnvironment | ((context: unknown) => QwikEnvironment);
+type ParseAst = TransformPluginContext['parse'];
+type ImportLikeNode = { type?: string; source?: { value?: unknown } };
 
 const QWIK_HANDLERS = '@qwik.dev/core/handlers.mjs';
 const QWIK_PRELOADER = '@qwik.dev/core/preloader';
@@ -50,6 +48,7 @@ const SEGMENT = '\0qwik:segment:';
 const JS_OR_TS_SOURCE_FILE = /\.[cm]?[jt]sx?$/;
 const QWIK_LIBRARY_SOURCE_FILE = /\.qwik\.[cm]?[jt]sx?$/;
 const QWIK_RUNTIME_MODULE = /[/\\]@qwik\.dev[/\\]core[/\\]/;
+const QWIK_PUBLIC_IMPORTS = ['@qwik.dev/core', '@builder.io/qwik'];
 const manifests = new Map<string, QwikManifest>();
 
 export const qwik = (options?: QwikRolldownOptions) => qwikClient(options);
@@ -221,7 +220,7 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 			const currentEnvironment = getEnvironment(this);
 			const path = pathname(id);
 			const replaced = replaceExperimental(code, currentEnvironment, options.experimental);
-			const optimize = shouldOptimize(path);
+			const optimize = shouldOptimize(replaced ?? code, path, this.parse);
 			const transformed = optimize
 				? await transform(replaced ?? code, path, this, currentEnvironment)
 				: null;
@@ -371,10 +370,42 @@ function createPluginError(id: string, message: string): RolldownError {
 	});
 }
 
-function shouldOptimize(path: string) {
+function shouldOptimize(code: string, path: string, parse: ParseAst) {
+	if (!JS_OR_TS_SOURCE_FILE.test(path)) return false;
 	if (QWIK_RUNTIME_MODULE.test(path)) return false;
 	if (QWIK_LIBRARY_SOURCE_FILE.test(path)) return true;
-	return JS_OR_TS_SOURCE_FILE.test(path);
+	return importsQwik(code, parse);
+}
+
+function importsQwik(code: string, parse: ParseAst) {
+	let ast: { body?: ImportLikeNode[] };
+	try {
+		ast = parse(code) as { body?: ImportLikeNode[] };
+	} catch {
+		return false;
+	}
+
+	for (const node of ast.body ?? []) {
+		if (!isImportNode(node.type)) continue;
+
+		const source = node.source?.value;
+		if (typeof source === 'string' && isQwikPublicImport(source)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+function isImportNode(type: string | undefined) {
+	return (
+		type === 'ImportDeclaration' ||
+		type === 'ExportNamedDeclaration' ||
+		type === 'ExportAllDeclaration'
+	);
+}
+
+function isQwikPublicImport(source: string) {
+	return QWIK_PUBLIC_IMPORTS.some((id) => source === id || source.startsWith(`${id}/`));
 }
 
 function entryStrategy(environment: QwikEnvironment, value: EntryStrategy | undefined) {

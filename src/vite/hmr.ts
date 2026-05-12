@@ -8,7 +8,7 @@ import type {
 	ViteDevServer,
 } from 'vite';
 import { QWIK_HMR_BRIDGE_SOURCE } from '../hmr/bridge';
-import type { QwikEnvironment } from '../rolldown';
+import type { QwikEnvironment } from '../types';
 
 export const QWIK_HMR_BRIDGE_ID = 'virtual:qwik-hmr-bridge';
 
@@ -47,7 +47,11 @@ export function createViteHmr(options: ViteHmrOptions) {
 			return id === RESOLVED_QWIK_HMR_BRIDGE_ID ? QWIK_HMR_BRIDGE_SOURCE : null;
 		},
 		hotUpdate(environment: DevEnvironment | undefined, ctx: HotUpdateOptions) {
-			const env = environment?.config?.consumer;
+			if (!environment) {
+				return undefined;
+			}
+
+			const env = environment.config.consumer;
 			if (env !== 'client' && env !== 'server') {
 				return undefined;
 			}

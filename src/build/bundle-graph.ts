@@ -1,12 +1,8 @@
 import { defDGraph } from '@thi.ng/dgraph';
-import type { QwikBundle, QwikManifest } from './manifest';
+import type { BundleGraphAdder, QwikBundle, QwikBundleGraph, QwikManifest } from '../types';
 
-export type QwikBundleGraph = Array<string | number>;
 type BundleGraphEdge = [string, string | null];
 type BundleGraphRecord = Partial<QwikBundle>;
-export type BundleGraphAdder = (
-	manifest: QwikManifest,
-) => Record<string, { imports?: string[]; dynamicImports?: string[] }> | undefined;
 
 export function convertManifestToBundleGraph(
 	manifest: QwikManifest,
@@ -28,7 +24,9 @@ export function convertManifestToBundleGraph(
 		.map((name) => {
 			const dynamicImports = graph[name]?.dynamicImports ?? [];
 			const deps: Array<string | number> = [...reduced.immediateDependencies(name)].sort();
-			if (dynamicImports.length > 0) deps.push(-5, ...dynamicImports);
+			for (const dep of dynamicImports.sort()) {
+				deps.push(dynamicImportMarker(graph[dep]), dep);
+			}
 			return [name, deps] as const;
 		});
 	const indexes = new Map<string, number>();
@@ -110,6 +108,11 @@ function isSymbolGraphNode(bundle: BundleGraphRecord) {
 
 function hasQwikSymbols(dep: string, graph: Record<string, BundleGraphRecord>) {
 	return !!graph[dep]?.symbols;
+}
+
+function dynamicImportMarker(bundle: BundleGraphRecord | undefined) {
+	const probability = Math.min(0.5 + (bundle?.interactivity ?? 0) * 0.08, 0.99);
+	return -Math.round(probability * 10);
 }
 
 function* bundleGraphEdges(graph: Record<string, BundleGraphRecord>): Generator<BundleGraphEdge> {

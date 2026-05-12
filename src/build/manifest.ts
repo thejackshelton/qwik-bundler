@@ -1,61 +1,14 @@
 import type { SegmentAnalysis } from '@qwik.dev/optimizer';
 import { relative } from 'pathe';
 import type { OutputBundle, OutputChunk } from 'rolldown';
-import {
-	convertManifestToBundleGraph,
-	type BundleGraphAdder,
-	type QwikBundleGraph,
-} from './bundle-graph';
-
-export interface QwikManifest {
-	manifestHash: string;
-	symbols: Record<string, QwikSymbol>;
-	mapping: Record<string, string>;
-	bundles: Record<string, QwikBundle>;
-	assets?: Record<string, QwikAsset>;
-	bundleGraph?: QwikBundleGraph;
-	bundleGraphAsset?: string;
-	preloader?: string;
-	core?: string;
-	qwikLoader?: string;
-	injections?: GlobalInjections[];
-	version: string;
-}
-
-export type ServerQwikManifest = Pick<
+import type {
+	BundleGraphAdder,
+	QwikBundle,
 	QwikManifest,
-	| 'manifestHash'
-	| 'injections'
-	| 'bundleGraph'
-	| 'bundleGraphAsset'
-	| 'mapping'
-	| 'preloader'
-	| 'core'
-	| 'qwikLoader'
->;
-
-export type QwikSymbol = Partial<SegmentAnalysis> & {
-	origin: string;
-	displayName: string;
-	hash: string;
-};
-
-export interface QwikBundle {
-	size: number;
-	total: number;
-	symbols?: string[];
-	imports?: string[];
-	dynamicImports?: string[];
-	origins?: string[];
-}
-
-export type QwikAsset = { name: string | undefined; size: number };
-
-export type GlobalInjections = {
-	tag: string;
-	attributes?: Record<string, string>;
-	location: 'head' | 'body';
-};
+	QwikSymbol,
+	ServerQwikManifest,
+} from '../types';
+import { convertManifestToBundleGraph } from './bundle-graph';
 
 export const QWIK_MANIFEST = 'globalThis.__QWIK_MANIFEST__';
 export const Q_MANIFEST_FILE = 'q-manifest.json';
@@ -81,6 +34,19 @@ const CORE_RE = /[/\\](core|qwik)[/\\]dist[/\\]core(\.min|\.prod)?\.(|c|m)js$/;
 const QWIK_LOADER_RE = /[/\\](core|qwik)[/\\](dist[/\\])?qwikloader(\.debug)?\.[^/\\]*js$/;
 const QWIK_LIBRARY_MODULE_RE = /\.qwik\.mjs$/;
 const LIBRARY_QRL_SYMBOL_RE = /["']([A-Za-z_$][\w$.-]*_[A-Za-z0-9_-]{8,})["']/g;
+const FUNCTION_INTERACTIVITY: Record<string, number> = {
+	component$: 2,
+	useStyles$: 2,
+	useStylesScoped$: 2,
+	useAsync$: 3,
+	useComputed$: 3,
+	useResource$: 3,
+	useTask$: 3,
+	useVisibleTask$: 3,
+	useOn: 3,
+	useOnDocument: 3,
+	useOnWindow: 3,
+};
 const RUNTIME_BUNDLES = [
 	['preloader', 'preloader', PRELOADER_RE],
 	['core', 'core', CORE_RE],
@@ -115,7 +81,7 @@ export function createManifest(
 			}
 
 			manifest.assets![item.fileName] = {
-				name: item.names[0] ?? item.name,
+				name: item.names[0],
 				size: item.source.length,
 			};
 			continue;
@@ -177,6 +143,13 @@ export function createManifest(
 		symbols.push(symbolName);
 		manifest.symbols[symbolName] = segment;
 	}
+	for (const qwikBundle of Object.values(manifest.bundles)) {
+		const interactivity = getBundleInteractivity(qwikBundle, manifest);
+		if (interactivity > 0) {
+			qwikBundle.interactivity = interactivity;
+		}
+	}
+	computeTotals(manifest.bundles);
 
 	if (manifest.core) {
 		for (const symbol of HANDLERS) {
@@ -283,6 +256,40 @@ function filterRuntimeImports(manifest: QwikManifest) {
 		if (bundle.imports.length === 0) {
 			delete bundle.imports;
 		}
+	}
+}
+
+function getBundleInteractivity(bundle: QwikBundle, manifest: QwikManifest) {
+	let maxScore = 0;
+	for (const symbolName of bundle.symbols ?? []) {
+		const symbol = manifest.symbols[symbolName];
+		let score = 0;
+		if (symbol?.ctxKind === 'eventHandler') {
+			score = 5;
+		} else if (symbol?.ctxKind === 'function') {
+			score = symbol.ctxName ? (FUNCTION_INTERACTIVITY[symbol.ctxName] ?? 1) : 1;
+		} else if (symbol) {
+			score = 1;
+		}
+		maxScore = Math.max(maxScore, score);
+	}
+	return maxScore;
+}
+
+function computeTotals(bundles: Record<string, QwikBundle>) {
+	const collect = (name: string, seen: Set<string>) => {
+		const bundle = bundles[name];
+		if (!bundle || seen.has(name)) return;
+		seen.add(name);
+		for (const dep of bundle.imports ?? []) {
+			collect(dep, seen);
+		}
+	};
+
+	for (const name of Object.keys(bundles)) {
+		const seen = new Set<string>();
+		collect(name, seen);
+		bundles[name]!.total = [...seen].reduce((sum, dep) => sum + (bundles[dep]?.size ?? 0), 0);
 	}
 }
 

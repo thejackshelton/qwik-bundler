@@ -3,12 +3,7 @@ import { dirname, normalize, relative, resolve } from 'pathe';
 import type { PluginContext } from 'rolldown';
 import { isEqual, isRelative, parsePath, withLeadingSlash } from 'ufo';
 import { makeConstPropsDiffable } from './hmr/optimizer';
-import type { QwikEnvironment } from './rolldown';
-
-export interface QwikDevServer {
-	environments?: Record<string, { transformRequest: (url: string) => Promise<unknown> }>;
-	transformRequest: (url: string) => Promise<unknown>;
-}
+import type { QwikDevServer, QwikEnvironment } from './types';
 
 type EncodeSegment = (environment: QwikEnvironment, path: string) => string;
 

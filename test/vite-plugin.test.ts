@@ -1,6 +1,6 @@
 import { createOptimizer } from '@qwik.dev/optimizer';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
-import type { QwikManifest } from '../src/build/manifest';
+import type { QwikManifest } from '../src/types';
 import { qwik } from '../src/vite/index';
 import {
 	callConfigResolved,
@@ -70,7 +70,7 @@ describe('Vite plugin hooks', () => {
 		});
 		const result = await callTransform(
 			plugin,
-			'export default 1;',
+			"import { component$ } from '@qwik.dev/core'; export default 1;",
 			'/workspace/app/src/root.tsx',
 			createViteHookContext(),
 		);
@@ -98,7 +98,7 @@ describe('Vite plugin hooks', () => {
 		});
 		await callTransform(
 			plugin,
-			'export default 1;',
+			"import { renderToString } from '@qwik.dev/core/server'; export default 1;",
 			'/workspace/app/src/root.tsx',
 			createViteHookContext('server'),
 		);
@@ -126,7 +126,7 @@ describe('Vite plugin hooks', () => {
 		});
 		await callTransform(
 			plugin,
-			'export default 1;',
+			"import { component$ } from '@qwik.dev/core'; export default 1;",
 			'/workspace/app/src/root.tsx',
 			createViteHookContext(),
 		);
@@ -152,7 +152,7 @@ describe('Vite plugin hooks', () => {
 		});
 		await callTransform(
 			plugin,
-			'export default 1;',
+			"import { component$ } from '@qwik.dev/core'; export default 1;",
 			'/workspace/app/src/root.tsx',
 			createViteHookContext('client', { lib: { entry: 'src/index.tsx' } }),
 		);
@@ -214,7 +214,7 @@ describe('Vite plugin hooks', () => {
 		});
 		await callTransform(
 			plugin,
-			'source',
+			"import { component$ } from '@qwik.dev/core';",
 			'/workspace/app/src/root.tsx',
 			createViteHookContext(),
 		);
