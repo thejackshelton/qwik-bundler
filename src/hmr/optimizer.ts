@@ -50,6 +50,6 @@ function jsxSortedHmrShim(moduleSource: string) {
 	return (
 		`import { _jsxSplit as __qwikHmrJsxSplit } from ${moduleSource};\n` +
 		'const _jsxSorted=(type,varProps,constProps,children,flags,key,dev)=>' +
-		'__qwikHmrJsxSplit(type,{...constProps,...varProps},null,children,flags,key,dev);'
+		'__qwikHmrJsxSplit(type,{...constProps,...varProps},null,children,flags,key??(dev&&((s)=>s?`${dev.fileName}:${dev.lineNumber}:${dev.columnNumber}:${s}`:null)(Array.isArray(children)?children.filter((c)=>typeof c==="string").join("|"):typeof children==="string"?children:"")),dev);'
 	);
 }

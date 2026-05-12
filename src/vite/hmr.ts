@@ -47,11 +47,11 @@ export function createViteHmr(options: ViteHmrOptions) {
 			return id === RESOLVED_QWIK_HMR_BRIDGE_ID ? QWIK_HMR_BRIDGE_SOURCE : null;
 		},
 		hotUpdate(environment: DevEnvironment | undefined, ctx: HotUpdateOptions) {
-			if (environment?.name !== 'client' && environment?.name !== 'ssr') {
+			const env = environment?.config?.consumer;
+			if (env !== 'client' && env !== 'server') {
 				return undefined;
 			}
 
-			const env = environment.name === 'ssr' ? 'server' : 'client';
 			const hot = env === 'server' ? server?.environments?.client?.hot : environment.hot;
 			if (!hot?.send) {
 				return undefined;
@@ -63,6 +63,15 @@ export function createViteHmr(options: ViteHmrOptions) {
 			}
 
 			const files = changedFiles(ctx.modules ?? []);
+			const root = server?.config?.root;
+			if (ctx.file && SOURCE_FILE_EXTENSION.test(ctx.file)) {
+				const prefix = root && `${root}/`;
+				files.add(
+					prefix && ctx.file.startsWith(prefix)
+						? `/${ctx.file.slice(prefix.length)}`
+						: ctx.file,
+				);
+			}
 			if (!files.size) {
 				return undefined;
 			}

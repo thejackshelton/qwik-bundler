@@ -177,6 +177,7 @@ describe('Vite Qwik HMR transport', () => {
 		const server = { environments: { client: { hot: { send: clientSend } } } };
 		const environment = {
 			name: 'ssr',
+			config: { consumer: 'server' },
 			moduleGraph: { getModuleById, invalidateModule },
 			hot: { send: ssrSend },
 		};
@@ -217,6 +218,7 @@ describe('Vite Qwik HMR transport', () => {
 		const server = { environments: { client: { hot: { send: clientSend } } } };
 		const environment = {
 			name: 'ssr',
+			config: { consumer: 'server' },
 			moduleGraph: { getModuleById: vi.fn(), invalidateModule: vi.fn() },
 			hot: { send: vi.fn() },
 		};
@@ -261,6 +263,7 @@ describe('Vite Qwik HMR transport', () => {
 		const send = vi.fn();
 		const environment = {
 			name: 'client',
+			config: { consumer: 'client' },
 			moduleGraph: { getModuleById: vi.fn(), invalidateModule: vi.fn() },
 			hot: { send },
 		};
@@ -290,6 +293,7 @@ describe('Vite Qwik HMR transport', () => {
 		const send = vi.fn();
 		const environment = {
 			name: 'client',
+			config: { consumer: 'client' },
 			moduleGraph: { getModuleById: vi.fn(), invalidateModule: vi.fn() },
 			hot: { send },
 		};
@@ -322,6 +326,7 @@ describe('Vite Qwik HMR transport', () => {
 		const server = { environments: { client: { hot: { send: clientSend } } } };
 		const environment = {
 			name: 'ssr',
+			config: { consumer: 'server' },
 			moduleGraph: { getModuleById: vi.fn(), invalidateModule: vi.fn() },
 			hot: { send: ssrSend },
 		};
@@ -356,6 +361,7 @@ describe('Vite Qwik HMR transport', () => {
 		const send = vi.fn();
 		const environment = {
 			name: 'client',
+			config: { consumer: 'client' },
 			moduleGraph: { getModuleById, invalidateModule },
 			hot: { send },
 		};
@@ -396,6 +402,7 @@ describe('Vite Qwik HMR transport', () => {
 		const invalidateDevSegments = vi.fn().mockReturnValue([]);
 		const environment = {
 			name: 'client',
+			config: { consumer: 'client' },
 			moduleGraph: { getModuleById: vi.fn(), invalidateModule: vi.fn() },
 		};
 
@@ -421,6 +428,7 @@ describe('Vite Qwik HMR transport', () => {
 		const send = vi.fn();
 		const environment = {
 			name: 'client',
+			config: { consumer: 'client' },
 			moduleGraph: { getModuleById: vi.fn(), invalidateModule: vi.fn() },
 			hot: { send },
 		};
