@@ -125,7 +125,7 @@ describe('Qwik manifest output', () => {
 					fileName: 'build/q-handlers.js',
 					name: 'handlers',
 					code: 'export const _run = 1;',
-					exports: ['_run'],
+					exports: ['_run', '_reR'],
 					imports: ['build/q-core.js'],
 					dynamicImports: [],
 					moduleIds: ['/workspace/app/node_modules/@qwik.dev/core/handlers.mjs'],
@@ -152,6 +152,7 @@ describe('Qwik manifest output', () => {
 		expect(manifest?.mapping.s_abc).toBe('q-symbol.js');
 		expect(manifest?.mapping._chk).toBe('q-core.js');
 		expect(manifest?.mapping._run).toBe('q-handlers.js');
+		expect(manifest?.mapping._reR).toBe('q-handlers.js');
 		expect(manifest?.symbols.s_abc).toMatchObject({ displayName: 'root.tsx_root_component' });
 		expect(manifest?.bundles['q-entry.js']).toMatchObject({
 			imports: ['q-symbol.js'],
@@ -303,6 +304,67 @@ describe('Qwik manifest output', () => {
 		expect(() => convertManifestToBundleGraph(manifest)).toThrow(/Circular dependency/);
 	});
 
+	test('applies bundle graph adders for route and insights preload entries', () => {
+		const manifest = {
+			bundles: {
+				'q-entry.js': { size: 100, total: 100 },
+				'q-route.js': { size: 50, total: 50, symbols: ['Route_component_abc12345'] },
+			},
+			mapping: { Route_component_abc12345: 'q-route.js' },
+			symbols: {},
+			manifestHash: '',
+			version: '1',
+		} as QwikManifest;
+
+		const graph = (convertManifestToBundleGraph as any)(
+			manifest,
+			new Set([() => ({ '/dashboard/': { dynamicImports: ['q-route.js'] } })]),
+		);
+
+		expect(graphDynamicDeps(graph, '/dashboard/')).toEqual(['q-route.js']);
+	});
+
+	test('filters non-Qwik dynamic imports from bundle graph nodes', () => {
+		const manifest = {
+			bundles: {
+				'q-entry.js': {
+					size: 100,
+					total: 100,
+					dynamicImports: ['q-symbol.js', 'q-source.js', 'q-language.js'],
+				},
+				'q-symbol.js': { size: 50, total: 50, symbols: ['Symbol_component_abc12345'] },
+				'q-source.js': { size: 50, total: 50, origins: ['src/entry.tsx'] },
+				'q-language.js': { size: 50, total: 50, origins: ['node_modules/shiki/lang.js'] },
+			},
+			mapping: {},
+			symbols: {},
+			manifestHash: '',
+			version: '1',
+		} as QwikManifest;
+
+		const graph = convertManifestToBundleGraph(manifest);
+
+		expect(graphDynamicDeps(graph, 'q-entry.js')).toEqual(['q-symbol.js']);
+	});
+
+	test('removes isolated unused bundles from the bundle graph', () => {
+		const manifest = {
+			bundles: {
+				'q-entry.js': { size: 100, total: 100, imports: ['q-used.js'] },
+				'q-used.js': { size: 50, total: 50 },
+				'q-unused.js': { size: 50, total: 50 },
+			},
+			mapping: {},
+			symbols: {},
+			manifestHash: '',
+			version: '1',
+		} as QwikManifest;
+
+		const graph = convertManifestToBundleGraph(manifest);
+
+		expect(graph).not.toContain('q-unused.js');
+	});
+
 	test('warns when server manifest injection has no manifest available', async () => {
 		const plugin = qwikServer();
 		const warn = vi.fn();
@@ -396,6 +458,29 @@ function graphDeps(graph: QwikBundleGraph, nodeName: string) {
 		if (typeof dep === 'string') {
 			deps.push(dep);
 		}
+	}
+	return deps;
+}
+
+function graphDynamicDeps(graph: QwikBundleGraph, nodeName: string) {
+	const nodeIndex = graph.indexOf(nodeName);
+	if (nodeIndex < 0) {
+		throw new Error(`Expected graph node ${nodeName}`);
+	}
+
+	const deps: string[] = [];
+	let dynamic = false;
+	for (let index = nodeIndex + 1; index < graph.length; index++) {
+		const value = graph[index];
+		if (typeof value === 'string') break;
+		if (typeof value !== 'number') continue;
+		if (value < 0) {
+			dynamic = true;
+			continue;
+		}
+		if (!dynamic) continue;
+		const dep = graph[value];
+		if (typeof dep === 'string') deps.push(dep);
 	}
 	return deps;
 }

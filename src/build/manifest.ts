@@ -1,7 +1,11 @@
 import type { SegmentAnalysis } from '@qwik.dev/optimizer';
 import { relative } from 'pathe';
 import type { OutputBundle, OutputChunk } from 'rolldown';
-import { convertManifestToBundleGraph, type QwikBundleGraph } from './bundle-graph';
+import {
+	convertManifestToBundleGraph,
+	type BundleGraphAdder,
+	type QwikBundleGraph,
+} from './bundle-graph';
 
 export interface QwikManifest {
 	manifestHash: string;
@@ -56,7 +60,21 @@ export type GlobalInjections = {
 export const QWIK_MANIFEST = 'globalThis.__QWIK_MANIFEST__';
 export const Q_MANIFEST_FILE = 'q-manifest.json';
 
-const HANDLERS = ['_chk', '_rsc', '_res', '_run', '_task', '_val', '_eaC', '_eaT', '_suC', '_suT'];
+const HANDLERS = [
+	'_chk',
+	'_rsc',
+	'_res',
+	'_run',
+	'_task',
+	'_val',
+	'_eaC',
+	'_eaT',
+	'_suC',
+	'_suT',
+	'_reR',
+	'_reC',
+	'_reT',
+];
 const HANDLER_SET = new Set(HANDLERS);
 const PRELOADER_RE = /[/\\](core|qwik)[/\\]dist[/\\]preloader\.(|c|m)js$/;
 const CORE_RE = /[/\\](core|qwik)[/\\]dist[/\\]core(\.min|\.prod)?\.(|c|m)js$/;
@@ -75,6 +93,7 @@ export function createManifest(
 	root: string | undefined,
 	options: {
 		bundleGraphAsset?: string;
+		bundleGraphAdders?: Set<BundleGraphAdder>;
 		canonPath?: (fileName: string) => string;
 	} = {},
 ) {
@@ -169,7 +188,7 @@ export function createManifest(
 	sortManifest(manifest);
 
 	if (options.bundleGraphAsset) {
-		manifest.bundleGraph = convertManifestToBundleGraph(manifest);
+		manifest.bundleGraph = convertManifestToBundleGraph(manifest, options.bundleGraphAdders);
 		manifest.bundleGraphAsset = options.bundleGraphAsset;
 		manifest.assets![options.bundleGraphAsset] = {
 			name: 'bundle-graph.json',

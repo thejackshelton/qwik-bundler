@@ -9,6 +9,7 @@ import type {
 	ViteDevServer,
 } from 'vite';
 import type { OutputOptions } from 'rolldown';
+import type { BundleGraphAdder } from '../build/bundle-graph';
 import { outputDefaults } from '../build/chunking';
 import type { QwikManifest } from '../build/manifest';
 import {
@@ -28,7 +29,9 @@ const QWIK_SKIP_DUPLICATE_CLIENT_BUILD = Symbol('qwik-skip-duplicate-client-buil
 
 export function qwik(options: VitePluginOptions = {}): Plugin[] {
 	let manifest: QwikManifest | null = null;
+	const bundleGraphAdders = new Set<BundleGraphAdder>();
 	const rolldownOptions = { ...options };
+	rolldownOptions.bundleGraphAdders = bundleGraphAdders;
 	rolldownOptions.onManifest = (nextManifest) => {
 		manifest = nextManifest;
 		options.onManifest?.(nextManifest);
@@ -52,6 +55,7 @@ export function qwik(options: VitePluginOptions = {}): Plugin[] {
 		api: {
 			...(basePlugin.api as QwikPluginApi),
 			getManifest: () => manifest,
+			registerBundleGraphAdder: (adder: BundleGraphAdder) => bundleGraphAdders.add(adder),
 		},
 		...external,
 		configResolved(resolvedConfig) {
@@ -177,6 +181,7 @@ function emptyConfig(config: EnvironmentOptions) {
 type QwikPluginApi = {
 	invalidateDevSegments: (parent: string, environment?: QwikEnvironment) => string[];
 	getManifest?: () => QwikManifest | null;
+	registerBundleGraphAdder?: (adder: BundleGraphAdder) => void;
 };
 
 function getBuildEnvironment(context: unknown): QwikEnvironment {

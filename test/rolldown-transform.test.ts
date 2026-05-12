@@ -151,6 +151,19 @@ describe('Rolldown optimizer transforms', () => {
 		);
 	});
 
+	test('optimizes plain JavaScript source files', async () => {
+		const plugin = qwikClient();
+
+		callBuildStart(plugin, { cwd: '/workspace/app' });
+		await callTransform(plugin, 'export const value = 1;', '/workspace/app/src/component.js');
+
+		expect(optimizerMock.transformModules).toHaveBeenCalledWith(
+			expect.objectContaining({
+				input: [expect.objectContaining({ path: '/workspace/app/src/component.js' })],
+			}),
+		);
+	});
+
 	test('replaces experimental globals in non-source Qwik modules', async () => {
 		const plugin = qwikClient({ experimental: ['suspense'] });
 
@@ -161,20 +174,6 @@ describe('Rolldown optimizer transforms', () => {
 		);
 
 		expect(result).toEqual({ code: 'export const flags = [true, false];', map: null });
-		expect(optimizerMock.transformModules).not.toHaveBeenCalled();
-	});
-
-	test('skips non-Qwik node_modules source such as Nitro generated service chunks', async () => {
-		const plugin = qwikServer();
-
-		callBuildStart(plugin, { cwd: '/workspace/app' });
-		const result = await callTransform(
-			plugin,
-			'export const alreadyOptimized = true;',
-			'/workspace/app/node_modules/.nitro/vite/services/ssr/build/q-core.js',
-		);
-
-		expect(result).toBeNull();
 		expect(optimizerMock.transformModules).not.toHaveBeenCalled();
 	});
 

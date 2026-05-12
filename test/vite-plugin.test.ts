@@ -47,11 +47,15 @@ beforeEach(() => {
 describe('Vite plugin hooks', () => {
 	test('exposes the Vite plugin identity expected by Qwik Router', () => {
 		const plugin = getQwikPlugin() as ReturnType<typeof getQwikPlugin> & {
-			api?: { getManifest?: () => QwikManifest | null };
+			api?: {
+				getManifest?: () => QwikManifest | null;
+				registerBundleGraphAdder?: (adder: () => Record<string, never>) => void;
+			};
 		};
 
 		expect(plugin.name).toBe('vite-plugin-qwik');
 		expect(plugin.api?.getManifest?.()).toBe(null);
+		expect(plugin.api?.registerBundleGraphAdder).toEqual(expect.any(Function));
 	});
 
 	test('uses Vite config root for optimizer paths', async () => {

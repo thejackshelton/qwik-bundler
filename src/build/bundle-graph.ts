@@ -3,9 +3,16 @@ import type { QwikBundle, QwikManifest } from './manifest';
 
 export type QwikBundleGraph = Array<string | number>;
 type BundleGraphEdge = [string, string | null];
+type BundleGraphRecord = Partial<QwikBundle>;
+export type BundleGraphAdder = (
+	manifest: QwikManifest,
+) => Record<string, { imports?: string[]; dynamicImports?: string[] }> | undefined;
 
-export function convertManifestToBundleGraph(manifest: QwikManifest): QwikBundleGraph {
-	const graph = bundleGraphRecords(manifest);
+export function convertManifestToBundleGraph(
+	manifest: QwikManifest,
+	bundleGraphAdders?: Set<BundleGraphAdder>,
+): QwikBundleGraph {
+	const graph = bundleGraphRecords(manifest, bundleGraphAdders);
 	const dag = defDGraph(bundleGraphEdges(graph));
 	const reduced = dag.copy();
 	for (const name of dag.nodes()) {
@@ -36,8 +43,8 @@ export function convertManifestToBundleGraph(manifest: QwikManifest): QwikBundle
 	]);
 }
 
-function bundleGraphRecords(manifest: QwikManifest) {
-	const graph: Record<string, QwikBundle> = { ...manifest.bundles };
+function bundleGraphRecords(manifest: QwikManifest, bundleGraphAdders?: Set<BundleGraphAdder>) {
+	const graph: Record<string, BundleGraphRecord> = { ...manifest.bundles };
 	for (const [symbol, bundleName] of Object.entries(manifest.mapping)) {
 		if (manifest.symbols[symbol]?.ctxKind === 'eventHandler' && manifest.mapping._run) {
 			const bundle = graph[bundleName];
@@ -64,6 +71,12 @@ function bundleGraphRecords(manifest: QwikManifest) {
 			};
 		}
 	}
+	if (bundleGraphAdders) {
+		const combined = { ...manifest, bundles: graph as QwikManifest['bundles'] };
+		for (const add of bundleGraphAdders) {
+			Object.assign(graph, add(combined));
+		}
+	}
 
 	for (const bundleName of Object.keys(graph)) {
 		const qwikBundle = graph[bundleName];
@@ -72,13 +85,34 @@ function bundleGraphRecords(manifest: QwikManifest) {
 		graph[bundleName] = {
 			...qwikBundle,
 			imports: qwikBundle.imports?.filter((dep) => graph[dep]) ?? [],
-			dynamicImports: qwikBundle.dynamicImports?.filter((dep) => graph[dep]) ?? [],
+			dynamicImports:
+				qwikBundle.dynamicImports?.filter(
+					(dep) => isSymbolGraphNode(qwikBundle) || hasQwikSymbols(dep, graph),
+				) ?? [],
 		};
+	}
+	const used = new Set<string>();
+	for (const bundle of Object.values(graph)) {
+		for (const dep of bundle.imports ?? []) used.add(dep);
+		for (const dep of bundle.dynamicImports ?? []) used.add(dep);
+	}
+	for (const [bundleName, bundle] of Object.entries(graph)) {
+		if (!used.has(bundleName) && !bundle.imports?.length && !bundle.dynamicImports?.length) {
+			delete graph[bundleName];
+		}
 	}
 	return graph;
 }
 
-function* bundleGraphEdges(graph: Record<string, QwikBundle>): Generator<BundleGraphEdge> {
+function isSymbolGraphNode(bundle: BundleGraphRecord) {
+	return bundle.size === 0 && bundle.total === 0 && bundle.dynamicImports?.length === 1;
+}
+
+function hasQwikSymbols(dep: string, graph: Record<string, BundleGraphRecord>) {
+	return !!graph[dep]?.symbols;
+}
+
+function* bundleGraphEdges(graph: Record<string, BundleGraphRecord>): Generator<BundleGraphEdge> {
 	for (const [bundleName, bundle] of Object.entries(graph)) {
 		yield [bundleName, null];
 		for (const dep of bundle.imports ?? []) {

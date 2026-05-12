@@ -6,7 +6,7 @@ import {
 	type SegmentAnalysis,
 	type TransformModule,
 } from '@qwik.dev/optimizer';
-import { dirname, normalize, resolve } from 'pathe';
+import { dirname, resolve } from 'pathe';
 import type { Plugin, RolldownError, TransformPluginContext } from 'rolldown';
 import { isRelative, parsePath } from 'ufo';
 import { outputDefaults, Q_BUNDLE_GRAPH, Q_BUILD_PREFIX, QWIK_BUILD } from './build/chunking';
@@ -21,6 +21,7 @@ import {
 	type QwikManifest,
 	type ServerQwikManifest,
 } from './build/manifest';
+import type { BundleGraphAdder } from './build/bundle-graph';
 import { qwikExternal } from './qwik-external';
 
 export type QwikEnvironment = 'client' | 'server' | 'lib';
@@ -31,6 +32,7 @@ export interface QwikRolldownOptions {
 	entryStrategy?: EntryStrategy;
 	experimental?: string[];
 	hmr?: boolean;
+	bundleGraphAdders?: Set<BundleGraphAdder>;
 	manifestInput?: QwikManifest | ServerQwikManifest;
 	onManifest?: (manifest: QwikManifest) => void;
 	optimizerOptions?: OptimizerOptions;
@@ -47,6 +49,7 @@ const QWIK_PRELOADER_ENTRY = 'qwik:preloader';
 const SEGMENT = '\0qwik:segment:';
 const JS_OR_TS_SOURCE_FILE = /\.[cm]?[jt]sx?$/;
 const QWIK_LIBRARY_SOURCE_FILE = /\.qwik\.[cm]?[jt]sx?$/;
+const QWIK_RUNTIME_MODULE = /[/\\]@qwik\.dev[/\\]core[/\\]/;
 const manifests = new Map<string, QwikManifest>();
 
 export const qwik = (options?: QwikRolldownOptions) => qwikClient(options);
@@ -218,10 +221,7 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 			const currentEnvironment = getEnvironment(this);
 			const path = pathname(id);
 			const replaced = replaceExperimental(code, currentEnvironment, options.experimental);
-			const optimize =
-				JS_OR_TS_SOURCE_FILE.test(path) &&
-				(!normalize(path).includes('/node_modules/') ||
-					QWIK_LIBRARY_SOURCE_FILE.test(path));
+			const optimize = shouldOptimize(path);
 			const transformed = optimize
 				? await transform(replaced ?? code, path, this, currentEnvironment)
 				: null;
@@ -260,6 +260,7 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 
 				const clientManifest = createManifest(bundle, symbols, getRoot(), {
 					bundleGraphAsset: Q_BUNDLE_GRAPH,
+					bundleGraphAdders: options.bundleGraphAdders,
 					canonPath: stripBuildPrefix,
 				});
 				manifest = clientManifest;
@@ -368,6 +369,12 @@ function createPluginError(id: string, message: string): RolldownError {
 		plugin: 'qwik',
 		stack: '',
 	});
+}
+
+function shouldOptimize(path: string) {
+	if (QWIK_RUNTIME_MODULE.test(path)) return false;
+	if (QWIK_LIBRARY_SOURCE_FILE.test(path)) return true;
+	return JS_OR_TS_SOURCE_FILE.test(path);
 }
 
 function entryStrategy(environment: QwikEnvironment, value: EntryStrategy | undefined) {
