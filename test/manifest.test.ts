@@ -176,6 +176,60 @@ describe('Qwik manifest output', () => {
 		);
 	});
 
+	test('detects Qwik runtime bundles without a project package.json root', () => {
+		const manifest = createManifest(
+			{
+				'build/q-entry.js': {
+					type: 'chunk',
+					fileName: 'build/q-entry.js',
+					name: 'entry',
+					code: 'export const entry = 1;',
+					exports: ['entry'],
+					imports: ['build/q-core.js', 'build/q-preloader.js'],
+					dynamicImports: [],
+					moduleIds: ['/deno/app/src/main.tsx'],
+					facadeModuleId: '/deno/app/src/main.tsx',
+				},
+				'build/q-core.js': {
+					type: 'chunk',
+					fileName: 'build/q-core.js',
+					name: 'qwik-core',
+					code: 'export const _chk = 1; export const _run = 1;',
+					exports: ['_chk', '_run'],
+					imports: [],
+					dynamicImports: [],
+					moduleIds: [
+						'/deno/npm/@qwik.dev/core/dist/core.prod.mjs',
+						'/deno/npm/@qwik.dev/core/handlers.mjs',
+					],
+					facadeModuleId: '/deno/npm/@qwik.dev/core/dist/core.prod.mjs',
+				},
+				'build/q-preloader.js': {
+					type: 'chunk',
+					fileName: 'build/q-preloader.js',
+					name: 'preloader',
+					code: 'export const l = () => {};',
+					exports: ['l'],
+					imports: [],
+					dynamicImports: [],
+					moduleIds: ['/deno/npm/@qwik.dev/core/dist/preloader.mjs'],
+					facadeModuleId: '/deno/npm/@qwik.dev/core/dist/preloader.mjs',
+				},
+			} as never,
+			new Map(),
+			undefined,
+		);
+
+		expect(manifest.core).toBe('build/q-core.js');
+		expect(manifest.preloader).toBe('build/q-preloader.js');
+		expect(manifest.mapping._chk).toBe('build/q-core.js');
+		expect(manifest.mapping._run).toBe('build/q-core.js');
+		expect(manifest.bundles['build/q-core.js']?.origins).toEqual([
+			'/deno/npm/@qwik.dev/core/dist/core.prod.mjs',
+			'/deno/npm/@qwik.dev/core/handlers.mjs',
+		]);
+	});
+
 	test('computes bundle total size from static import graph', async () => {
 		let manifest: QwikManifest | undefined;
 		const plugin = qwikClient({ onManifest: (nextManifest) => (manifest = nextManifest) });
