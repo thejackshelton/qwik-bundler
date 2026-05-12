@@ -1,6 +1,7 @@
 import type { SegmentAnalysis } from '@qwik.dev/optimizer';
 import { relative } from 'pathe';
 import type { OutputBundle, OutputChunk } from 'rolldown';
+import { convertManifestToBundleGraph, type QwikBundleGraph } from './bundle-graph';
 
 export interface QwikManifest {
 	manifestHash: string;
@@ -28,8 +29,6 @@ export type ServerQwikManifest = Pick<
 	| 'core'
 	| 'qwikLoader'
 >;
-
-export type QwikBundleGraph = Array<string | number>;
 
 export type QwikSymbol = Partial<SegmentAnalysis> & {
 	origin: string;
@@ -64,12 +63,20 @@ const CORE_RE = /[/\\](core|qwik)[/\\]dist[/\\]core(\.min|\.prod)?\.(|c|m)js$/;
 const QWIK_LOADER_RE = /[/\\](core|qwik)[/\\](dist[/\\])?qwikloader(\.debug)?\.[^/\\]*js$/;
 const QWIK_LIBRARY_MODULE_RE = /\.qwik\.mjs$/;
 const LIBRARY_QRL_SYMBOL_RE = /["']([A-Za-z_$][\w$.-]*_[A-Za-z0-9_-]{8,})["']/g;
+const RUNTIME_BUNDLES = [
+	['preloader', 'preloader', PRELOADER_RE],
+	['core', 'core', CORE_RE],
+	['qwikLoader', 'qwik-loader', QWIK_LOADER_RE],
+] as const;
 
 export function createManifest(
 	bundle: OutputBundle,
 	segments: Map<string, SegmentAnalysis>,
 	root: string | undefined,
-	options: { bundleGraphAsset?: string; canonPath?: (fileName: string) => string } = {},
+	options: {
+		bundleGraphAsset?: string;
+		canonPath?: (fileName: string) => string;
+	} = {},
 ) {
 	const canonPath = options.canonPath ?? ((fileName: string) => fileName);
 	const manifest: QwikManifest = {
@@ -90,7 +97,7 @@ export function createManifest(
 
 			manifest.assets![item.fileName] = {
 				name: item.names[0] ?? item.name,
-				size: assetSize(item.source),
+				size: item.source.length,
 			};
 			continue;
 		}
@@ -208,75 +215,6 @@ export function injectManifest(code: string, manifest: QwikManifest | ServerQwik
 	return code.replaceAll(`!${QWIK_MANIFEST}`, 'false').replaceAll(QWIK_MANIFEST, value);
 }
 
-export function convertManifestToBundleGraph(manifest: QwikManifest): QwikBundleGraph {
-	const graph: Record<string, QwikBundle> = { ...manifest.bundles };
-	for (const [symbol, bundleName] of Object.entries(manifest.mapping)) {
-		if (manifest.symbols[symbol]?.ctxKind === 'eventHandler' && manifest.mapping._run) {
-			const bundle = graph[bundleName];
-			if (bundle && bundleName !== manifest.mapping._run) {
-				graph[bundleName] = {
-					...bundle,
-					imports: [...new Set([...(bundle.imports ?? []), manifest.mapping._run])],
-				};
-			}
-		}
-
-		if (symbol.startsWith('_') && symbol.length < 10) {
-			continue;
-		}
-
-		const symbolHash = getSymbolHash(symbol);
-		if (symbolHash) {
-			const bundle = manifest.bundles[bundleName];
-			graph[symbolHash] = {
-				size: 0,
-				total: 0,
-				imports: bundle?.imports ? [...bundle.imports] : undefined,
-				dynamicImports: [bundleName],
-			};
-		}
-	}
-
-	for (const bundleName of Object.keys(graph)) {
-		const qwikBundle = graph[bundleName];
-		if (!qwikBundle) {
-			continue;
-		}
-
-		const imports = qwikBundle.imports?.filter((dep) => graph[dep]) ?? [];
-		const dynamicImports = qwikBundle.dynamicImports?.filter((dep) => graph[dep]) ?? [];
-
-		graph[bundleName] = { ...qwikBundle, imports, dynamicImports };
-	}
-
-	const nodes = Object.keys(graph)
-		.sort()
-		.map((name) => graphNode(name, graph));
-	const indexes = new Map<string, number>();
-	let index = 0;
-	for (const node of nodes) {
-		indexes.set(node.name, index);
-		index += 1 + node.deps.length;
-	}
-
-	const bundleGraph: QwikBundleGraph = [];
-	for (const node of nodes) {
-		bundleGraph.push(node.name);
-		for (const dep of node.deps) {
-			if (typeof dep === 'number') {
-				bundleGraph.push(dep);
-				continue;
-			}
-
-			const depIndex = indexes.get(dep);
-			if (depIndex !== undefined) {
-				bundleGraph.push(depIndex);
-			}
-		}
-	}
-	return bundleGraph;
-}
-
 function mapBundleNames(
 	bundle: OutputBundle,
 	names: string[],
@@ -290,12 +228,8 @@ function mapBundleNames(
 
 function getOrigins(item: OutputChunk, root: string | undefined) {
 	return item.moduleIds
-		.flatMap((id) => {
-			if (id.startsWith('\0')) {
-				return [];
-			}
-			return root ? [relative(root, id)] : [id];
-		})
+		.filter((id) => !id.startsWith('\0'))
+		.map((id) => (root ? relative(root, id) : id))
 		.sort();
 }
 
@@ -306,31 +240,17 @@ function detectQwikCoreBundles(
 	bundleFileName: string,
 ) {
 	const candidates = [item.name, item.facadeModuleId ?? '', ...item.moduleIds, ...origins];
-	if (
-		!manifest.preloader &&
-		candidates.some((value) => value === 'preloader' || PRELOADER_RE.test(value))
-	) {
-		manifest.preloader = bundleFileName;
-	}
-	if (!manifest.core && candidates.some((value) => value === 'core' || CORE_RE.test(value))) {
-		manifest.core = bundleFileName;
-	}
-	if (
-		!manifest.qwikLoader &&
-		candidates.some((value) => value === 'qwik-loader' || QWIK_LOADER_RE.test(value))
-	) {
-		manifest.qwikLoader = bundleFileName;
+	for (const [field, name, pattern] of RUNTIME_BUNDLES) {
+		if (!manifest[field] && candidates.some((value) => value === name || pattern.test(value))) {
+			manifest[field] = bundleFileName;
+		}
 	}
 }
 
 function filterRuntimeImports(manifest: QwikManifest) {
-	const ignored = new Set<string>();
-	if (manifest.core) {
-		ignored.add(manifest.core);
-	}
-	if (manifest.preloader) {
-		ignored.add(manifest.preloader);
-	}
+	const ignored = new Set(
+		[manifest.core, manifest.preloader].filter((name): name is string => !!name),
+	);
 	if (ignored.size === 0) {
 		return;
 	}
@@ -347,24 +267,12 @@ function filterRuntimeImports(manifest: QwikManifest) {
 	}
 }
 
-function assetSize(source: string | Uint8Array) {
-	if (typeof source === 'string') {
-		return source.length;
-	}
-	return source.byteLength;
-}
-
 function sortManifest(manifest: QwikManifest) {
 	manifest.mapping = sortRecord(manifest.mapping);
 	manifest.symbols = sortRecord(manifest.symbols);
 	manifest.bundles = sortRecord(manifest.bundles);
 	manifest.assets = sortRecord(manifest.assets ?? {});
-	for (const name of Object.keys(manifest.bundles)) {
-		const bundle = manifest.bundles[name];
-		if (!bundle) {
-			continue;
-		}
-
+	for (const bundle of Object.values(manifest.bundles)) {
 		bundle.imports?.sort();
 		bundle.dynamicImports?.sort();
 		bundle.origins?.sort();
@@ -381,28 +289,6 @@ function sortRecord<T>(record: Record<string, T>) {
 		}
 	}
 	return next;
-}
-
-function graphNode(name: string, graph: Record<string, QwikBundle>) {
-	const bundle = graph[name];
-	if (!bundle) {
-		return { name, deps: [] };
-	}
-
-	const deps: Array<string | number> = [...new Set(bundle.imports ?? [])].sort();
-	const dynamicImports = [...new Set(bundle.dynamicImports ?? [])].sort();
-	if (dynamicImports.length > 0) {
-		deps.push(-5, ...dynamicImports);
-	}
-	return { name, deps };
-}
-
-function getSymbolHash(symbolName: string) {
-	const index = symbolName.lastIndexOf('_');
-	if (index > -1) {
-		return symbolName.slice(index + 1);
-	}
-	return symbolName;
 }
 
 function hash(value: string) {

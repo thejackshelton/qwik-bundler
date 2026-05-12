@@ -26,6 +26,7 @@
 	},
 	"dependencies": {
 		"@qwik.dev/optimizer": "2.1.0-beta.2",
+		"@thi.ng/dgraph": "^2.1.205",
 		"pathe": "^2.0.3",
 		"ufo": "^1.6.4",
 		"vitefu": "^1.1.3"

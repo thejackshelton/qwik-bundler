@@ -1,10 +1,6 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
-import {
-	convertManifestToBundleGraph,
-	QWIK_MANIFEST,
-	type QwikBundleGraph,
-	type QwikManifest,
-} from '../src/build/manifest';
+import { convertManifestToBundleGraph, type QwikBundleGraph } from '../src/build/bundle-graph';
+import { QWIK_MANIFEST, type QwikManifest } from '../src/build/manifest';
 import { qwikClient, qwikServer } from '../src/rolldown';
 import { callBuildStart, callGenerateBundle, callTransform } from './helpers';
 
@@ -267,6 +263,44 @@ describe('Qwik manifest output', () => {
 		const graph = convertManifestToBundleGraph(manifest);
 
 		expect(graphDeps(graph, 'q-click.js')).toContain('q-handlers.js');
+	});
+
+	test('prunes transitive static preload dependencies from bundle graph nodes', () => {
+		const manifest = {
+			bundles: {
+				'q-entry.js': {
+					size: 100,
+					total: 100,
+					imports: ['q-a.js', 'q-b.js', 'q-c.js'],
+				},
+				'q-a.js': { size: 50, total: 50, imports: ['q-b.js'] },
+				'q-b.js': { size: 50, total: 50, imports: ['q-c.js'] },
+				'q-c.js': { size: 50, total: 50 },
+			},
+			mapping: {},
+			symbols: {},
+			manifestHash: '',
+			version: '1',
+		} as QwikManifest;
+
+		const graph = convertManifestToBundleGraph(manifest);
+
+		expect(graphDeps(graph, 'q-entry.js')).toEqual(['q-a.js']);
+	});
+
+	test('rejects cyclic static preload dependencies', () => {
+		const manifest = {
+			bundles: {
+				'q-a.js': { size: 50, total: 50, imports: ['q-b.js'] },
+				'q-b.js': { size: 50, total: 50, imports: ['q-a.js'] },
+			},
+			mapping: {},
+			symbols: {},
+			manifestHash: '',
+			version: '1',
+		} as QwikManifest;
+
+		expect(() => convertManifestToBundleGraph(manifest)).toThrow(/Circular dependency/);
 	});
 
 	test('warns when server manifest injection has no manifest available', async () => {
