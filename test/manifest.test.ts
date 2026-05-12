@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
-import { QWIK_MANIFEST, type QwikManifest } from '../src/build/manifest';
+import {
+	convertManifestToBundleGraph,
+	QWIK_MANIFEST,
+	type QwikBundleGraph,
+	type QwikManifest,
+} from '../src/build/manifest';
 import { qwikClient, qwikServer } from '../src/rolldown';
 import { callBuildStart, callGenerateBundle, callTransform } from './helpers';
 
@@ -220,6 +225,50 @@ describe('Qwik manifest output', () => {
 		expect(manifest?.bundleGraph).not.toContain('12345678');
 	});
 
+	test('includes symbol bundle static imports on symbol graph nodes for render-time preload', () => {
+		const manifest = {
+			bundles: {
+				'q-click.js': {
+					size: 100,
+					total: 100,
+					imports: ['q-handlers.js'],
+					symbols: ['Button_onClick_abc12345'],
+				},
+				'q-handlers.js': {
+					size: 50,
+					total: 50,
+				},
+			},
+			mapping: { Button_onClick_abc12345: 'q-click.js' },
+			symbols: {},
+			manifestHash: '',
+			version: '1',
+		} as QwikManifest;
+
+		const graph = convertManifestToBundleGraph(manifest);
+
+		expect(graphDeps(graph, 'abc12345')).toEqual(
+			expect.arrayContaining(['q-click.js', 'q-handlers.js']),
+		);
+	});
+
+	test('treats the handlers bundle as an event handler preload dependency', () => {
+		const manifest = {
+			bundles: {
+				'q-click.js': { size: 100, total: 100, symbols: ['Button_onClick_abc12345'] },
+				'q-handlers.js': { size: 50, total: 50 },
+			},
+			mapping: { _run: 'q-handlers.js', Button_onClick_abc12345: 'q-click.js' },
+			symbols: { Button_onClick_abc12345: { ctxKind: 'eventHandler' } },
+			manifestHash: '',
+			version: '1',
+		} as QwikManifest;
+
+		const graph = convertManifestToBundleGraph(manifest);
+
+		expect(graphDeps(graph, 'q-click.js')).toContain('q-handlers.js');
+	});
+
 	test('warns when server manifest injection has no manifest available', async () => {
 		const plugin = qwikServer();
 		const warn = vi.fn();
@@ -297,3 +346,22 @@ describe('Qwik manifest output', () => {
 		expect(optimizerMock.transformModules).not.toHaveBeenCalled();
 	});
 });
+
+function graphDeps(graph: QwikBundleGraph, nodeName: string) {
+	const nodeIndex = graph.indexOf(nodeName);
+	if (nodeIndex < 0) {
+		throw new Error(`Expected graph node ${nodeName}`);
+	}
+
+	const deps: string[] = [];
+	for (let index = nodeIndex + 1; index < graph.length; index++) {
+		const value = graph[index];
+		if (typeof value === 'string') break;
+		if (typeof value !== 'number' || value < 0) continue;
+		const dep = graph[value];
+		if (typeof dep === 'string') {
+			deps.push(dep);
+		}
+	}
+	return deps;
+}

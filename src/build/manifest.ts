@@ -211,13 +211,29 @@ export function injectManifest(code: string, manifest: QwikManifest | ServerQwik
 export function convertManifestToBundleGraph(manifest: QwikManifest): QwikBundleGraph {
 	const graph: Record<string, QwikBundle> = { ...manifest.bundles };
 	for (const [symbol, bundleName] of Object.entries(manifest.mapping)) {
+		if (manifest.symbols[symbol]?.ctxKind === 'eventHandler' && manifest.mapping._run) {
+			const bundle = graph[bundleName];
+			if (bundle && bundleName !== manifest.mapping._run) {
+				graph[bundleName] = {
+					...bundle,
+					imports: [...new Set([...(bundle.imports ?? []), manifest.mapping._run])],
+				};
+			}
+		}
+
 		if (symbol.startsWith('_') && symbol.length < 10) {
 			continue;
 		}
 
 		const symbolHash = getSymbolHash(symbol);
 		if (symbolHash) {
-			graph[symbolHash] = { size: 0, total: 0, dynamicImports: [bundleName] };
+			const bundle = manifest.bundles[bundleName];
+			graph[symbolHash] = {
+				size: 0,
+				total: 0,
+				imports: bundle?.imports ? [...bundle.imports] : undefined,
+				dynamicImports: [bundleName],
+			};
 		}
 	}
 
