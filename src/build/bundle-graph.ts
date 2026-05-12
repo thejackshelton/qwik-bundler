@@ -4,6 +4,10 @@ import type { BundleGraphAdder, QwikBundle, QwikBundleGraph, QwikManifest } from
 type BundleGraphEdge = [string, string | null];
 type BundleGraphRecord = Partial<QwikBundle>;
 
+const MINIMUM_CONNECTION_BYTES_PER_SECOND = (300 * 1024) / 8;
+const SLOW_BUNDLE_TOTAL = MINIMUM_CONNECTION_BYTES_PER_SECOND * 0.5;
+const SMALL_BUNDLE_TOTAL = 1000;
+
 export function convertManifestToBundleGraph(
 	manifest: QwikManifest,
 	bundleGraphAdders?: Set<BundleGraphAdder>,
@@ -22,10 +26,18 @@ export function convertManifestToBundleGraph(
 	const nodes = Object.keys(graph)
 		.sort()
 		.map((name) => {
-			const dynamicImports = graph[name]?.dynamicImports ?? [];
+			const bundle = graph[name];
+			const dynamicImports = (bundle?.dynamicImports ?? [])
+				.map((dep) => [dep, dynamicImportMarker(bundle, graph[dep])] as const)
+				.sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0]));
 			const deps: Array<string | number> = [...reduced.immediateDependencies(name)].sort();
-			for (const dep of dynamicImports.sort()) {
-				deps.push(dynamicImportMarker(graph[dep]), dep);
+			let lastMarker: number | undefined;
+			for (const [dep, marker] of dynamicImports) {
+				if (marker !== lastMarker) {
+					deps.push(marker);
+					lastMarker = marker;
+				}
+				deps.push(dep);
 			}
 			return [name, deps] as const;
 		});
@@ -110,9 +122,26 @@ function hasQwikSymbols(dep: string, graph: Record<string, BundleGraphRecord>) {
 	return !!graph[dep]?.symbols;
 }
 
-function dynamicImportMarker(bundle: BundleGraphRecord | undefined) {
-	const probability = Math.min(0.5 + (bundle?.interactivity ?? 0) * 0.08, 0.99);
+function dynamicImportMarker(
+	bundle: BundleGraphRecord | undefined,
+	dependency: BundleGraphRecord | undefined,
+) {
+	let probability = 0.5 + (dependency?.interactivity ?? 0) * 0.08;
+	if (hasRelatedOrigin(bundle, dependency)) probability += 0.25;
+	if ((dependency?.total ?? 0) > SLOW_BUNDLE_TOTAL)
+		probability += probability > 0.5 ? 0.02 : -0.02;
+	if ((dependency?.total ?? 0) < SMALL_BUNDLE_TOTAL) probability += 0.15;
+	probability = Math.min(probability, 0.99);
 	return -Math.round(probability * 10);
+}
+
+function hasRelatedOrigin(
+	bundle: BundleGraphRecord | undefined,
+	dependency: BundleGraphRecord | undefined,
+) {
+	return !!bundle?.origins?.some((origin) =>
+		dependency?.origins?.some((depOrigin) => depOrigin.startsWith(origin)),
+	);
 }
 
 function* bundleGraphEdges(graph: Record<string, BundleGraphRecord>): Generator<BundleGraphEdge> {

@@ -519,7 +519,7 @@ describe('Qwik manifest output', () => {
 				'q-entry.js': {
 					size: 100,
 					total: 100,
-					dynamicImports: ['q-click.js'],
+					dynamicImports: ['q-later.js', 'q-click.js', 'q-small.js'],
 					origins: ['src/root.tsx'],
 				},
 				'q-click.js': {
@@ -528,6 +528,16 @@ describe('Qwik manifest output', () => {
 					interactivity: 5,
 					symbols: ['Button_onClick_abc12345'],
 					origins: ['src/root.tsx_click_abc12345.js'],
+				},
+				'q-small.js': {
+					size: 100,
+					total: 100,
+					symbols: ['Small_component_abc12345'],
+				},
+				'q-later.js': {
+					size: 20_000,
+					total: 20_000,
+					symbols: ['Later_component_abc12345'],
 				},
 			},
 			mapping: {},
@@ -538,7 +548,12 @@ describe('Qwik manifest output', () => {
 
 		const graph = convertManifestToBundleGraph(manifest);
 
-		expect(graphDynamicMarker(graph, 'q-entry.js')).toBe(-9);
+		expect(graphDynamicDeps(graph, 'q-entry.js')).toEqual([
+			'q-click.js',
+			'q-small.js',
+			'q-later.js',
+		]);
+		expect(graphDynamicMarkers(graph, 'q-entry.js')).toEqual([-10, -7, -5]);
 	});
 
 	test('removes isolated unused bundles from the bundle graph', () => {
@@ -679,16 +694,18 @@ function graphDynamicDeps(graph: QwikBundleGraph, nodeName: string) {
 	return deps;
 }
 
-function graphDynamicMarker(graph: QwikBundleGraph, nodeName: string) {
+function graphDynamicMarkers(graph: QwikBundleGraph, nodeName: string) {
 	const nodeIndex = graph.indexOf(nodeName);
 	if (nodeIndex < 0) {
 		throw new Error(`Expected graph node ${nodeName}`);
 	}
 
+	const markers: number[] = [];
 	for (let index = nodeIndex + 1; index < graph.length; index++) {
 		const value = graph[index];
 		if (typeof value === 'string') break;
-		if (typeof value === 'number' && value < 0) return value;
+		if (typeof value === 'number' && value < 0) markers.push(value);
 	}
+	if (markers.length > 0) return markers;
 	throw new Error(`Expected graph node ${nodeName} to have dynamic dependencies`);
 }
