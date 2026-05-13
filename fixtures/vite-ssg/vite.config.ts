@@ -8,29 +8,35 @@ import { qwik } from 'qwik-bundler/vite';
 
 const execFileAsync = promisify(execFile);
 
-export default defineConfig({
-	plugins: [qwik(), prerender()],
-	builder: {},
-	environments: {
-		client: {
-			consumer: 'client',
-			build: {
-				rolldownOptions: {
-					input: 'index.html',
+export default defineConfig(({ command }) => {
+	if (command === 'serve') {
+		return { plugins: [qwik()] };
+	}
+
+	return {
+		plugins: [qwik(), prerender()],
+		builder: {},
+		environments: {
+			client: {
+				consumer: 'client',
+				build: {
+					rolldownOptions: {
+						input: ['index.html', 'src/content.tsx'],
+					},
+				},
+			},
+			ssr: {
+				consumer: 'server',
+				build: {
+					outDir: 'dist/ssr',
+					rolldownOptions: {
+						input: 'src/entry.ssr.tsx',
+						output: { entryFileNames: 'entry.ssr.mjs' },
+					},
 				},
 			},
 		},
-		ssr: {
-			consumer: 'server',
-			build: {
-				outDir: 'dist/ssr',
-				rolldownOptions: {
-					input: 'src/entry.ssr.tsx',
-					output: { entryFileNames: 'entry.ssr.mjs' },
-				},
-			},
-		},
-	},
+	};
 });
 
 function prerender(): Plugin {
@@ -52,19 +58,33 @@ function prerender(): Plugin {
 				await builder.build(ssr);
 
 				const root = builder.config.root;
-				const html = await renderInChildProcess(resolve(root, 'dist/ssr/entry.ssr.mjs'));
-				const file = resolve(root, 'dist/index.html');
-				await mkdir(dirname(file), { recursive: true });
-				await writeFile(file, html);
+				const entry = resolve(root, 'dist/ssr/entry.ssr.mjs');
+				for (const route of ssgRoutes()) {
+					const html = await renderInChildProcess(entry, route);
+					const file = resolve(root, 'dist', routeFile(route));
+					await mkdir(dirname(file), { recursive: true });
+					await writeFile(file, html);
+				}
 			},
 		},
 	};
 }
 
-async function renderInChildProcess(entry: string) {
+function ssgRoutes() {
+	return (process.env.SSG_PATHS ?? '/,/old,/changed')
+		.split(',')
+		.map((route) => route.trim())
+		.filter(Boolean);
+}
+
+function routeFile(route: string) {
+	return route === '/' ? 'index.html' : `${route.replace(/^\/+/, '')}/index.html`;
+}
+
+async function renderInChildProcess(entry: string, route: string) {
 	const code = `
 const { render } = await import(${JSON.stringify(entry)});
-const html = await render('/ssg');
+const html = await render(${JSON.stringify(route)});
 process.stdout.write(html);
 process.exit(0);
 `;

@@ -1,12 +1,8 @@
-import { component$, useSignal } from '@qwik.dev/core';
+import { component$ } from '@qwik.dev/core';
+import FixtureContent, { type FixtureContentProps } from './content';
 import './style.css';
 
-interface RootProps {
-	url?: string;
-}
-
-const Root = component$<RootProps>(({ url = '/' }) => {
-	const count = useSignal(0);
+const Root = component$<FixtureContentProps>(({ url = '/', version = 'initial' }) => {
 	return (
 		<>
 			<head>
@@ -15,13 +11,7 @@ const Root = component$<RootProps>(({ url = '/' }) => {
 				<title>Vite SSG Fixture</title>
 			</head>
 			<body>
-				<main>
-					<h1>Vite SSG Fixture</h1>
-					<p data-url={url}>Rendered at {url}</p>
-					<button type="button" onClick$={() => count.value++}>
-						Count {count.value}
-					</button>
-				</main>
+				<FixtureContent url={url} version={version} />
 			</body>
 		</>
 	);

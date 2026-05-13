@@ -1,4 +1,5 @@
 import { render } from '@qwik.dev/core';
-import Root from './root';
+import DevRoot from './dev-root';
+import './style.css';
 
-render(document.getElementById('root')!, <Root url={location.pathname} />);
+render(document.getElementById('root')!, <DevRoot />);
