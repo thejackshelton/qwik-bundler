@@ -37,8 +37,6 @@ export type {
 
 type TransformContext = Pick<TransformPluginContext, 'emitFile' | 'error' | 'warn'>;
 type Environment = QwikEnvironment | ((context: unknown) => QwikEnvironment);
-type ParseAst = TransformPluginContext['parse'];
-type ImportLikeNode = { type?: string; source?: { value?: unknown } };
 
 const QWIK_HANDLERS = '@qwik.dev/core/handlers.mjs';
 const QWIK_PRELOADER = '@qwik.dev/core/preloader';
@@ -49,6 +47,8 @@ const JS_OR_TS_SOURCE_FILE = /\.[cm]?[jt]sx?$/;
 const QWIK_LIBRARY_SOURCE_FILE = /\.qwik\.[cm]?[jt]sx?$/;
 const QWIK_RUNTIME_MODULE = /[/\\]@qwik\.dev[/\\]core[/\\]/;
 const QWIK_PUBLIC_IMPORTS = ['@qwik.dev/core', '@builder.io/qwik'];
+const QWIK_IMPORTS =
+	/\b(?:import|export)\s+(?:[^'";]*?\s+from\s*)?['"](@qwik\.dev\/core(?:\/[^'"]*)?|@builder\.io\/qwik(?:\/[^'"]*)?)['"]/;
 const manifests = new Map<string, QwikManifest>();
 
 export const qwik = (options?: QwikRolldownOptions) => qwikClient(options);
@@ -220,7 +220,7 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 			const currentEnvironment = getEnvironment(this);
 			const path = pathname(id);
 			const replaced = replaceExperimental(code, currentEnvironment, options.experimental);
-			const optimize = shouldOptimize(replaced ?? code, path, this.parse);
+			const optimize = shouldOptimize(replaced ?? code, path);
 			const transformed = optimize
 				? await transform(replaced ?? code, path, this, currentEnvironment)
 				: null;
@@ -370,38 +370,16 @@ function createPluginError(id: string, message: string): RolldownError {
 	});
 }
 
-function shouldOptimize(code: string, path: string, parse: ParseAst) {
+function shouldOptimize(code: string, path: string) {
 	if (!JS_OR_TS_SOURCE_FILE.test(path)) return false;
 	if (QWIK_RUNTIME_MODULE.test(path)) return false;
 	if (QWIK_LIBRARY_SOURCE_FILE.test(path)) return true;
-	return importsQwik(code, parse);
+	return importsQwik(code);
 }
 
-function importsQwik(code: string, parse: ParseAst) {
-	let ast: { body?: ImportLikeNode[] };
-	try {
-		ast = parse(code) as { body?: ImportLikeNode[] };
-	} catch {
-		return false;
-	}
-
-	for (const node of ast.body ?? []) {
-		if (!isImportNode(node.type)) continue;
-
-		const source = node.source?.value;
-		if (typeof source === 'string' && isQwikPublicImport(source)) {
-			return true;
-		}
-	}
-	return false;
-}
-
-function isImportNode(type: string | undefined) {
-	return (
-		type === 'ImportDeclaration' ||
-		type === 'ExportNamedDeclaration' ||
-		type === 'ExportAllDeclaration'
-	);
+function importsQwik(code: string) {
+	const match = QWIK_IMPORTS.exec(code);
+	return !!match?.[1] && isQwikPublicImport(match[1]);
 }
 
 function isQwikPublicImport(source: string) {

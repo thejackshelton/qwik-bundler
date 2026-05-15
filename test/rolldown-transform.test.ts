@@ -65,6 +65,28 @@ describe('Rolldown optimizer transforms', () => {
 		expect(result).toEqual({ code: 'optimized', map: null });
 	});
 
+	test('optimizes TSX files when import parsing fails on JSX syntax', async () => {
+		const plugin = qwikClient();
+
+		callBuildStart(plugin, { cwd: '/workspace/app' });
+		await callTransform(
+			plugin,
+			"import { component$ } from '@qwik.dev/core'; export default component$(() => <div />);",
+			'/workspace/app/src/root.tsx',
+			{
+				parse: vi.fn(() => {
+					throw new Error('Unexpected token');
+				}),
+			},
+		);
+
+		expect(optimizerMock.transformModules).toHaveBeenCalledWith(
+			expect.objectContaining({
+				input: [expect.objectContaining({ path: '/workspace/app/src/root.tsx' })],
+			}),
+		);
+	});
+
 	test('forwards optimizer diagnostics through the plugin context', async () => {
 		optimizerMock.transformModules.mockResolvedValueOnce({
 			modules: [
