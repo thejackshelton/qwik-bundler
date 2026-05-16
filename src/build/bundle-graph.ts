@@ -1,5 +1,5 @@
 import { defDGraph } from '@thi.ng/dgraph';
-import type { BundleGraphAdder, QwikBundle, QwikBundleGraph, QwikManifest } from '../types';
+import type { BundleGraphAdder, QwikBundle, QwikBundleGraph, QwikManifest } from '../types.ts';
 
 type BundleGraphEdge = [string, string | null];
 type BundleGraphRecord = Partial<QwikBundle>;

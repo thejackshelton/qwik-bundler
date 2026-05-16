@@ -10,6 +10,7 @@
 		"skipLibCheck": true,
 		"verbatimModuleSyntax": true,
 		"resolveJsonModule": true,
+		"allowImportingTsExtensions": true,
 		"noEmit": true,
 		"declaration": true,
 		"lib": ["ESNext"]
