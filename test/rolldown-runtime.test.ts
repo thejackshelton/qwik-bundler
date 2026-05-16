@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { parseAst } from 'rolldown/parseAst';
 import { plugin as qwikPlugin, qwikClient, qwikLib, qwikServer } from '../src/rolldown';
+import { makeConstPropsDiffable } from '../src/hmr/optimizer';
 import { callBuildStart, callLoad, callOptions, callResolveId, callTransform } from './helpers';
 
 const optimizerMock = vi.hoisted(() => ({
@@ -339,6 +340,16 @@ describe('Rolldown runtime integration', () => {
 		expect(code).toContain('{...constProps,...varProps}');
 		expect(code).not.toContain('hmrKey');
 		expect(code).toContain('import.meta.hot.accept(');
+	});
+
+	test('preserves combined Qwik core imports when adding the HMR JSX helper', () => {
+		const code = `import { _fnSignal, _jsxSorted, componentQrl } from '@qwik.dev/core';\nexport const component = () => _jsxSorted('p', null, null, 'text', 3, null);`;
+		const result = makeConstPropsDiffable(code, parseAst);
+
+		expect(result).toContain('_fnSignal');
+		expect(result).toContain('componentQrl');
+		expect(result).toContain('_jsxSplit as __qwikHmrJsxSplit');
+		expect(result).toContain('const _jsxSorted=');
 	});
 
 	test('keeps client and server dev segment cache entries isolated', async () => {

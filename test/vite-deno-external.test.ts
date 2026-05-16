@@ -153,6 +153,11 @@ describe('Vite Node and Deno externalization integration', () => {
 		const library = await readJson<{ name: string; exports: { '.': string } }>(
 			resolve(denoFixtureRoot, 'qwik-lib/deno.json'),
 		);
+		const rootSource = await readFile(resolve(denoFixtureRoot, 'app/src/root.tsx'), 'utf8');
+		const ssrEntrySource = await readFile(
+			resolve(denoFixtureRoot, 'app/src/entry.ssr.tsx'),
+			'utf8',
+		);
 
 		await expect(stat(resolve(denoFixtureRoot, 'app/package.json'))).rejects.toMatchObject({
 			code: 'ENOENT',
@@ -173,17 +178,23 @@ describe('Vite Node and Deno externalization integration', () => {
 		expect(viteConfig).toContain('Fixture-only');
 		expect(viteConfig).toContain('meta-framework');
 		expect(viteConfig).toContain('qwik(),');
-		expect(viteConfig).toContain('ssrLoadModule');
-		expect(viteConfig).toContain('transformIndexHtml');
+		expect(viteConfig).toContain('createRunnableDevEnvironment');
+		expect(viteConfig).toContain('dispatchFetch');
+		expect(viteConfig).toContain('runner.import');
 		expect(viteConfig).toContain('__qwik');
 		expect(viteConfig).not.toContain('appType');
 		expect(viteConfig).not.toContain('createFetchableDevEnvironment');
 		expect(viteConfig).not.toContain('createServerModuleRunner');
-		expect(viteConfig).not.toContain('dispatchFetch');
+		expect(viteConfig).not.toContain('ssrLoadModule');
+		expect(viteConfig).not.toContain('transformIndexHtml');
 		expect(viteConfig).not.toContain('...qwik');
 		expect(viteConfig).not.toContain('srvx/node');
 		expect(viteConfig).not.toContain('node:');
 		expect(viteConfig).not.toContain('Deno.serve');
+		expect(rootSource).not.toContain('<head>');
+		expect(rootSource).not.toContain('<body>');
+		expect(ssrEntrySource).toContain('<head>');
+		expect(ssrEntrySource).toContain('<body>');
 		expect(workspace.workspace).toEqual(['./app', './qwik-lib', './qwik-bundler']);
 		expect(workspace.compilerOptions).toMatchObject({
 			jsx: 'react-jsx',

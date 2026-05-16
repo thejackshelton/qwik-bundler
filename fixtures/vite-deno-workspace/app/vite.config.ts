@@ -1,5 +1,11 @@
 import deno from '@deno/vite-plugin';
-import { type Plugin, type ViteDevServer } from 'vite';
+import {
+	createRunnableDevEnvironment,
+	type EnvironmentOptions,
+	type Plugin,
+	type RunnableDevEnvironment,
+	type ViteDevServer,
+} from 'vite';
 import { qwik } from '@qwik.dev/bundler/vite';
 
 export default {
@@ -21,10 +27,13 @@ export default {
 };
 
 // Fixture-only dev SSR shim. In a real app, a meta-framework plugin owns this layer.
+// Keep it fetch-shaped so the fixture is not coupled to Vite's legacy Node SSR helpers.
 
 type SsrEntry = {
 	render: (url?: string) => Promise<string>;
 };
+
+type CreateEnvironment = NonNullable<NonNullable<EnvironmentOptions['dev']>['createEnvironment']>;
 
 type DevRequest = {
 	url?: string;
@@ -39,23 +48,59 @@ type DevResponse = {
 	end(body?: Uint8Array): void;
 };
 
+type DenoSsrEnvironment = RunnableDevEnvironment & {
+	dispatchFetch(request: Request): Promise<Response>;
+};
+
 function denoSsrDev(): Plugin {
+	let server: ViteDevServer | undefined;
+	let ssrEnvironment: DenoSsrEnvironment | undefined;
+
 	return {
 		name: 'fixture:deno-ssr-dev',
 		apply: 'serve',
-		configureServer(server) {
-			server.middlewares.use(async (request, response, next) => {
-				const devRequest = request as DevRequest;
+		config() {
+			return {
+				environments: {
+					ssr: {
+						consumer: 'server',
+						dev: {
+							createEnvironment: ((name, config) => {
+								const environment = createRunnableDevEnvironment(
+									name,
+									config,
+								) as DenoSsrEnvironment;
+								environment.dispatchFetch = (request) => {
+									if (!server) {
+										throw new Error('Vite dev server is not ready.');
+									}
+									return renderDevRequest(server, environment, request);
+								};
+								ssrEnvironment = environment;
+								return environment;
+							}) satisfies CreateEnvironment,
+						},
+					},
+				},
+			};
+		},
+		configureServer(devServer) {
+			server = devServer;
+			devServer.middlewares.use(async (nodeRequest, nodeResponse, next) => {
+				const devRequest = nodeRequest as DevRequest;
 				if (!devRequest.url || devRequest.method !== 'GET' || !acceptsHtml(devRequest)) {
 					next();
 					return;
 				}
 
 				try {
-					const rendered = await renderDevRequest(server, devRequest);
-					sendResponse(response as DevResponse, rendered);
+					const environment =
+						ssrEnvironment ?? (devServer.environments.ssr as DenoSsrEnvironment);
+					const request = toFetchRequest(devRequest);
+					const response = await environment.dispatchFetch(request);
+					await sendResponse(nodeResponse as DevResponse, response);
 				} catch (error) {
-					server.ssrFixStacktrace(error as Error);
+					devServer.ssrFixStacktrace(error as Error);
 					next(error);
 				}
 			});
@@ -63,19 +108,19 @@ function denoSsrDev(): Plugin {
 	};
 }
 
-async function renderDevRequest(server: ViteDevServer, request: DevRequest) {
-	const url = new URL(request.url ?? '/', requestUrlOrigin(request));
+async function renderDevRequest(
+	_server: ViteDevServer,
+	environment: DenoSsrEnvironment,
+	request: Request,
+) {
+	const url = new URL(request.url);
 
 	(globalThis as { __qwik?: string }).__qwik = undefined;
-	const entry = (await server.ssrLoadModule('/src/entry.ssr.tsx')) as SsrEntry;
+	const entry = (await environment.runner.import('/src/entry.ssr.tsx')) as SsrEntry;
 	const html = await entry.render(url.pathname);
-	const transformed = await viteHtmlTransforms(server, url.pathname);
-	return {
-		html: injectHtmlTransforms(html, transformed),
-		status: 200,
-		statusText: 'OK',
+	return new Response(html, {
 		headers: { 'Content-Type': 'text/html;charset=utf-8' },
-	};
+	});
 }
 
 function acceptsHtml(request: DevRequest) {
@@ -83,38 +128,35 @@ function acceptsHtml(request: DevRequest) {
 	return typeof accept === 'string' && accept.includes('text/html');
 }
 
+function toFetchRequest(request: DevRequest) {
+	return new Request(new URL(request.url ?? '/', requestUrlOrigin(request)), {
+		headers: toFetchHeaders(request.headers),
+		method: request.method,
+	});
+}
+
+function toFetchHeaders(headers: DevRequest['headers']) {
+	const next = new Headers();
+	for (const [name, value] of Object.entries(headers)) {
+		if (Array.isArray(value)) {
+			for (const item of value) next.append(name, item);
+		} else if (value) {
+			next.set(name, value);
+		}
+	}
+	return next;
+}
+
 function requestUrlOrigin(request: DevRequest) {
 	const host = typeof request.headers.host === 'string' ? request.headers.host : 'localhost';
 	return `http://${host}`;
 }
 
-async function viteHtmlTransforms(server: ViteDevServer, url: string) {
-	const html = await server.transformIndexHtml(url, '<html><head></head><body></body></html>');
-	return {
-		head: html.match(/<head>([\s\S]*?)<\/head>/)?.[1] ?? '',
-		body: html.match(/<body>([\s\S]*?)<\/body>/)?.[1] ?? '',
-	};
-}
-
-function injectHtmlTransforms(html: string, transforms: { head: string; body: string }) {
-	return html
-		.replace('</head>', `${transforms.head}</head>`)
-		.replace('</body>', `${transforms.body}</body>`);
-}
-
-function sendResponse(
-	response: DevResponse,
-	rendered: {
-		html: string;
-		status: number;
-		statusText: string;
-		headers: Record<string, string>;
-	},
-) {
+async function sendResponse(response: DevResponse, rendered: Response) {
 	response.statusCode = rendered.status;
 	response.statusMessage = rendered.statusText;
-	for (const [name, value] of Object.entries(rendered.headers)) {
+	for (const [name, value] of rendered.headers) {
 		response.setHeader(name, value);
 	}
-	response.end(new TextEncoder().encode(rendered.html));
+	response.end(new Uint8Array(await rendered.arrayBuffer()));
 }
