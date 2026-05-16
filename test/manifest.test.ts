@@ -574,7 +574,7 @@ describe('Qwik manifest output', () => {
 		expect(graph).not.toContain('q-unused.js');
 	});
 
-	test('warns when server manifest injection has no manifest available', async () => {
+	test('leaves server manifest placeholder when no manifest is available', async () => {
 		const plugin = qwikServer();
 		const warn = vi.fn();
 
@@ -589,13 +589,7 @@ describe('Qwik manifest output', () => {
 			throw new Error('Expected transformed code');
 		}
 
-		expect(warn).toHaveBeenCalledWith(
-			expect.objectContaining({
-				id: '/workspace/server-only/node_modules/@qwik.dev/core/dist/server.mjs',
-				plugin: 'qwik',
-				message: expect.stringContaining('Qwik server manifest'),
-			}),
-		);
+		expect(warn).not.toHaveBeenCalled();
 		expect(result.code).toContain(QWIK_MANIFEST);
 	});
 

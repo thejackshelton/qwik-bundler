@@ -1,0 +1,5 @@
+{
+	"deno.enable": false,
+	"deno.enablePaths": ["./fixtures/vite-deno-workspace"],
+	"deno.config": "./fixtures/vite-deno-workspace/deno.json"
+}

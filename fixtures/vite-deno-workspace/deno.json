@@ -1,0 +1,23 @@
+{
+	"workspace": ["./app", "./qwik-lib", "./qwik-bundler"],
+	"nodeModulesDir": "auto",
+	"compilerOptions": {
+		"jsx": "react-jsx",
+		"jsxImportSource": "@qwik.dev/core",
+		"jsxImportSourceTypes": "@qwik.dev/core",
+		"lib": ["deno.ns", "dom", "dom.iterable", "esnext"]
+	},
+	"tasks": {
+		"prepare:bundler": "rm -rf qwik-bundler/dist && cp -R ../../dist qwik-bundler/",
+		"build": "deno task prepare:bundler && cd app && deno run -A npm:vite@8.0.10 build --configLoader native && deno run -A npm:vite@8.0.10 build --configLoader native --ssr src/entry.ssr.tsx --outDir dist/server",
+		"dev": "deno task prepare:bundler && cd app && deno run -A npm:vite@8.0.10 --configLoader native --mode ssr --host 127.0.0.1 --port 5173",
+		"preview": "cd app && deno run -A server.ts"
+	},
+	"imports": {
+		"@deno/vite-plugin": "npm:@deno/vite-plugin@2.0.2",
+		"@qwik.dev/bundler/vite": "./qwik-bundler/dist/vite/index.mjs",
+		"@qwik.dev/core": "npm:@qwik.dev/core@2.0.0-beta.35",
+		"@types/deno": "npm:@types/deno@2.3.0",
+		"vite": "npm:vite@8.0.10"
+	}
+}

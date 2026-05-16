@@ -5,13 +5,14 @@ import {
 	type SegmentAnalysis,
 	type TransformModule,
 } from '@qwik.dev/optimizer';
-import { dirname, resolve } from 'pathe';
+import { dirname, join } from 'pathe';
 import type { Plugin, RolldownError, TransformPluginContext } from 'rolldown';
 import { isRelative, parsePath } from 'ufo';
 import { outputDefaults, Q_BUNDLE_GRAPH, Q_BUILD_PREFIX, QWIK_BUILD } from './build/chunking.ts';
 import { injectQwikPreloaderTags } from './build/static-html.ts';
 import { createQwikDev } from './dev.ts';
 import { comptimeConfig, replaceExperimental } from './features.ts';
+import { makeConstPropsDiffable } from './hmr/optimizer.ts';
 import {
 	createManifest,
 	injectManifest,
@@ -40,10 +41,8 @@ export type {
 	ServerQwikManifest,
 } from './types.ts';
 
-type TransformContext = Pick<TransformPluginContext, 'emitFile' | 'error' | 'warn'>;
+type TransformContext = Pick<TransformPluginContext, 'emitFile' | 'error' | 'parse' | 'warn'>;
 type Environment = QwikEnvironment | ((context: unknown) => QwikEnvironment);
-type ParseAst = TransformPluginContext['parse'];
-type ImportLikeNode = { type?: string; source?: { value?: unknown } };
 
 const QWIK_HANDLERS = '@qwik.dev/core/handlers.mjs';
 const QWIK_PRELOADER = '@qwik.dev/core/preloader';
@@ -54,6 +53,8 @@ const JS_OR_TS_SOURCE_FILE = /\.[cm]?[jt]sx?$/;
 const QWIK_LIBRARY_SOURCE_FILE = /\.qwik\.[cm]?[jt]sx?$/;
 const QWIK_RUNTIME_MODULE = /[/\\]@qwik\.dev[/\\]core[/\\]/;
 const QWIK_PUBLIC_IMPORTS = ['@qwik.dev/core', '@builder.io/qwik'];
+const QWIK_IMPORTS =
+	/\b(?:import|export)\s+(?:[^'";]*?\s+from\s*)?['"](@qwik\.dev\/core(?:\/[^'"]*)?|@builder\.io\/qwik(?:\/[^'"]*)?)['"]/;
 const manifests = new Map<string, QwikManifest>();
 
 export const qwik = (options?: QwikRolldownOptions) => qwikClient(options);
@@ -69,7 +70,6 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 	let manifest: QwikManifest | ServerQwikManifest | null = null;
 	let optimizer: ReturnType<typeof createOptimizer> | undefined;
 	let root = options.rootDir;
-	let missingManifestWarned = false;
 	let name = 'qwik:rolldown';
 
 	if (typeof environment === 'string') {
@@ -117,7 +117,6 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 				root = options.rootDir ?? input.cwd;
 			}
 
-			missingManifestWarned = false;
 			if (!dev.isEnabled() && getEnvironment(this) === 'client') {
 				for (const [id, name] of [
 					[QWIK_HANDLERS_ENTRY, 'handlers'],
@@ -185,7 +184,7 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 			const importerSegment = segments.get(importerPath);
 			const from = importerSegment?.path ?? importerPath;
 
-			const id = segmentId(currentEnvironment, resolve(dirname(from), source));
+			const id = segmentId(currentEnvironment, join(dirname(from), source));
 			if (segments.has(id)) {
 				return id;
 			}
@@ -225,7 +224,7 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 			const currentEnvironment = getEnvironment(this);
 			const path = pathname(id);
 			const replaced = replaceExperimental(code, currentEnvironment, options.experimental);
-			const optimize = shouldOptimize(replaced ?? code, path, this.parse);
+			const optimize = shouldOptimize(replaced ?? code, path);
 			const transformed = optimize
 				? await transform(replaced ?? code, path, this, currentEnvironment)
 				: null;
@@ -244,15 +243,6 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 
 			if (!next.includes(QWIK_MANIFEST)) {
 				return fallback;
-			}
-			if (!dev.isEnabled() && !manifest?.manifestHash && !missingManifestWarned) {
-				missingManifestWarned = true;
-				this.warn(
-					createPluginError(
-						path,
-						'Qwik server manifest was referenced, but no client manifest is available. Pass manifestInput or run the client build before the server build.',
-					),
-				);
 			}
 
 			return { code: injectManifest(next, manifest), map };
@@ -332,17 +322,31 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 			}
 		}
 
-		const primary = result.modules.find((module) => !module.isEntry && !module.segment);
-		if (primary) {
-			return { code: primary.code, map: primary.map };
+		const sourceModule = result.modules.find((module) => !module.isEntry && !module.segment);
+		if (!sourceModule) {
+			const firstModule = result.modules[0];
+			if (!firstModule) {
+				return null;
+			}
+
+			return { code: firstModule.code, map: firstModule.map };
 		}
 
-		const fallback = result.modules[0];
-		if (!fallback) {
-			return null;
+		const serverDevHmrOutput =
+			currentEnvironment === 'server' &&
+			dev.isEnabled() &&
+			options.hmr !== false &&
+			!QWIK_LIBRARY_SOURCE_FILE.test(id);
+		if (!serverDevHmrOutput) {
+			return { code: sourceModule.code, map: sourceModule.map };
 		}
 
-		return { code: fallback.code, map: fallback.map };
+		// TODO: Move this into the optimizer when SSR HMR output and client
+		// QRL segments emit the same diffable const-props shape. (attribute only HMR)
+		return {
+			code: makeConstPropsDiffable(sourceModule.code, context.parse),
+			map: sourceModule.map,
+		};
 	}
 }
 
@@ -375,38 +379,16 @@ function createPluginError(id: string, message: string): RolldownError {
 	});
 }
 
-function shouldOptimize(code: string, path: string, parse: ParseAst) {
+function shouldOptimize(code: string, path: string) {
 	if (!JS_OR_TS_SOURCE_FILE.test(path)) return false;
 	if (QWIK_RUNTIME_MODULE.test(path)) return false;
 	if (QWIK_LIBRARY_SOURCE_FILE.test(path)) return true;
-	return importsQwik(code, parse);
+	return importsQwik(code);
 }
 
-function importsQwik(code: string, parse: ParseAst) {
-	let ast: { body?: ImportLikeNode[] };
-	try {
-		ast = parse(code) as { body?: ImportLikeNode[] };
-	} catch {
-		return false;
-	}
-
-	for (const node of ast.body ?? []) {
-		if (!isImportNode(node.type)) continue;
-
-		const source = node.source?.value;
-		if (typeof source === 'string' && isQwikPublicImport(source)) {
-			return true;
-		}
-	}
-	return false;
-}
-
-function isImportNode(type: string | undefined) {
-	return (
-		type === 'ImportDeclaration' ||
-		type === 'ExportNamedDeclaration' ||
-		type === 'ExportAllDeclaration'
-	);
+function importsQwik(code: string) {
+	const match = QWIK_IMPORTS.exec(code);
+	return !!match?.[1] && isQwikPublicImport(match[1]);
 }
 
 function isQwikPublicImport(source: string) {

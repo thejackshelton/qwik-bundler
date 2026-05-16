@@ -104,25 +104,27 @@ export function qwik(options: VitePluginOptions = {}): Plugin[] {
 		transformIndexHtml() {
 			return hmr.transformIndexHtml();
 		},
-		resolveId(source, importer, resolveOptions) {
-			const resolved = hmr.resolveId(source);
-			if (resolved) {
-				return resolved;
-			}
+		resolveId: {
+			order: 'pre',
+			async handler(source, importer, opts) {
+				const hmrResolved = hmr.resolveId(source);
+				if (hmrResolved) return hmrResolved;
 
-			return typeof basePlugin.resolveId === 'function'
-				? basePlugin.resolveId.call(this, source, importer, resolveOptions)
-				: null;
+				const ext = external.resolveId;
+				const extResolved = await runHook(ext, this, source, importer, opts);
+				if (extResolved) return extResolved;
+
+				return runHook(basePlugin.resolveId, this, source, importer, opts);
+			},
 		},
 		load(id, loadOptions) {
-			const code = hmr.load(id);
-			if (code) {
-				return code;
-			}
-
-			return typeof basePlugin.load === 'function'
-				? basePlugin.load.call(this, id, loadOptions)
-				: null;
+			return hmr.load(id) ?? runHook(basePlugin.load, this, id, loadOptions);
+		},
+		transform: {
+			order: 'pre',
+			handler(code, id, transformOptions) {
+				return runHook(basePlugin.transform, this, code, id, transformOptions);
+			},
 		},
 		hotUpdate(ctx) {
 			return hmr.hotUpdate(this.environment, ctx);
@@ -183,6 +185,10 @@ function withOutputDefaults(
 
 function emptyConfig(config: EnvironmentOptions) {
 	return Object.keys(config).length === 0;
+}
+
+function runHook(hook: unknown, context: unknown, ...args: unknown[]) {
+	return typeof hook === 'function' ? hook.call(context, ...args) : null;
 }
 
 type QwikPluginApi = {

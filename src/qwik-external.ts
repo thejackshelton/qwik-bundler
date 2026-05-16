@@ -6,13 +6,25 @@ import type {
 	PluginContext,
 	ResolveIdResult,
 } from 'rolldown';
-import type { ConfigEnv, Plugin, UserConfig } from 'vite';
+import type { ConfigEnv, Environment, Plugin, UserConfig } from 'vite';
 import type { QwikEnvironment } from './types.ts';
 
-const QWIK_CORE = '@qwik.dev/core';
-const BUILDER_QWIK = '@builder.io/qwik';
+const QWIK_RUNTIME_DEPS = ['@qwik.dev/core', '@builder.io/qwik'];
+const QWIK_OPTIMIZE_DEPS_EXCLUDE = [
+	'@qwik.dev/core',
+	'@qwik.dev/core/internal',
+	'@qwik.dev/core/server',
+	'@qwik.dev/core/jsx-runtime',
+	'@qwik.dev/core/jsx-dev-runtime',
+	'@qwik.dev/core/build',
+	'@qwik.dev/core/loader',
+	'@qwik.dev/core/preloader',
+	'@builder.io/qwik',
+];
 
 type ExternalContext = { environment?: unknown };
+type ViteHookContext = { environment?: Pick<Environment, 'config' | 'name'> };
+type NoExternal = string | RegExp | (string | RegExp)[] | true;
 
 interface QwikExternalResolver {
 	external: ExternalOptionFunction;
@@ -57,57 +69,38 @@ export function qwikExternal() {
 }
 
 export function qwikViteExternal(configDefaults: (config: UserConfig, env: ConfigEnv) => void) {
-	let qwikDeps: string[] = [];
-
 	return {
 		config: {
 			order: 'post',
-			async handler(config, env) {
+			handler(config, env) {
 				configDefaults(config, env);
-				const root = config.root ?? process.cwd();
-				const { searchForWorkspaceRoot } = await import('vite');
-				const { crawlFrameworkPkgs } = await import('vitefu');
-				const result = await crawlFrameworkPkgs({
-					root,
-					workspaceRoot: searchForWorkspaceRoot(root),
-					isBuild: env.command === 'build',
-					viteUserConfig: config,
-					isFrameworkPkgByJson: isQwikPackage,
-				});
-				qwikDeps = result.optimizeDeps.exclude;
-				return { optimizeDeps: result.optimizeDeps };
+				if (env.command === 'serve') {
+					applyQwikOptimizeDeps(config);
+				}
+				return undefined;
 			},
 		},
-		configEnvironment(_name, config) {
-			const existing = config.resolve?.noExternal;
-			if (qwikDeps.length === 0 || existing === true) {
+		configEnvironment(name, config) {
+			if (!isServerViteEnvironment(name, config.consumer)) {
 				return;
 			}
 
-			const noExternal = Array.isArray(existing) ? [...existing] : [];
-			if (existing && !Array.isArray(existing)) {
-				noExternal.push(existing);
-			}
-
-			const size = noExternal.length;
-			for (const dep of qwikDeps) {
-				if (!noExternal.includes(dep)) {
-					noExternal.push(dep);
-				}
-			}
-
-			if (noExternal.length === size) {
-				return;
-			}
-
-			return { resolve: { noExternal } };
+			const noExternal = withQwikRuntimeDeps(config.resolve?.noExternal);
+			return noExternal ? { resolve: { noExternal } } : undefined;
 		},
-	} satisfies Pick<Plugin, 'config' | 'configEnvironment'>;
-}
+		async resolveId(source, importer, options) {
+			if (!isServerEnvironment(this) || !isBareId(source)) {
+				return null;
+			}
 
-function isQwikPackage(pkg: Record<string, any>) {
-	const deps = [pkg.dependencies, pkg.peerDependencies, pkg.devDependencies];
-	return Boolean(pkg.qwik || deps.some((dep) => dep?.[QWIK_CORE] || dep?.[BUILDER_QWIK]));
+			const resolved = await this.resolve(source, importer, { ...options, skipSelf: true });
+			if (!resolved || (!isQwikOutput(resolved.id) && !isQwikRuntimeImport(source))) {
+				return null;
+			}
+
+			return { ...resolved, external: false };
+		},
+	} satisfies Pick<Plugin, 'config' | 'configEnvironment' | 'resolveId'>;
 }
 
 function createQwikExternal(external: ExternalOption): QwikExternalResolver {
@@ -182,6 +175,60 @@ function externalValueMatches(value: string | RegExp, id: string) {
 
 function isQwikOutput(id: string) {
 	return id.includes('.qwik.');
+}
+
+function isQwikRuntimeImport(source: string) {
+	return QWIK_RUNTIME_DEPS.some((dep) => source === dep || source.startsWith(`${dep}/`));
+}
+
+function isServerEnvironment(context: unknown) {
+	const environment = (context as ViteHookContext).environment;
+	return isServerViteEnvironment(environment?.name, environment?.config.consumer);
+}
+
+function isServerViteEnvironment(name: string | undefined, consumer: string | undefined) {
+	if (consumer) {
+		return consumer === 'server';
+	}
+
+	return name !== undefined && name !== 'client';
+}
+
+function withQwikRuntimeDeps(existing: NoExternal | undefined) {
+	if (existing === true) {
+		return;
+	}
+
+	const noExternal = new Set(noExternalEntries(existing));
+	QWIK_RUNTIME_DEPS.forEach((dep) => noExternal.add(dep));
+	return [...noExternal];
+}
+
+function noExternalEntries(value: NoExternal | undefined) {
+	if (!value || value === true) {
+		return [];
+	}
+
+	return Array.isArray(value) ? value : [value];
+}
+
+function applyQwikOptimizeDeps(config: UserConfig) {
+	const optimizeDeps = (config.optimizeDeps ??= {});
+	optimizeDeps.exclude = withQwikOptimizeDeps(optimizeDeps.exclude);
+	const rolldownOptions = (optimizeDeps.rolldownOptions ??= {});
+	const transform = (rolldownOptions.transform ??= {});
+	if (transform.jsx === undefined) {
+		transform.jsx = { runtime: 'automatic', importSource: '@qwik.dev/core' };
+	} else if (typeof transform.jsx === 'object') {
+		transform.jsx.runtime ??= 'automatic';
+		transform.jsx.importSource ??= '@qwik.dev/core';
+	}
+}
+
+function withQwikOptimizeDeps(existing: string[] | undefined) {
+	const exclude = new Set(existing);
+	QWIK_OPTIMIZE_DEPS_EXCLUDE.forEach((dep) => exclude.add(dep));
+	return [...exclude];
 }
 
 function isBareId(id: string) {

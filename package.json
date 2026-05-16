@@ -12,7 +12,8 @@
 		"./package.json": "./package.json"
 	},
 	"scripts": {
-		"build": "vp pack",
+		"build": "vp pack && pnpm sync:deno-fixture",
+		"sync:deno-fixture": "rm -rf fixtures/vite-deno-workspace/qwik-bundler/dist && cp -R dist fixtures/vite-deno-workspace/qwik-bundler/",
 		"test": "vp test",
 		"test:hmr-leakage": "pnpm build && pnpm --filter @fixtures/vite-csr build && pnpm --filter @fixtures/vite-nitro-v3 build && pnpm --filter @fixtures/vite-library build && pnpm --filter @fixtures/rolldown-library build && node scripts/check-hmr-leakage.mjs",
 		"test:hmr-browser": "node scripts/with-lock.mjs hmr-smoke \"pnpm build && node scripts/smoke-vite-csr-hmr.mjs\"",
@@ -28,8 +29,7 @@
 		"@qwik.dev/optimizer": "2.1.0-beta.2",
 		"@thi.ng/dgraph": "^2.1.205",
 		"pathe": "^2.0.3",
-		"ufo": "^1.6.4",
-		"vitefu": "^1.1.3"
+		"ufo": "^1.6.4"
 	},
 	"devDependencies": {
 		"@types/node": "^24.10.1",
