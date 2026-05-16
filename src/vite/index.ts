@@ -9,23 +9,23 @@ import type {
 	ViteDevServer,
 } from 'vite';
 import type { OutputOptions } from 'rolldown';
-import { outputDefaults } from '../build/chunking';
-import { plugin as qwikRolldown } from '../rolldown';
-import { qwikViteExternal } from '../qwik-external';
+import { outputDefaults } from '../build/chunking.ts';
+import { plugin as qwikRolldown } from '../rolldown.ts';
+import { qwikViteExternal } from '../qwik-external.ts';
 import type {
 	BundleGraphAdder,
 	QwikEnvironment,
 	QwikManifest,
 	QwikRolldownOptions,
-} from '../types';
-import { createViteHmr } from './hmr';
+} from '../types.ts';
+import { createViteHmr } from './hmr.ts';
 
 export type {
 	BundleGraphAdder,
 	QwikEnvironment,
 	QwikManifest,
 	QwikRolldownOptions,
-} from '../types';
+} from '../types.ts';
 
 export interface VitePluginOptions extends QwikRolldownOptions {
 	clientEnvironment?: string;

@@ -7,7 +7,7 @@ import type {
 	ResolveIdResult,
 } from 'rolldown';
 import type { ConfigEnv, Environment, Plugin, UserConfig } from 'vite';
-import type { QwikEnvironment } from './types';
+import type { QwikEnvironment } from './types.ts';
 
 const QWIK_RUNTIME_DEPS = ['@qwik.dev/core', '@builder.io/qwik'];
 const QWIK_OPTIMIZE_DEPS_EXCLUDE = [
