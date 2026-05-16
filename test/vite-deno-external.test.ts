@@ -170,13 +170,17 @@ describe('Vite Node and Deno externalization integration', () => {
 			code: 'ENOENT',
 		});
 		const viteConfig = await readFile(resolve(denoFixtureRoot, 'app/vite.config.ts'), 'utf8');
-		expect(viteConfig).toContain('createFetchableDevEnvironment');
-		expect(viteConfig).toContain('dispatchFetch');
 		expect(viteConfig).toContain('Fixture-only');
 		expect(viteConfig).toContain('meta-framework');
+		expect(viteConfig).toContain('qwik(),');
 		expect(viteConfig).toContain('ssrLoadModule');
+		expect(viteConfig).toContain('transformIndexHtml');
+		expect(viteConfig).toContain('__qwik');
+		expect(viteConfig).not.toContain('appType');
+		expect(viteConfig).not.toContain('createFetchableDevEnvironment');
 		expect(viteConfig).not.toContain('createServerModuleRunner');
-		expect(viteConfig).not.toContain('transformIndexHtml');
+		expect(viteConfig).not.toContain('dispatchFetch');
+		expect(viteConfig).not.toContain('...qwik');
 		expect(viteConfig).not.toContain('srvx/node');
 		expect(viteConfig).not.toContain('node:');
 		expect(viteConfig).not.toContain('Deno.serve');
@@ -223,7 +227,7 @@ describe('Vite Node and Deno externalization integration', () => {
 				root: appRoot,
 				configFile: false,
 				logLevel: 'silent',
-				plugins: [await denoWorkspaceResolver(), ...qwik()],
+				plugins: [await denoWorkspaceResolver(), qwik()],
 				esbuild: {
 					jsx: 'automatic',
 					jsxImportSource: '@qwik.dev/core',
