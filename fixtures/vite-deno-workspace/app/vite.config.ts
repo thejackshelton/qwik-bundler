@@ -1,10 +1,11 @@
 import deno from '@deno/vite-plugin';
 import {
-	createRunnableDevEnvironment,
+	createFetchableDevEnvironment,
+	createServerHotChannel,
+	createServerModuleRunner,
 	type EnvironmentOptions,
+	type FetchableDevEnvironment,
 	type Plugin,
-	type RunnableDevEnvironment,
-	type ViteDevServer,
 } from 'vite';
 import { qwik } from '@qwik.dev/bundler/vite';
 
@@ -27,13 +28,14 @@ export default {
 };
 
 // Fixture-only dev SSR shim. In a real app, a meta-framework plugin owns this layer.
-// Keep it fetch-shaped so the fixture is not coupled to Vite's legacy Node SSR helpers.
+// Keep it fetch-shaped so Qwik's HMR bridge uses the same path as fetch runtimes.
 
 type SsrEntry = {
 	render: (url?: string) => Promise<string>;
 };
 
 type CreateEnvironment = NonNullable<NonNullable<EnvironmentOptions['dev']>['createEnvironment']>;
+type SsrRunner = ReturnType<typeof createServerModuleRunner>;
 
 type DevRequest = {
 	url?: string;
@@ -48,14 +50,7 @@ type DevResponse = {
 	end(body?: Uint8Array): void;
 };
 
-type DenoSsrEnvironment = RunnableDevEnvironment & {
-	dispatchFetch(request: Request): Promise<Response>;
-};
-
 function denoSsrDev(): Plugin {
-	let server: ViteDevServer | undefined;
-	let ssrEnvironment: DenoSsrEnvironment | undefined;
-
 	return {
 		name: 'fixture:deno-ssr-dev',
 		apply: 'serve',
@@ -66,17 +61,20 @@ function denoSsrDev(): Plugin {
 						consumer: 'server',
 						dev: {
 							createEnvironment: ((name, config) => {
-								const environment = createRunnableDevEnvironment(
-									name,
-									config,
-								) as DenoSsrEnvironment;
-								environment.dispatchFetch = (request) => {
-									if (!server) {
-										throw new Error('Vite dev server is not ready.');
-									}
-									return renderDevRequest(server, environment, request);
+								let runner: SsrRunner | undefined;
+								const environment = createFetchableDevEnvironment(name, config, {
+									hot: true,
+									transport: createServerHotChannel(),
+									handleRequest: (request) => {
+										runner ??= createServerModuleRunner(environment);
+										return renderDevRequest(runner, request);
+									},
+								});
+								const close = environment.close.bind(environment);
+								environment.close = async () => {
+									await runner?.close();
+									await close();
 								};
-								ssrEnvironment = environment;
 								return environment;
 							}) satisfies CreateEnvironment,
 						},
@@ -85,20 +83,18 @@ function denoSsrDev(): Plugin {
 			};
 		},
 		configureServer(devServer) {
-			server = devServer;
-			devServer.middlewares.use(async (nodeRequest, nodeResponse, next) => {
-				const devRequest = nodeRequest as DevRequest;
+			devServer.middlewares.use(async (incomingRequest, outgoingResponse, next) => {
+				const devRequest = incomingRequest as DevRequest;
 				if (!devRequest.url || devRequest.method !== 'GET' || !acceptsHtml(devRequest)) {
 					next();
 					return;
 				}
 
 				try {
-					const environment =
-						ssrEnvironment ?? (devServer.environments.ssr as DenoSsrEnvironment);
+					const environment = devServer.environments.ssr as FetchableDevEnvironment;
 					const request = toFetchRequest(devRequest);
 					const response = await environment.dispatchFetch(request);
-					await sendResponse(nodeResponse as DevResponse, response);
+					await sendResponse(outgoingResponse as DevResponse, response);
 				} catch (error) {
 					devServer.ssrFixStacktrace(error as Error);
 					next(error);
@@ -108,15 +104,11 @@ function denoSsrDev(): Plugin {
 	};
 }
 
-async function renderDevRequest(
-	_server: ViteDevServer,
-	environment: DenoSsrEnvironment,
-	request: Request,
-) {
+async function renderDevRequest(runner: SsrRunner, request: Request) {
 	const url = new URL(request.url);
 
 	(globalThis as { __qwik?: string }).__qwik = undefined;
-	const entry = (await environment.runner.import('/src/entry.ssr.tsx')) as SsrEntry;
+	const entry = (await runner.import('/src/entry.ssr.tsx')) as SsrEntry;
 	const html = await entry.render(url.pathname);
 	return new Response(html, {
 		headers: { 'Content-Type': 'text/html;charset=utf-8' },

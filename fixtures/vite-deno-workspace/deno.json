@@ -15,10 +15,8 @@
 	},
 	"imports": {
 		"@deno/vite-plugin": "npm:@deno/vite-plugin@2.0.2",
+		"@qwik.dev/bundler/vite": "./qwik-bundler/dist/vite/index.mjs",
 		"@qwik.dev/core": "npm:@qwik.dev/core@2.0.0-beta.35",
-		"@qwik.dev/core/jsx-dev-runtime": "npm:@qwik.dev/core@2.0.0-beta.35/jsx-dev-runtime",
-		"@qwik.dev/core/jsx-runtime": "npm:@qwik.dev/core@2.0.0-beta.35/jsx-runtime",
-		"@qwik.dev/core/server": "npm:@qwik.dev/core@2.0.0-beta.35/server",
 		"@types/deno": "npm:@types/deno@2.3.0",
 		"vite": "npm:vite@8.0.10"
 	}

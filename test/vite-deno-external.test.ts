@@ -178,13 +178,14 @@ describe('Vite Node and Deno externalization integration', () => {
 		expect(viteConfig).toContain('Fixture-only');
 		expect(viteConfig).toContain('meta-framework');
 		expect(viteConfig).toContain('qwik(),');
-		expect(viteConfig).toContain('createRunnableDevEnvironment');
+		expect(viteConfig).toContain('createFetchableDevEnvironment');
+		expect(viteConfig).toContain('createServerHotChannel');
+		expect(viteConfig).toContain('createServerModuleRunner');
 		expect(viteConfig).toContain('dispatchFetch');
 		expect(viteConfig).toContain('runner.import');
 		expect(viteConfig).toContain('__qwik');
 		expect(viteConfig).not.toContain('appType');
-		expect(viteConfig).not.toContain('createFetchableDevEnvironment');
-		expect(viteConfig).not.toContain('createServerModuleRunner');
+		expect(viteConfig).not.toContain('createRunnableDevEnvironment');
 		expect(viteConfig).not.toContain('ssrLoadModule');
 		expect(viteConfig).not.toContain('transformIndexHtml');
 		expect(viteConfig).not.toContain('...qwik');
@@ -202,10 +203,10 @@ describe('Vite Node and Deno externalization integration', () => {
 			jsxImportSourceTypes: '@qwik.dev/core',
 		});
 		expect(workspace.imports).toMatchObject({
+			'@qwik.dev/bundler/vite': './qwik-bundler/dist/vite/index.mjs',
 			'@qwik.dev/core': 'npm:@qwik.dev/core@2.0.0-beta.35',
-			'@qwik.dev/core/jsx-runtime': 'npm:@qwik.dev/core@2.0.0-beta.35/jsx-runtime',
-			'@qwik.dev/core/server': 'npm:@qwik.dev/core@2.0.0-beta.35/server',
 			'@types/deno': 'npm:@types/deno@2.3.0',
+			vite: 'npm:vite@8.0.10',
 		});
 		expect(workspace.imports).not.toHaveProperty('@qwik.dev/core/');
 		expect(app.compilerOptions).toMatchObject({

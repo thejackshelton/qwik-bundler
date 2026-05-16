@@ -12,6 +12,7 @@ import { outputDefaults, Q_BUNDLE_GRAPH, Q_BUILD_PREFIX, QWIK_BUILD } from './bu
 import { injectQwikPreloaderTags } from './build/static-html';
 import { createQwikDev } from './dev';
 import { comptimeConfig, replaceExperimental } from './features';
+import { makeConstPropsDiffable } from './hmr/optimizer';
 import { createManifest, injectManifest, Q_MANIFEST_FILE, QWIK_MANIFEST } from './build/manifest';
 import { qwikExternal } from './qwik-external';
 import type {
@@ -35,7 +36,7 @@ export type {
 	ServerQwikManifest,
 } from './types';
 
-type TransformContext = Pick<TransformPluginContext, 'emitFile' | 'error' | 'warn'>;
+type TransformContext = Pick<TransformPluginContext, 'emitFile' | 'error' | 'parse' | 'warn'>;
 type Environment = QwikEnvironment | ((context: unknown) => QwikEnvironment);
 
 const QWIK_HANDLERS = '@qwik.dev/core/handlers.mjs';
@@ -316,17 +317,31 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 			}
 		}
 
-		const primary = result.modules.find((module) => !module.isEntry && !module.segment);
-		if (primary) {
-			return { code: primary.code, map: primary.map };
+		const sourceModule = result.modules.find((module) => !module.isEntry && !module.segment);
+		if (!sourceModule) {
+			const firstModule = result.modules[0];
+			if (!firstModule) {
+				return null;
+			}
+
+			return { code: firstModule.code, map: firstModule.map };
 		}
 
-		const fallback = result.modules[0];
-		if (!fallback) {
-			return null;
+		const serverDevHmrOutput =
+			currentEnvironment === 'server' &&
+			dev.isEnabled() &&
+			options.hmr !== false &&
+			!QWIK_LIBRARY_SOURCE_FILE.test(id);
+		if (!serverDevHmrOutput) {
+			return { code: sourceModule.code, map: sourceModule.map };
 		}
 
-		return { code: fallback.code, map: fallback.map };
+		// TODO: Move this into the optimizer when SSR HMR output and client
+		// QRL segments emit the same diffable const-props shape. (attribute only HMR)
+		return {
+			code: makeConstPropsDiffable(sourceModule.code, context.parse),
+			map: sourceModule.map,
+		};
 	}
 }
 

@@ -342,6 +342,41 @@ describe('Rolldown runtime integration', () => {
 		expect(code).toContain('import.meta.hot.accept(');
 	});
 
+	test('makes server dev HMR output const props diffable', async () => {
+		optimizerMock.transformModules.mockResolvedValueOnce({
+			modules: [
+				{
+					path: '/workspace/app/src/home.tsx',
+					isEntry: false,
+					code: `import { _jsxSorted } from '@qwik.dev/core';\nexport const component = () => _jsxSorted('main', null, { 'data-hmr': 'next' }, 'text', 3, null);`,
+					map: null,
+					segment: null,
+					origPath: null,
+				},
+			],
+			diagnostics: [],
+			isTypeScript: true,
+			isJsx: true,
+		});
+		const plugin = qwikServer({ dev: true });
+
+		callBuildStart(plugin, { cwd: '/workspace/app' });
+		const result = await callTransform(
+			plugin,
+			"import { component$ } from '@qwik.dev/core'; export default 1;",
+			'/workspace/app/src/home.tsx',
+			{ parse: parseAst },
+		);
+
+		expect(JSON.stringify(result)).toContain(
+			"import { _jsxSplit as __qwikHmrJsxSplit } from '@qwik.dev/core';",
+		);
+		expect(JSON.stringify(result)).toContain('{...constProps,...varProps}');
+		expect(optimizerMock.transformModules).toHaveBeenCalledWith(
+			expect.objectContaining({ isServer: true, mode: 'hmr' }),
+		);
+	});
+
 	test('preserves combined Qwik core imports when adding the HMR JSX helper', () => {
 		const code = `import { _fnSignal, _jsxSorted, componentQrl } from '@qwik.dev/core';\nexport const component = () => _jsxSorted('p', null, null, 'text', 3, null);`;
 		const result = makeConstPropsDiffable(code, parseAst);
