@@ -758,6 +758,21 @@ describe('Rolldown runtime integration', () => {
 		});
 	});
 
+	test('resolves relative dev QRLs against virtual importers without filesystem coercion', async () => {
+		const plugin = qwikClient({ dev: true });
+
+		const resolved = await callResolveId(
+			plugin,
+			'./index.qwik.mjs_WorkspaceBadge_component_DenoFixture.js',
+			'\0fixture-virtual::/workspace/qwik-lib/lib/index.qwik.mjs#virtual',
+		);
+
+		expect(resolved).toEqual({
+			id: '\0qwik:segment:client:\0fixture-virtual::/workspace/qwik-lib/lib/index.qwik.mjs_WorkspaceBadge_component_DenoFixture.js',
+			moduleSideEffects: false,
+		});
+	});
+
 	test('resolves and loads QRL segment modules emitted by the optimizer', async () => {
 		optimizerMock.transformModules.mockResolvedValueOnce({
 			modules: [
@@ -822,6 +837,62 @@ describe('Rolldown runtime integration', () => {
 		expect(resolve).toHaveBeenCalledWith('./home', '/workspace/app/src/root.tsx', {
 			skipSelf: true,
 		});
+	});
+
+	test('resolves QRL segments relative to transformed virtual importers', async () => {
+		const importer = '\0fixture-virtual:/workspace/.cache/qwik-lib/index.qwik.mjs#virtual';
+		const virtualPath = '\0fixture-virtual:/workspace/.cache/qwik-lib/index.qwik.mjs';
+		optimizerMock.transformModules.mockResolvedValueOnce({
+			modules: [
+				{
+					path: virtualPath,
+					isEntry: false,
+					code: 'import { qrl } from "@qwik.dev/core"; qrl(() => import("./index.qwik.mjs_Badge_component_abc.js"), "s_abc");',
+					map: null,
+					segment: null,
+					origPath: null,
+				},
+				{
+					path: '\0fixture-virtual:/workspace/.cache/qwik-lib/index.qwik.mjs_Badge_component_abc.js',
+					isEntry: false,
+					code: 'export const s_abc = () => "Hello";',
+					map: null,
+					segment: {
+						origin: virtualPath,
+						name: 's_abc',
+						entry: null,
+						displayName: 'index.qwik.mjs_Badge_component',
+						hash: 'abc',
+						canonicalFilename: 'index.qwik.mjs_Badge_component_abc',
+						extension: 'js',
+						parent: null,
+						ctxKind: 'function',
+						ctxName: 'component',
+						captures: false,
+						loc: [0, 0],
+					},
+					origPath: null,
+				},
+			],
+			diagnostics: [],
+			isTypeScript: true,
+			isJsx: true,
+		});
+
+		const plugin = qwikClient();
+		callBuildStart(plugin, { cwd: '/workspace/app' });
+		await callTransform(plugin, "import { component$ } from '@qwik.dev/core';", importer);
+
+		const resolvedId = await callResolveId(
+			plugin,
+			'./index.qwik.mjs_Badge_component_abc.js',
+			importer,
+		);
+
+		expect(typeof resolvedId).toBe('string');
+		expect(await callLoad(plugin, resolvedId as string)).toBe(
+			'export const s_abc = () => "Hello";',
+		);
 	});
 });
 

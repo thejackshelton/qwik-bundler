@@ -125,7 +125,6 @@ This project implements Qwik Hot Module Replacement support for `qwik-bundler` V
 - `@qwik.dev/core` pkg.pr.new build - runtime dependency for fixtures, SSR rendering, Qwik loader/preloader/core chunks, and manifest detection in `fixtures/*/package.json` and `src/build/manifest.ts`.
 - `pathe` 2.0.3 - filesystem-style path resolution and normalization in `src/rolldown.ts`, `src/dev.ts`, `src/build/manifest.ts`, and `src/qwik-external.ts`; prefer this over hand-rolled path logic.
 - `ufo` 1.6.4 - URL and module id path handling in `src/rolldown.ts`, `src/dev.ts`, and `src/build/static-html.ts`; prefer this for URL joins/parsing.
-- `vitefu` 1.1.3 - framework package crawling for Vite dependency optimization and `noExternal` defaults in `src/qwik-external.ts`.
 - `@types/node` 24.12.2 resolved / `^24.10.1` declared - Node type support for implementation tests and fixtures.
 
 ## Configuration
@@ -191,7 +190,7 @@ This project implements Qwik Hot Module Replacement support for `qwik-bundler` V
 ## Import Organization
 
 - No TypeScript path aliases are configured in `tsconfig.json`; use relative imports for local source and test helpers.
-- Use package imports for public dependencies: `@qwik.dev/optimizer`, `pathe`, `ufo`, `rolldown`, `vite`, and `vitefu`.
+- Use package imports for public dependencies: `@qwik.dev/optimizer`, `pathe`, `ufo`, `rolldown`, and `vite`.
 - Use relative paths from tests to source: `../src/rolldown`, `../src/vite`, and `../src/build/manifest` in `test/*.test.ts`.
 
 ## Error Handling
@@ -200,7 +199,7 @@ This project implements Qwik Hot Module Replacement support for `qwik-bundler` V
 - Report optimizer diagnostics through the plugin context instead of throwing directly: `reportDiagnostics` calls `context.error` for `category === 'error'` and `context.warn` otherwise in `src/rolldown.ts`.
 - Throw a normal `Error` only for invalid direct API/config usage: boolean `codeSplitting` throws in `src/build/chunking.ts`.
 - Use nullable returns to express “not handled” in plugin hooks: `return null` in `resolveId`, `load`, and `transform` paths in `src/rolldown.ts`, `src/dev.ts`, and `src/qwik-external.ts`.
-- In tests, throw explicit assertion guard errors only after runtime shape checks: `throw new Error('Expected transformed code')` in `test/manifest.test.ts` and `throw new Error('Expected crawlFrameworkPkgs options')` in `test/vite-config.test.ts`.
+- In tests, throw explicit assertion guard errors only after runtime shape checks: `throw new Error('Expected transformed code')` in `test/manifest.test.ts`.
 
 ## Logging
 
@@ -286,10 +285,10 @@ This project implements Qwik Hot Module Replacement support for `qwik-bundler` V
 - Contains: `createQwikDev()`, `parseDevQrl()`, `devSegmentPaths()`, and `transformDevParent()`.
 - Depends on: narrow `QwikDevServer` callbacks rather than raw Vite server internals.
 - Used by: `resolveId`, `load`, and `transform` hooks in `src/rolldown.ts`; Vite injects the server through `src/vite.ts`.
-- Purpose: keep Qwik output bundleable while respecting user externalization and Vite dependency crawling.
+- Purpose: keep Qwik output bundleable while respecting user externalization and Vite environment resolution.
 - Location: `src/qwik-external.ts`
-- Contains: `qwikExternal()`, `qwikViteExternal()`, Qwik package detection, and `.qwik.` output checks.
-- Depends on: Rolldown external option shapes, Vite config hooks, `vitefu`, and `pathe`.
+- Contains: `qwikExternal()`, `qwikViteExternal()`, Qwik runtime defaults, and `.qwik.` output checks.
+- Depends on: Rolldown external option shapes, Vite config hooks, and `pathe`.
 - Used by: both `src/rolldown.ts` and `src/vite.ts`.
 - Purpose: exercise real host-native integration modes without baking app conventions into the plugin.
 - Location: `fixtures/`, `test/`

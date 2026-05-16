@@ -5,7 +5,7 @@ import {
 	type SegmentAnalysis,
 	type TransformModule,
 } from '@qwik.dev/optimizer';
-import { dirname, resolve } from 'pathe';
+import { dirname, join } from 'pathe';
 import type { Plugin, RolldownError, TransformPluginContext } from 'rolldown';
 import { isRelative, parsePath } from 'ufo';
 import { outputDefaults, Q_BUNDLE_GRAPH, Q_BUILD_PREFIX, QWIK_BUILD } from './build/chunking';
@@ -64,7 +64,6 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 	let manifest: QwikManifest | ServerQwikManifest | null = null;
 	let optimizer: ReturnType<typeof createOptimizer> | undefined;
 	let root = options.rootDir;
-	let missingManifestWarned = false;
 	let name = 'qwik:rolldown';
 
 	if (typeof environment === 'string') {
@@ -112,7 +111,6 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 				root = options.rootDir ?? input.cwd;
 			}
 
-			missingManifestWarned = false;
 			if (!dev.isEnabled() && getEnvironment(this) === 'client') {
 				for (const [id, name] of [
 					[QWIK_HANDLERS_ENTRY, 'handlers'],
@@ -180,7 +178,7 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 			const importerSegment = segments.get(importerPath);
 			const from = importerSegment?.path ?? importerPath;
 
-			const id = segmentId(currentEnvironment, resolve(dirname(from), source));
+			const id = segmentId(currentEnvironment, join(dirname(from), source));
 			if (segments.has(id)) {
 				return id;
 			}
@@ -239,15 +237,6 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 
 			if (!next.includes(QWIK_MANIFEST)) {
 				return fallback;
-			}
-			if (!dev.isEnabled() && !manifest?.manifestHash && !missingManifestWarned) {
-				missingManifestWarned = true;
-				this.warn(
-					createPluginError(
-						path,
-						'Qwik server manifest was referenced, but no client manifest is available. Pass manifestInput or run the client build before the server build.',
-					),
-				);
 			}
 
 			return { code: injectManifest(next, manifest), map };

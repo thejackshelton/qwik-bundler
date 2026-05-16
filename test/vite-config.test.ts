@@ -1,5 +1,5 @@
 import type { EnvironmentOptions, Plugin, UserConfig } from 'vite';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
 import { qwik } from '../src/vite/index';
 import {
 	callConfig,
@@ -9,22 +9,6 @@ import {
 	createViteHookContext,
 	getPlugin,
 } from './helpers';
-
-const vitefuMock = vi.hoisted(() => ({
-	crawlFrameworkPkgs: vi.fn(),
-}));
-
-vi.mock('vitefu', () => ({
-	crawlFrameworkPkgs: vitefuMock.crawlFrameworkPkgs,
-}));
-
-beforeEach(() => {
-	vitefuMock.crawlFrameworkPkgs.mockReset();
-	vitefuMock.crawlFrameworkPkgs.mockResolvedValue({
-		optimizeDeps: { include: [], exclude: [] },
-		ssr: { noExternal: [], external: [] },
-	});
-});
 
 describe('Vite config integration', () => {
 	test('sets Vite config defaults for app builds', async () => {
@@ -75,7 +59,9 @@ describe('Vite config integration', () => {
 				},
 			},
 		});
-		expect(callConfigEnvironment(plugin, 'vite_workerd_fixture', workerConfig)).toBeUndefined();
+		expect(callConfigEnvironment(plugin, 'vite_workerd_fixture', workerConfig)).toEqual({
+			resolve: { noExternal: ['@qwik.dev/core', '@builder.io/qwik'] },
+		});
 	});
 
 	test('does not rebuild the client environment after Qwik prebuilds it', async () => {
@@ -96,11 +82,7 @@ describe('Vite config integration', () => {
 		expect(build).toHaveBeenCalledTimes(1);
 	});
 
-	test('uses vitefu to optimize and bundle Qwik deps', async () => {
-		vitefuMock.crawlFrameworkPkgs.mockResolvedValueOnce({
-			optimizeDeps: { include: [], exclude: ['@fixtures/qwik-lib'] },
-			ssr: { noExternal: ['@fixtures/qwik-lib'], external: [] },
-		});
+	test('adds only built-in Qwik runtime externalization defaults', async () => {
 		const plugin = getQwikPlugin();
 		const config: UserConfig = { root: '/workspace/app' };
 
@@ -109,26 +91,7 @@ describe('Vite config integration', () => {
 			mode: 'development',
 		});
 
-		expect(result).toEqual({
-			optimizeDeps: { include: [], exclude: ['@fixtures/qwik-lib'] },
-		});
-		expect(vitefuMock.crawlFrameworkPkgs).toHaveBeenCalledWith(
-			expect.objectContaining({
-				root: '/workspace/app',
-				isBuild: false,
-				viteUserConfig: config,
-			}),
-		);
-
-		const [crawlOptions] = vitefuMock.crawlFrameworkPkgs.mock.calls[0] ?? [];
-		if (!crawlOptions) {
-			throw new Error('Expected crawlFrameworkPkgs options');
-		}
-		expect(crawlOptions.isFrameworkPkgByJson({ qwik: './lib/index.qwik.mjs' })).toBe(true);
-		expect(
-			crawlOptions.isFrameworkPkgByJson({ peerDependencies: { '@qwik.dev/core': '^2.0.0' } }),
-		).toBe(true);
-		expect(crawlOptions.isFrameworkPkgByJson({ dependencies: { plain: '1.0.0' } })).toBe(false);
+		expect(result).toBeUndefined();
 
 		const environmentConfig: EnvironmentOptions = {
 			resolve: { noExternal: ['existing'] },
@@ -136,33 +99,42 @@ describe('Vite config integration', () => {
 		const environmentResult = callConfigEnvironment(plugin, 'ssr', environmentConfig);
 
 		expect(environmentResult).toEqual({
-			resolve: { noExternal: ['existing', '@fixtures/qwik-lib'] },
+			resolve: { noExternal: ['existing', '@qwik.dev/core', '@builder.io/qwik'] },
 		});
-
-		const existingQwikConfig: EnvironmentOptions = {
-			resolve: { noExternal: ['existing', '@fixtures/qwik-lib'] },
-		};
-		expect(callConfigEnvironment(plugin, 'ssr', existingQwikConfig)).toBeUndefined();
 
 		const noExternalAllConfig: EnvironmentOptions = { resolve: { noExternal: true } };
 		expect(callConfigEnvironment(plugin, 'ssr', noExternalAllConfig)).toBeUndefined();
 	});
 
-	test('does not emit SSR externalization defaults', async () => {
-		vitefuMock.crawlFrameworkPkgs.mockResolvedValueOnce({
-			optimizeDeps: { include: [], exclude: ['@fixtures/qwik-lib'] },
-			ssr: { noExternal: ['@fixtures/qwik-lib'], external: ['node-only'] },
-		});
+	test('excludes Qwik runtime from dev dependency optimization', async () => {
 		const plugin = getQwikPlugin();
-		const config: UserConfig = { root: '/workspace/app' };
+		const config: UserConfig = {
+			optimizeDeps: { exclude: ['existing'] },
+		};
 
-		const result = await callConfig(plugin, config, {
-			command: 'serve',
-			mode: 'development',
-		});
+		await callConfig(plugin, config, { command: 'serve', mode: 'development' });
 
-		expect(result).toEqual({
-			optimizeDeps: { include: [], exclude: ['@fixtures/qwik-lib'] },
+		expect(config.optimizeDeps).toMatchObject({
+			exclude: [
+				'existing',
+				'@qwik.dev/core',
+				'@qwik.dev/core/internal',
+				'@qwik.dev/core/server',
+				'@qwik.dev/core/jsx-runtime',
+				'@qwik.dev/core/jsx-dev-runtime',
+				'@qwik.dev/core/build',
+				'@qwik.dev/core/loader',
+				'@qwik.dev/core/preloader',
+				'@builder.io/qwik',
+			],
+			rolldownOptions: {
+				transform: {
+					jsx: {
+						runtime: 'automatic',
+						importSource: '@qwik.dev/core',
+					},
+				},
+			},
 		});
 	});
 

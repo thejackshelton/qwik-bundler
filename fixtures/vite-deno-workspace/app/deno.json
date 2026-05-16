@@ -1,0 +1,11 @@
+{
+	"name": "@fixtures/deno-qwik-app",
+	"version": "0.0.0",
+	"exports": "./src/root.tsx",
+	"compilerOptions": {
+		"jsx": "react-jsx",
+		"jsxImportSource": "@qwik.dev/core",
+		"jsxImportSourceTypes": "@qwik.dev/core",
+		"lib": ["deno.ns", "dom", "dom.iterable", "esnext"]
+	}
+}

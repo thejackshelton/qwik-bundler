@@ -1,0 +1,22 @@
+{
+	"compilerOptions": {
+		"allowImportingTsExtensions": true,
+		"allowJs": true,
+		"baseUrl": ".",
+		"checkJs": false,
+		"jsx": "react-jsx",
+		"jsxImportSource": "@qwik.dev/core",
+		"lib": ["DOM", "DOM.Iterable", "ESNext"],
+		"module": "ESNext",
+		"moduleResolution": "Bundler",
+		"noEmit": true,
+		"paths": {
+			"@fixtures/deno-qwik-lib": ["../qwik-lib/lib/index.qwik.mjs"],
+			"@qwik.dev/bundler/vite": ["../qwik-bundler/dist/vite/index.mjs"]
+		},
+		"skipLibCheck": true,
+		"target": "ESNext",
+		"types": ["@types/deno"]
+	},
+	"include": ["server.ts", "src/**/*.ts", "src/**/*.tsx", "vite.config.ts"]
+}

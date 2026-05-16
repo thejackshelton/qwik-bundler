@@ -1,5 +1,5 @@
 import type { TransformModule } from '@qwik.dev/optimizer';
-import { dirname, normalize, relative, resolve } from 'pathe';
+import { dirname, join, normalize, relative } from 'pathe';
 import type { PluginContext } from 'rolldown';
 import { isEqual, isRelative, parsePath, withLeadingSlash } from 'ufo';
 import { makeConstPropsDiffable } from './hmr/optimizer';
@@ -140,7 +140,7 @@ function parseDevQrl(id: string): { parent: string; path: string } | null {
 }
 
 function resolveRelative(path: string, importer: string | undefined) {
-	return importer && isRelative(path) ? resolve(dirname(pathname(importer)), path) : path;
+	return importer && isRelative(path) ? join(dirname(pathname(importer)), path) : path;
 }
 
 function devSegmentPaths(path: string, root: string | undefined) {

@@ -1,0 +1,28 @@
+{
+	"name": "@qwik.dev/bundler",
+	"version": "0.0.0",
+	"type": "module",
+	"exports": {
+		"./vite": "./dist/vite/index.mjs",
+		"./rolldown": "./dist/rolldown.mjs",
+		"./package.json": "./package.json"
+	},
+	"dependencies": {
+		"@qwik.dev/optimizer": "2.1.0-beta.2",
+		"@thi.ng/dgraph": "^2.1.205",
+		"pathe": "^2.0.3",
+		"ufo": "^1.6.4"
+	},
+	"peerDependencies": {
+		"rolldown": "^1.0.0-rc.18",
+		"vite": "^8.0.10"
+	},
+	"peerDependenciesMeta": {
+		"rolldown": {
+			"optional": true
+		},
+		"vite": {
+			"optional": true
+		}
+	}
+}
