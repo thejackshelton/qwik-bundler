@@ -7,8 +7,8 @@ import type {
 	QwikManifest,
 	QwikSymbol,
 	ServerQwikManifest,
-} from '../types';
-import { convertManifestToBundleGraph } from './bundle-graph';
+} from '../types.ts';
+import { convertManifestToBundleGraph } from './bundle-graph.ts';
 
 export const QWIK_MANIFEST = 'globalThis.__QWIK_MANIFEST__';
 export const Q_MANIFEST_FILE = 'q-manifest.json';

@@ -8,18 +8,23 @@ import {
 import { dirname, resolve } from 'pathe';
 import type { Plugin, RolldownError, TransformPluginContext } from 'rolldown';
 import { isRelative, parsePath } from 'ufo';
-import { outputDefaults, Q_BUNDLE_GRAPH, Q_BUILD_PREFIX, QWIK_BUILD } from './build/chunking';
-import { injectQwikPreloaderTags } from './build/static-html';
-import { createQwikDev } from './dev';
-import { comptimeConfig, replaceExperimental } from './features';
-import { createManifest, injectManifest, Q_MANIFEST_FILE, QWIK_MANIFEST } from './build/manifest';
-import { qwikExternal } from './qwik-external';
+import { outputDefaults, Q_BUNDLE_GRAPH, Q_BUILD_PREFIX, QWIK_BUILD } from './build/chunking.ts';
+import { injectQwikPreloaderTags } from './build/static-html.ts';
+import { createQwikDev } from './dev.ts';
+import { comptimeConfig, replaceExperimental } from './features.ts';
+import {
+	createManifest,
+	injectManifest,
+	Q_MANIFEST_FILE,
+	QWIK_MANIFEST,
+} from './build/manifest.ts';
+import { qwikExternal } from './qwik-external.ts';
 import type {
 	QwikEnvironment,
 	QwikManifest,
 	QwikRolldownOptions,
 	ServerQwikManifest,
-} from './types';
+} from './types.ts';
 
 export type {
 	BundleGraphAdder,
@@ -33,7 +38,7 @@ export type {
 	QwikRolldownOptions,
 	QwikSymbol,
 	ServerQwikManifest,
-} from './types';
+} from './types.ts';
 
 type TransformContext = Pick<TransformPluginContext, 'emitFile' | 'error' | 'warn'>;
 type Environment = QwikEnvironment | ((context: unknown) => QwikEnvironment);

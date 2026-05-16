@@ -2,8 +2,8 @@ import type { TransformModule } from '@qwik.dev/optimizer';
 import { dirname, normalize, relative, resolve } from 'pathe';
 import type { PluginContext } from 'rolldown';
 import { isEqual, isRelative, parsePath, withLeadingSlash } from 'ufo';
-import { makeConstPropsDiffable } from './hmr/optimizer';
-import type { QwikDevServer, QwikEnvironment } from './types';
+import { makeConstPropsDiffable } from './hmr/optimizer.ts';
+import type { QwikDevServer, QwikEnvironment } from './types.ts';
 
 type EncodeSegment = (environment: QwikEnvironment, path: string) => string;
 

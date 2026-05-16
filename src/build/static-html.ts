@@ -5,8 +5,8 @@
 // TODO: Move the bootstrap tag generation upstream into core so SSR and static HTML share it.
 import type { OutputBundle } from 'rolldown';
 import { joinURL } from 'ufo';
-import { Q_BUILD_PREFIX } from './chunking';
-import type { QwikManifest } from '../types';
+import { Q_BUILD_PREFIX } from './chunking.ts';
+import type { QwikManifest } from '../types.ts';
 
 const MODULE_SCRIPT_TAG =
 	/<script\b(?=[^>]*\btype\s*=\s*(['"])module\1)[^>]*\bsrc\s*=\s*(['"])(.*?)\2[^>]*>/gi;
