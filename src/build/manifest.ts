@@ -1,6 +1,5 @@
 import type { SegmentAnalysis } from '@qwik.dev/optimizer';
 import { relative } from 'pathe';
-import type { OutputBundle, OutputChunk } from 'rolldown';
 import type {
 	BundleGraphAdder,
 	QwikBundle,
@@ -12,6 +11,30 @@ import { convertManifestToBundleGraph } from './bundle-graph.ts';
 
 export const QWIK_MANIFEST = 'globalThis.__QWIK_MANIFEST__';
 export const Q_MANIFEST_FILE = 'q-manifest.json';
+
+export type QwikManifestBundle = Record<string, QwikManifestBundleItem>;
+
+export type QwikManifestBundleItem = QwikManifestAsset | QwikManifestChunk;
+
+export interface QwikManifestAsset {
+	type: 'asset';
+	fileName: string;
+	name?: string;
+	names?: string[];
+	source: string | Uint8Array;
+}
+
+export interface QwikManifestChunk {
+	type: 'chunk';
+	fileName: string;
+	name: string;
+	code: string;
+	exports: string[];
+	imports: string[];
+	dynamicImports: string[];
+	moduleIds: string[];
+	facadeModuleId?: string | null;
+}
 
 const HANDLERS = [
 	'_chk',
@@ -54,7 +77,7 @@ const RUNTIME_BUNDLES = [
 ] as const;
 
 export function createManifest(
-	bundle: OutputBundle,
+	bundle: QwikManifestBundle,
 	segments: Map<string, SegmentAnalysis>,
 	root: string | undefined,
 	options: {
@@ -81,7 +104,7 @@ export function createManifest(
 			}
 
 			manifest.assets![item.fileName] = {
-				name: item.names[0],
+				name: item.names?.[0] ?? item.name,
 				size: item.source.length,
 			};
 			continue;
@@ -208,7 +231,7 @@ export function injectManifest(code: string, manifest: QwikManifest | ServerQwik
 }
 
 function mapBundleNames(
-	bundle: OutputBundle,
+	bundle: QwikManifestBundle,
 	names: string[],
 	canonPath: (fileName: string) => string,
 ) {
@@ -218,7 +241,7 @@ function mapBundleNames(
 	});
 }
 
-function getOrigins(item: OutputChunk, root: string | undefined) {
+function getOrigins(item: QwikManifestChunk, root: string | undefined) {
 	return item.moduleIds
 		.filter((id) => !id.startsWith('\0'))
 		.map((id) => (root ? relative(root, id) : id))
@@ -227,7 +250,7 @@ function getOrigins(item: OutputChunk, root: string | undefined) {
 
 function detectQwikCoreBundles(
 	manifest: QwikManifest,
-	item: OutputChunk,
+	item: QwikManifestChunk,
 	origins: string[],
 	bundleFileName: string,
 ) {

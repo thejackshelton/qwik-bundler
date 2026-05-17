@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { convertManifestToBundleGraph } from '../src/build/bundle-graph';
 import { createManifest, QWIK_MANIFEST } from '../src/build/manifest';
 import { qwikClient, qwikServer } from '../src/rolldown';
+import type { QwikManifestBundle } from '../src/build/manifest';
 import type { QwikBundleGraph, QwikManifest } from '../src/types';
 import { callBuildStart, callGenerateBundle, callTransform } from './helpers';
 
@@ -228,6 +229,61 @@ describe('Qwik manifest output', () => {
 			'/deno/npm/@qwik.dev/core/dist/core.prod.mjs',
 			'/deno/npm/@qwik.dev/core/handlers.mjs',
 		]);
+	});
+
+	test('creates a manifest from a bundler-neutral output shape', () => {
+		const bundle = {
+			'build/q-entry.js': {
+				type: 'chunk',
+				fileName: 'build/q-entry.js',
+				name: 'entry',
+				code: 'export const entry = 1;',
+				exports: ['entry'],
+				imports: ['build/q-child.js', 'build/q-core.js'],
+				dynamicImports: [],
+				moduleIds: ['/workspace/app/src/main.tsx'],
+				facadeModuleId: '/workspace/app/src/main.tsx',
+			},
+			'build/q-child.js': {
+				type: 'chunk',
+				fileName: 'build/q-child.js',
+				name: 'child',
+				code: 'export const child = 1;',
+				exports: ['child'],
+				imports: [],
+				dynamicImports: [],
+				moduleIds: ['/workspace/app/src/child.ts'],
+				facadeModuleId: '/workspace/app/src/child.ts',
+			},
+			'build/q-core.js': {
+				type: 'chunk',
+				fileName: 'build/q-core.js',
+				name: 'qwik-core',
+				code: 'export const _chk = 1;',
+				exports: ['_chk'],
+				imports: [],
+				dynamicImports: [],
+				moduleIds: ['/workspace/app/node_modules/@qwik.dev/core/dist/core.prod.mjs'],
+				facadeModuleId: '/workspace/app/node_modules/@qwik.dev/core/dist/core.prod.mjs',
+			},
+			'build/style.css': {
+				type: 'asset',
+				fileName: 'build/style.css',
+				source: 'body{}',
+			},
+		} satisfies QwikManifestBundle;
+
+		const manifest = createManifest(bundle, new Map(), '/workspace/app');
+
+		expect(manifest.core).toBe('build/q-core.js');
+		expect(manifest.bundles['build/q-entry.js']).toMatchObject({
+			imports: ['build/q-child.js'],
+			origins: ['src/main.tsx'],
+		});
+		expect(manifest.assets?.['build/style.css']).toEqual({
+			name: undefined,
+			size: 6,
+		});
 	});
 
 	test('computes bundle total size from static import graph', async () => {

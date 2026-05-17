@@ -8,6 +8,7 @@
 	"type": "module",
 	"exports": {
 		"./rolldown": "./dist/rolldown.mjs",
+		"./router/vite": "./dist/router/vite/index.mjs",
 		"./vite": "./dist/vite/index.mjs",
 		"./package.json": "./package.json"
 	},

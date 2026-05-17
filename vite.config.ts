@@ -5,11 +5,22 @@ export default defineConfig({
 		'*': 'vp check --fix',
 	},
 	pack: {
-		entry: ['./src/rolldown.ts', './src/vite/index.ts'],
+		entry: {
+			rolldown: './src/rolldown.ts',
+			'router/vite/index': './router/vite/index.ts',
+			'vite/index': './src/vite/index.ts',
+		},
 		format: ['esm'],
 		dts: true,
 		clean: true,
-		exports: true,
+		exports: {
+			customExports: () => ({
+				'./rolldown': './dist/rolldown.mjs',
+				'./router/vite': './dist/router/vite/index.mjs',
+				'./vite': './dist/vite/index.mjs',
+				'./package.json': './package.json',
+			}),
+		},
 	},
 	test: {
 		environment: 'node',

@@ -7,7 +7,7 @@
 		"dev": "vite --mode ssr",
 		"build": "qwik build",
 		"build.client": "vite build",
-		"build.preview": "vite build --ssr src/entry.preview.tsx",
+		"build.preview": "vite build --ssr src/entry.preview.tsx --outDir server",
 		"preview": "qwik build preview && vite preview --open"
 	},
 	"dependencies": {

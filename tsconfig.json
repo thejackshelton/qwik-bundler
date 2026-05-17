@@ -15,5 +15,5 @@
 		"declaration": true,
 		"lib": ["ESNext"]
 	},
-	"include": ["src", "vite.config.ts"]
+	"include": ["src", "router", "vite.config.ts"]
 }
