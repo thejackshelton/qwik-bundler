@@ -20,6 +20,7 @@
 		"test:hmr-attribute": "node scripts/with-lock.mjs hmr-smoke \"pnpm build && node scripts/smoke-vite-csr-attribute-hmr.mjs\"",
 		"test:hmr-remove-handler": "node scripts/with-lock.mjs hmr-smoke \"pnpm build && node scripts/smoke-vite-nitro-remove-handler-hmr.mjs\"",
 		"test:hmr-nitro": "node scripts/with-lock.mjs hmr-smoke \"pnpm build && node scripts/smoke-vite-nitro-hmr.mjs\"",
+		"test:ssg-overlay": "node scripts/with-lock.mjs ssg-overlay-smoke \"node scripts/smoke-vite-ssg-overlay.mjs\"",
 		"test:workerd": "pnpm build && pnpm --dir fixtures/vite-workerd build && node scripts/smoke-vite-workerd-hmr.mjs",
 		"test:watch": "vp test watch",
 		"check": "vp check",

@@ -3,7 +3,9 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"build": "vite build"
+		"build": "vite build",
+		"dev": "vite dev",
+		"preview": "vite preview"
 	},
 	"dependencies": {
 		"@qwik.dev/core": "https://pkg.pr.new/QwikDev/qwik/@qwik.dev/core@1f3647c"
