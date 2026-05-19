@@ -204,6 +204,28 @@ describe('Rolldown optimizer transforms', () => {
 		);
 	});
 
+	test('optimizes TypeScript side-effect modules without Qwik imports', async () => {
+		const plugin = qwikServer();
+
+		callBuildStart(plugin, { cwd: '/workspace/app' });
+		await callTransform(
+			plugin,
+			'const script = document.currentScript;',
+			'/workspace/app/src/view-navigation.script.ts',
+		);
+
+		expect(optimizerMock.transformModules).toHaveBeenCalledWith(
+			expect.objectContaining({
+				input: [
+					expect.objectContaining({
+						path: '/workspace/app/src/view-navigation.script.ts',
+					}),
+				],
+				isServer: true,
+			}),
+		);
+	});
+
 	test('skips generated JavaScript without Qwik imports', async () => {
 		const plugin = qwikClient();
 

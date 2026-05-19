@@ -1,13 +1,7 @@
 import { basename, dirname, extname, join, relative, resolve } from 'pathe';
-import type {
-	ConfigEnv,
-	EnvironmentOptions,
-	Plugin,
-	PluginOption,
-	UserConfig,
-	ViteDevServer,
-} from 'vite';
+import type { ConfigEnv, EnvironmentOptions, PluginOption, UserConfig, ViteDevServer } from 'vite';
 import type { BundleGraphAdder, QwikManifest } from '../../src/types.ts';
+import { createDevSsrMiddleware, getRouterIndexTags } from './dev.ts';
 import { configureRouterPreviewServer, type RouterPreviewOptions } from './preview.ts';
 import {
 	QWIK_ROUTER_SERVER_FUNCTIONS_ID,
@@ -17,6 +11,17 @@ import {
 	type ServerFunctionsPluginOptions,
 	collectServerFunctionModuleIds,
 } from './server-functions.ts';
+import type {
+	BuiltRouterLayout,
+	BuiltRouterRoute,
+	QwikCityVitePluginOptions,
+	QwikRouterPlugin,
+	QwikRouterPluginApi,
+	QwikRouterVitePluginOptions,
+	QwikVitePluginApiHost,
+	RouterBuildOptions,
+	RouterState,
+} from './types.ts';
 
 export {
 	QWIK_ROUTER_SERVER_FUNCTIONS_ID,
@@ -25,7 +30,13 @@ export {
 	serverFunctionsPlugin,
 };
 export type {
+	BuiltRouterLayout,
+	BuiltRouterRoute,
 	CollectServerFunctionModuleOptions,
+	QwikCityVitePluginOptions,
+	QwikRouterPlugin,
+	QwikRouterPluginApi,
+	QwikRouterVitePluginOptions,
 	RouterPreviewOptions,
 	ServerFunctionPluginContext,
 	ServerFunctionsPluginOptions,
@@ -39,60 +50,6 @@ const QWIK_ROUTER = '@qwik.dev/router';
 const DEFAULT_CLIENT_INPUT = 'src/root.tsx';
 const ROUTE_EXTENSIONS = new Set(['.js', '.jsx', '.ts', '.tsx']);
 const ROUTE_BASENAMES = new Set(['index', 'layout', '404', 'error']);
-
-export interface QwikRouterVitePluginOptions {
-	/** Client build input to use when the host has not supplied one. Defaults to `src/root.tsx`. */
-	clientInput?: string | string[] | Record<string, string>;
-	/** Environment name used for the client build. Defaults to `client`. */
-	clientEnvironment?: string;
-	/** Directory containing Qwik Router routes. Defaults to `src/routes`. */
-	routesDir?: string;
-	/** Directory containing Qwik Router server plugins. Defaults to `routesDir`. */
-	serverPluginsDir?: string;
-	/** Use static route imports in generated router config. Defaults to dynamic imports. */
-	staticImportRoutes?: boolean;
-	/** Configure Vite preview to serve the built SSR preview entry. */
-	preview?: RouterPreviewOptions | false;
-	/** Client manifest imported into server builds. Defaults to `dist/q-manifest.json`. */
-	clientManifest?: string | false;
-	/** Enable the basic dev SSR fallback middleware. Defaults to `true`. */
-	devSsrServer?: boolean;
-	/** Match Qwik Router's trailing slash define. Defaults to `true`. */
-	trailingSlash?: boolean;
-	/** Match Qwik Router's loader serialization define. Defaults to `never`. */
-	defaultLoadersSerializationStrategy?: string;
-	/** Platform data passed to the dev middleware's Qwik Router adapter. */
-	platform?: Record<string, unknown>;
-	/** Server function virtual-module options for non-router hosts. */
-	serverFunctions?: Partial<Pick<ServerFunctionsPluginOptions, 'virtualId'>>;
-}
-
-export type QwikCityVitePluginOptions = QwikRouterVitePluginOptions;
-
-export interface BuiltRouterRoute {
-	id: string;
-	filePath: string;
-	pathname: string;
-	routeName: string;
-	layouts: BuiltRouterLayout[];
-}
-
-export interface BuiltRouterLayout {
-	id: string;
-	filePath: string;
-	pathname: string;
-}
-
-export interface QwikRouterPluginApi {
-	getBasePathname: () => string;
-	getRoutes: () => BuiltRouterRoute[];
-	getServiceWorkers: () => [];
-}
-
-export type QwikRouterPlugin = Plugin & {
-	name: 'vite-plugin-qwik-router';
-	api: QwikRouterPluginApi;
-};
 
 /** @deprecated Use `qwikRouter` instead. */
 export function qwikCity(options?: QwikCityVitePluginOptions): PluginOption[] {
@@ -158,6 +115,7 @@ function qwikRouterPlugin(
 						QWIK_ROUTER_CONFIG_ID,
 						QWIK_ROUTER_ENTRIES_ID,
 						QWIK_ROUTER_SW_REGISTER_ID,
+						// TODO: Remove the Zod special case once Qwik Router accepts Standard Schema validators.
 						'zod',
 					],
 				},
@@ -196,7 +154,7 @@ function qwikRouterPlugin(
 			}
 
 			return () => {
-				server.middlewares.use(createDevSsrMiddleware(server, state, options));
+				server.middlewares.use(createDevSsrMiddleware(server, options));
 			};
 		},
 
@@ -293,6 +251,7 @@ function routerViteConfig(options: QwikRouterVitePluginOptions): UserConfig {
 				QWIK_ROUTER_CONFIG_ID,
 				QWIK_ROUTER_ENTRIES_ID,
 				QWIK_ROUTER_SW_REGISTER_ID,
+				// TODO: Remove the Zod special case once Qwik Router accepts Standard Schema validators.
 				'zod',
 			],
 		},
@@ -603,108 +562,6 @@ function invalidateRouterConfig(server: ViteDevServer) {
 	}
 }
 
-function createDevSsrMiddleware(
-	server: ViteDevServer,
-	state: RouterState,
-	options: QwikRouterVitePluginOptions,
-) {
-	return async (req: ConnectRequest, res: ConnectResponse, next: () => void) => {
-		let mod: { default?: (options: unknown) => unknown };
-		try {
-			mod = (await server.ssrLoadModule('src/entry.ssr')) as {
-				default?: (options: unknown) => unknown;
-			};
-		} catch (error) {
-			if (error instanceof Error) {
-				server.ssrFixStacktrace(error);
-			}
-			next();
-			return;
-		}
-		if (!mod.default) {
-			next();
-			return;
-		}
-
-		try {
-			const { createQwikRouter } = (await server.ssrLoadModule(
-				'@qwik.dev/router/middleware/node',
-			)) as {
-				createQwikRouter: (options: unknown) => {
-					router: (req: ConnectRequest, res: ConnectResponse, next: () => void) => void;
-					staticFile: (
-						req: ConnectRequest,
-						res: ConnectResponse,
-						next: () => void,
-					) => void;
-				};
-			};
-			const { router, staticFile } = createQwikRouter({
-				render: mod.default,
-				platform: options.platform,
-			});
-
-			staticFile(req, res, () => router(req, res, next));
-		} catch (error) {
-			if (error instanceof Error) {
-				server.ssrFixStacktrace(error);
-			}
-			next();
-		}
-	};
-}
-
-function getRouterIndexTags(server: ViteDevServer) {
-	const cssUrls = new Set<string>();
-	for (const graph of [
-		server.environments.client?.moduleGraph,
-		server.environments.ssr?.moduleGraph,
-	]) {
-		if (!graph) continue;
-		for (const mod of graph.idToModuleMap.values()) {
-			const [path] = mod.url.split('?');
-			if (path && isCssPath(path) && mod.importers.size === 0) {
-				cssUrls.add(mod.url);
-			}
-		}
-	}
-	return [...cssUrls].sort().map((href) => ({
-		tag: 'link',
-		attrs: { rel: 'stylesheet', href },
-	}));
-}
-
-function isCssPath(path: string) {
-	return ['.css', '.scss', '.sass', '.less', '.styl', '.stylus'].some((ext) =>
-		path.endsWith(ext),
-	);
-}
-
-type RouterState = {
-	base: string;
-	dirty: boolean;
-	dynamicImports: boolean;
-	layouts: BuiltRouterLayout[];
-	rootDir: string;
-	routes: BuiltRouterRoute[];
-	routesDir: string;
-	serverPlugins: string[];
-	serverPluginsDir: string;
-};
-
-type RouterBuildOptions = {
-	rolldownOptions?: { input?: unknown };
-};
-
 function hasBuildInput(build: RouterBuildOptions | undefined) {
 	return !!build?.rolldownOptions?.input;
 }
-
-type QwikVitePluginApiHost = Plugin & {
-	api?: {
-		registerBundleGraphAdder?: (adder: BundleGraphAdder) => void;
-	};
-};
-
-type ConnectRequest = Parameters<import('vite').Connect.NextHandleFunction>[0];
-type ConnectResponse = Parameters<import('vite').Connect.NextHandleFunction>[1];

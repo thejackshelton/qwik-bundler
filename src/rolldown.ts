@@ -50,6 +50,7 @@ const QWIK_HANDLERS_ENTRY = 'qwik:handlers';
 const QWIK_PRELOADER_ENTRY = 'qwik:preloader';
 const SEGMENT = '\0qwik:segment:';
 const JS_OR_TS_SOURCE_FILE = /\.[cm]?[jt]sx?$/;
+const TS_OR_JSX_SOURCE_FILE = /(?:\.[cm]?tsx?|\.jsx)$/;
 const QWIK_LIBRARY_SOURCE_FILE = /\.qwik\.[cm]?[jt]sx?$/;
 const QWIK_RUNTIME_MODULE = /[/\\]@qwik\.dev[/\\]core[/\\]/;
 const QWIK_PUBLIC_IMPORTS = ['@qwik.dev/core', '@builder.io/qwik'];
@@ -380,9 +381,10 @@ function createPluginError(id: string, message: string): RolldownError {
 }
 
 function shouldOptimize(code: string, path: string) {
-	if (!JS_OR_TS_SOURCE_FILE.test(path)) return false;
 	if (QWIK_RUNTIME_MODULE.test(path)) return false;
 	if (QWIK_LIBRARY_SOURCE_FILE.test(path)) return true;
+	if (TS_OR_JSX_SOURCE_FILE.test(path)) return true;
+	if (!JS_OR_TS_SOURCE_FILE.test(path)) return false;
 	return importsQwik(code);
 }
 
