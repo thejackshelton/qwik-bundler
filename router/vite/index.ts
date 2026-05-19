@@ -1,7 +1,7 @@
 import { basename, dirname, extname, join, relative, resolve } from 'pathe';
 import type { ConfigEnv, EnvironmentOptions, PluginOption, UserConfig, ViteDevServer } from 'vite';
 import type { BundleGraphAdder, QwikManifest } from '../../src/types.ts';
-import { createDevSsrMiddleware, getRouterIndexTags } from './dev.ts';
+import { createDevSsrMiddleware, createRouterDevEnvironment, getRouterIndexTags } from './dev.ts';
 import { configureRouterPreviewServer, type RouterPreviewOptions } from './preview.ts';
 import {
 	QWIK_ROUTER_SERVER_FUNCTIONS_ID,
@@ -104,11 +104,12 @@ function qwikRouterPlugin(
 			return routerViteConfig(options);
 		},
 
-		configEnvironment(name: string) {
-			if (name !== 'ssr') {
+		configEnvironment(name: string, config) {
+			if (name !== (options.serverEnvironment ?? 'ssr')) {
 				return {};
 			}
-			return {
+			const environment: EnvironmentOptions = {
+				consumer: 'server',
 				resolve: {
 					noExternal: [
 						QWIK_ROUTER,
@@ -120,6 +121,12 @@ function qwikRouterPlugin(
 					],
 				},
 			} satisfies EnvironmentOptions;
+			if (options.devSsrServer !== false && !config.dev?.createEnvironment) {
+				environment.dev = {
+					createEnvironment: createRouterDevEnvironment(options),
+				};
+			}
+			return environment;
 		},
 
 		configResolved(config) {

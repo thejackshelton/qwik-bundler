@@ -1,6 +1,17 @@
-import { isCSSRequest } from 'vite';
+import {
+	createFetchableDevEnvironment,
+	createServerHotChannel,
+	createServerModuleRunner,
+	isCSSRequest,
+} from 'vite';
 import { parsePath, withQuery } from 'ufo';
-import type { DevEnvironment, EnvironmentModuleNode, HtmlTagDescriptor, ViteDevServer } from 'vite';
+import type {
+	DevEnvironment,
+	EnvironmentModuleNode,
+	EnvironmentOptions,
+	HtmlTagDescriptor,
+	ViteDevServer,
+} from 'vite';
 import type {
 	ConnectNext,
 	ConnectRequest,
@@ -11,8 +22,29 @@ import type {
 	FetchableServerEnvironment,
 	RequestHandlerModule,
 	RouterServerRequestEvent,
-	RunnableServerEnvironment,
 } from './types.ts';
+
+export function createRouterDevEnvironment(
+	options: DevSsrOptions,
+): NonNullable<NonNullable<EnvironmentOptions['dev']>['createEnvironment']> {
+	return (name, config) => {
+		let runner: ReturnType<typeof createServerModuleRunner> | undefined;
+		const environment = createFetchableDevEnvironment(name, config, {
+			hot: true,
+			transport: createServerHotChannel(),
+			handleRequest(request) {
+				runner ??= createServerModuleRunner(environment);
+				return renderDevRequest(runner, request, options);
+			},
+		});
+		const close = environment.close.bind(environment);
+		environment.close = async () => {
+			await runner?.close();
+			await close();
+		};
+		return environment;
+	};
+}
 
 export function createDevSsrMiddleware(server: ViteDevServer, options: DevSsrOptions) {
 	return async (req: ConnectRequest, res: ConnectResponse, next: ConnectNext) => {
@@ -44,60 +76,36 @@ export function getRouterIndexTags(server: ViteDevServer): HtmlTagDescriptor[] {
 }
 
 async function getDevResponse(server: ViteDevServer, request: Request, options: DevSsrOptions) {
-	const environments = getServerEnvironments(server, options.serverEnvironment);
-	for (const environment of environments) {
-		if (environment?.config.consumer !== 'server') {
-			continue;
-		}
-		const dispatchFetch = (environment as Partial<FetchableServerEnvironment>).dispatchFetch;
-		if (dispatchFetch) {
-			return dispatchFetch.call(environment, request);
-		}
+	const environment = getFetchEnvironment(server, options.serverEnvironment);
+	if (!environment) {
+		return null;
 	}
 
-	for (const environment of environments) {
-		if (environment?.config.consumer !== 'server') {
-			continue;
-		}
-		const runner = (environment as Partial<RunnableServerEnvironment>).runner;
-		if (runner?.import) {
-			return renderWithRunnableEnvironment(
-				environment as RunnableServerEnvironment,
-				request,
-				options,
-			);
-		}
-	}
-
-	return null;
+	return environment.dispatchFetch(request);
 }
 
-function getServerEnvironments(server: ViteDevServer, name: string | undefined) {
-	if (name) {
-		return [server.environments[name]];
+function getFetchEnvironment(server: ViteDevServer, name: string | undefined) {
+	const environment = server.environments[name ?? 'ssr'] as
+		| Partial<FetchableServerEnvironment>
+		| undefined;
+	if (environment?.config?.consumer !== 'server' || !environment.dispatchFetch) {
+		return null;
 	}
-	const environments = Object.values(server.environments);
-	const ssr = server.environments.ssr;
-	if (!ssr) {
-		return environments;
-	}
-	return [ssr, ...environments.filter((environment) => environment !== ssr)];
+	return environment as FetchableServerEnvironment;
 }
 
-async function renderWithRunnableEnvironment(
-	environment: RunnableServerEnvironment,
+async function renderDevRequest(
+	runner: ReturnType<typeof createServerModuleRunner>,
 	request: Request,
 	options: DevSsrOptions,
 ) {
 	(globalThis as { __qwik?: unknown }).__qwik = undefined;
 	const [entry, requestHandler] = await Promise.all([
-		environment.runner.import<DevSsrEntry>('src/entry.ssr'),
-		environment.runner.import<RequestHandlerModule>(
-			'@qwik.dev/router/middleware/request-handler',
-		),
+		runner.import<DevSsrEntry>('src/entry.ssr'),
+		runner.import<RequestHandlerModule>('@qwik.dev/router/middleware/request-handler'),
 	]);
 	if (typeof entry.default !== 'function') {
-		return null;
+		return new Response('src/entry.ssr must export a default renderer', { status: 500 });
 	}
 
 	const handled = await requestHandler.requestHandler(
@@ -107,11 +115,11 @@ async function renderWithRunnableEnvironment(
 		},
 	);
 	if (!handled) {
-		return null;
+		return new Response('Not Found', { status: 404 });
 	}
 	void handled.completion.then(logCompletionError, logCompletionError);
 	const response = await handled.response;
-	return response ?? null;
+	return response ?? new Response('Not Found', { status: 404 });
 }
 
 function logCompletionError(error: unknown) {

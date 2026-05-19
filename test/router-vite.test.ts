@@ -11,6 +11,7 @@ import {
 } from '../router/vite/index.ts';
 import {
 	callConfig,
+	callConfigEnvironment,
 	callConfigResolved,
 	callConfigureServer,
 	callLoad,
@@ -201,6 +202,34 @@ describe('Qwik Router Vite integration', () => {
 		expect(result).toEqual(['/app/lazy.ts']);
 	});
 
+	test('configures a fetchable dev SSR environment', () => {
+		const plugin = getRouterPlugin();
+		const result = callConfigEnvironment(plugin, 'ssr', {});
+
+		expect(result).toMatchObject({
+			consumer: 'server',
+			resolve: {
+				noExternal: expect.arrayContaining([
+					'@qwik.dev/router',
+					QWIK_ROUTER_CONFIG_ID,
+					'zod',
+				]),
+			},
+		});
+		expect(result.dev?.createEnvironment).toEqual(expect.any(Function));
+	});
+
+	test('does not replace a host-owned dev server environment', () => {
+		const plugin = getRouterPlugin();
+		const createEnvironment = vi.fn();
+		const result = callConfigEnvironment(plugin, 'ssr', {
+			dev: { createEnvironment },
+		});
+
+		expect(result.resolve?.noExternal).toContain('@qwik.dev/router');
+		expect(result.dev?.createEnvironment).toBeUndefined();
+	});
+
 	test('dispatches dev SSR through a fetchable server environment', async () => {
 		const plugin = getRouterPlugin();
 		await callConfig(plugin, {}, { command: 'serve', mode: 'development' });
@@ -249,7 +278,7 @@ describe('Qwik Router Vite integration', () => {
 		expect(res.body).toContain('import(u)');
 	});
 
-	test('renders dev SSR through a runnable server environment without the node adapter', async () => {
+	test('does not fall back to a runnable server environment', async () => {
 		const plugin = getRouterPlugin({
 			platform: {
 				env: {
@@ -266,54 +295,11 @@ describe('Qwik Router Vite integration', () => {
 			root: '/app',
 		});
 
-		const render = vi.fn();
-		const importedIds: string[] = [];
-		const requestHandler = vi.fn(async (event, options) => {
-			expect(options.render).toBe(render);
-			expect(event.request).toBeInstanceOf(Request);
-			expect(event.platform.ssr).toBe(true);
-			expect(event.env.get('PUBLIC_API_URL')).toBe('https://api.local');
-			let response: Response | undefined;
-			const stream = event.getWritableStream(
-				200,
-				new Headers({ 'content-type': 'text/html' }),
-				{},
-				(value: Response) => {
-					response = value;
-				},
-				{},
-			);
-			const writer = stream.getWriter();
-			void writer
-				.write(new TextEncoder().encode('<html><head></head><body>runner ok</body></html>'))
-				.then(() => writer.close());
-			return {
-				completion: new Promise(() => {}),
-				response: Promise.resolve(response),
-			};
-		});
 		const runnerImport = vi.fn(async (id: string) => {
-			importedIds.push(id);
-			if (id === 'src/entry.ssr') {
-				return { default: render };
-			}
-			if (id === '@qwik.dev/router/middleware/request-handler') {
-				return {
-					mergeHeadersCookies: (headers: Headers) => headers,
-					requestHandler,
-				};
-			}
 			throw new Error(`Unexpected import: ${id}`);
 		});
 		const server = createMockDevServer({
 			ssr: createMockEnvironment({ consumer: 'server', runnerImport }),
-		});
-		server.transformIndexHtml.mockImplementation(async (_url, html: string) => {
-			expect(html).toBe('<html><head></head><body></body></html>');
-			return html.replace(
-				'<head>',
-				'<head><script type="module" src="/@vite/client"></script>',
-			);
 		});
 
 		const install = callConfigureServer(plugin, server) as () => void;
@@ -322,15 +308,12 @@ describe('Qwik Router Vite integration', () => {
 		const middleware = server.middlewares.use.mock.calls[0]?.[0];
 		const req = createMockRequest('/');
 		const res = createMockResponse();
-		await middleware(req, res, vi.fn());
+		const next = vi.fn();
+		await middleware(req, res, next);
 
-		expect(importedIds).toEqual([
-			'src/entry.ssr',
-			'@qwik.dev/router/middleware/request-handler',
-		]);
-		expect(importedIds).not.toContain('@qwik.dev/router/middleware/node');
-		expect(res.body).toContain('<script type="module" src="/@vite/client"></script>');
-		expect(res.body).toContain('runner ok');
+		expect(runnerImport).not.toHaveBeenCalled();
+		expect(next).toHaveBeenCalledTimes(1);
+		expect(res.body).toBe('');
 	});
 
 	test('collects dev CSS links from environment graphs in import order', async () => {

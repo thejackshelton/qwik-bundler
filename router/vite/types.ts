@@ -91,10 +91,6 @@ export type FetchableServerEnvironment = DevEnvironment & {
 	dispatchFetch: (request: Request) => Promise<Response> | Response;
 };
 
-export type RunnableServerEnvironment = DevEnvironment & {
-	runner: { import: <T = Record<string, unknown>>(url: string) => Promise<T> };
-};
-
 export type DevSsrEntry = {
 	default?: (options: unknown) => unknown;
 };
