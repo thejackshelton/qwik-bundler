@@ -1,5 +1,6 @@
 import type { EnvironmentOptions, Plugin, UserConfig } from 'vite';
 import { describe, expect, test, vi } from 'vitest';
+import { transformQwikRequest } from '../src/vite/environment';
 import { qwik } from '../src/vite/index';
 import {
 	callConfig,
@@ -189,6 +190,28 @@ describe('Vite config integration', () => {
 		await callConfig(plugin, config, { command: 'build', mode: 'production' });
 
 		expect(config.build!.rolldownOptions!.output).toBeUndefined();
+	});
+
+	test('maps Qwik dev transforms through configured Vite environments', async () => {
+		const app = vi.fn(async () => 'client result');
+		const worker = vi.fn(async () => 'server result');
+		const server = {
+			environments: {
+				app: { transformRequest: app },
+				worker: { transformRequest: worker },
+			},
+		};
+		const options = { clientEnvironment: 'app', serverEnvironment: 'worker' };
+
+		await expect(
+			transformQwikRequest(server as never, '/src/root.tsx', 'client', options),
+		).resolves.toBe('client result');
+		await expect(
+			transformQwikRequest(server as never, '/src/entry.ssr.tsx', 'server', options),
+		).resolves.toBe('server result');
+
+		expect(app).toHaveBeenCalledWith('/src/root.tsx');
+		expect(worker).toHaveBeenCalledWith('/src/entry.ssr.tsx');
 	});
 });
 

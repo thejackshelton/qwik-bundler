@@ -5,10 +5,8 @@ export type QwikEnvironment = 'client' | 'server' | 'lib';
 
 /** Narrow Vite dev-server surface used for dev QRL segment loading. */
 export interface QwikDevServer {
-	/** Per-environment transform entry points when the host supports them. */
-	environments?: Record<string, { transformRequest: (url: string) => Promise<unknown> }>;
-	/** Fallback transform entry point used to lazily materialize dev segments. */
-	transformRequest: (url: string) => Promise<unknown>;
+	/** Transform a parent module in the requested Qwik environment. */
+	transformRequest: (url: string, environment: QwikEnvironment) => Promise<unknown> | unknown;
 }
 
 /** Shared options accepted by the Rolldown plugin and Vite adapter. */

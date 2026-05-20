@@ -69,7 +69,7 @@ export function createQwikDev(
 			let segment = segments.get(key);
 			const server = options.devServer;
 			if (!segment && server) {
-				await transformDevParent(server, pending.environment, pending.parent);
+				await server.transformRequest(pending.parent, pending.environment);
 				segment = segments.get(key);
 			}
 			return segment
@@ -136,11 +136,17 @@ function parseDevQrl(id: string): { parent: string; path: string } | null {
 	const path = pathname(id);
 	const match = /^(?<parent>.*\.[cm]?[jt]sx?)_(?<name>[^/]+)\.js$/.exec(path);
 	const parent = match?.groups?.parent;
-	return parent ? { parent, path } : null;
+	if (!parent) {
+		return null;
+	}
+	return { parent, path };
 }
 
 function resolveRelative(path: string, importer: string | undefined) {
-	return importer && isRelative(path) ? join(dirname(pathname(importer)), path) : path;
+	if (!importer || !isRelative(path)) {
+		return path;
+	}
+	return join(dirname(pathname(importer)), path);
 }
 
 function devSegmentPaths(path: string, root: string | undefined) {
@@ -159,7 +165,10 @@ function getDevPath(id: string, root: string | undefined) {
 	}
 
 	const path = relative(root, id);
-	return path && path !== '..' && !isRelative(path) ? withLeadingSlash(path) : undefined;
+	if (!path || path === '..' || isRelative(path)) {
+		return undefined;
+	}
+	return withLeadingSlash(path);
 }
 
 function parentKey(environment: QwikEnvironment, parent: string) {
@@ -173,11 +182,6 @@ function normalizeSourcePath(id: string) {
 function normalizePathname(id: string) {
 	const path = parsePath(id).pathname.replace(/\\/g, '/');
 	return path.replace(/^[A-Za-z]:\//, '/');
-}
-
-function transformDevParent(server: QwikDevServer, environment: QwikEnvironment, parent: string) {
-	const devEnvironment = server.environments?.[environment === 'server' ? 'ssr' : 'client'];
-	return devEnvironment?.transformRequest(parent) ?? server.transformRequest(parent);
 }
 
 function appendSegmentAccept(

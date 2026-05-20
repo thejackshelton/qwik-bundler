@@ -8,6 +8,7 @@ import type {
 } from 'rolldown';
 import type { ConfigEnv, Environment, Plugin, UserConfig } from 'vite';
 import type { QwikEnvironment } from './types.ts';
+import { isServerViteEnvironment } from './vite/environment.ts';
 
 const QWIK_RUNTIME_DEPS = ['@qwik.dev/core', '@builder.io/qwik'];
 const QWIK_OPTIMIZE_DEPS_EXCLUDE = [
@@ -81,7 +82,7 @@ export function qwikViteExternal(configDefaults: (config: UserConfig, env: Confi
 			},
 		},
 		configEnvironment(name, config) {
-			if (!isServerViteEnvironment(name, config.consumer)) {
+			if (!isServerViteEnvironment({ name, config })) {
 				return;
 			}
 
@@ -183,15 +184,7 @@ function isQwikRuntimeImport(source: string) {
 
 function isServerEnvironment(context: unknown) {
 	const environment = (context as ViteHookContext).environment;
-	return isServerViteEnvironment(environment?.name, environment?.config.consumer);
-}
-
-function isServerViteEnvironment(name: string | undefined, consumer: string | undefined) {
-	if (consumer) {
-		return consumer === 'server';
-	}
-
-	return name !== undefined && name !== 'client';
+	return isServerViteEnvironment(environment);
 }
 
 function withQwikRuntimeDeps(existing: NoExternal | undefined) {

@@ -18,6 +18,7 @@ import type {
 	QwikManifest,
 	QwikRolldownOptions,
 } from '../types.ts';
+import { qwikEnvironment, transformQwikRequest, viteEnvironmentName } from './environment.ts';
 import { createViteHmr } from './hmr.ts';
 
 export type {
@@ -28,7 +29,10 @@ export type {
 } from '../types.ts';
 
 export interface VitePluginOptions extends QwikRolldownOptions {
+	/** Vite environment name used for client transforms/builds. Defaults to `client`. */
 	clientEnvironment?: string;
+	/** Vite environment name used for server dev transforms. Defaults to `ssr`. */
+	serverEnvironment?: string;
 }
 
 type QwikOutputOptions = OutputOptions | OutputOptions[] | undefined;
@@ -74,7 +78,7 @@ export function qwik(options: VitePluginOptions = {}): Plugin[] {
 		},
 		configEnvironment(name, config) {
 			const externalConfig = external.configEnvironment?.call(this, name, config) ?? {};
-			if (name !== (options.clientEnvironment ?? 'client') || config.build?.lib) {
+			if (name !== viteEnvironmentName('client', options) || config.build?.lib) {
 				return emptyConfig(externalConfig) ? undefined : externalConfig;
 			}
 
@@ -94,11 +98,14 @@ export function qwik(options: VitePluginOptions = {}): Plugin[] {
 		buildApp: {
 			order: 'pre',
 			handler(builder) {
-				return buildQwikClient(builder, options.clientEnvironment);
+				return buildQwikClient(builder, options);
 			},
 		},
 		configureServer(server: ViteDevServer) {
-			rolldownOptions.devServer = server;
+			rolldownOptions.devServer = {
+				transformRequest: (url, environment) =>
+					transformQwikRequest(server, url, environment, options),
+			};
 			hmr.configureServer(server);
 		},
 		transformIndexHtml() {
@@ -134,8 +141,8 @@ export function qwik(options: VitePluginOptions = {}): Plugin[] {
 	return [qwikPlugin];
 }
 
-async function buildQwikClient(builder: ViteBuilder, clientEnvironment: string | undefined) {
-	const name = clientEnvironment ?? 'client';
+async function buildQwikClient(builder: ViteBuilder, options: VitePluginOptions) {
+	const name = viteEnvironmentName('client', options);
 	const environment = builder.environments[name];
 	if (environment && !environment.isBuilt) {
 		skipDuplicateClientBuilds(builder, name);
@@ -188,7 +195,10 @@ function emptyConfig(config: EnvironmentOptions) {
 }
 
 function runHook(hook: unknown, context: unknown, ...args: unknown[]) {
-	return typeof hook === 'function' ? hook.call(context, ...args) : null;
+	if (typeof hook !== 'function') {
+		return null;
+	}
+	return hook.call(context, ...args);
 }
 
 type QwikPluginApi = {
@@ -199,22 +209,5 @@ type QwikPluginApi = {
 
 function getBuildEnvironment(context: unknown): QwikEnvironment {
 	const pluginContext = context as { environment?: Environment };
-	const environment = pluginContext.environment;
-	const config = environment?.config;
-	if (!config) {
-		return 'client';
-	}
-
-	if (config.build?.lib) {
-		return 'lib';
-	}
-
-	if (config.consumer === 'server') {
-		return 'server';
-	}
-	if (environment?.name && environment.name !== 'client' && config.consumer !== 'client') {
-		return 'server';
-	}
-
-	return 'client';
+	return qwikEnvironment(pluginContext.environment);
 }

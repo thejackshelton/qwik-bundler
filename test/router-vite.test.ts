@@ -5,9 +5,10 @@ import type { Plugin, UserConfig } from 'vite';
 import { describe, expect, test, vi } from 'vitest';
 import {
 	QWIK_ROUTER_CONFIG_ID,
-	collectServerFunctionModuleIds,
+	QWIK_ROUTER_SERVER_FUNCTIONS_ID,
 	configureRouterPreviewServer,
 	qwikRouter,
+	serverFunctionsPlugin,
 } from '../router/vite/index.ts';
 import {
 	callConfig,
@@ -15,6 +16,7 @@ import {
 	callConfigResolved,
 	callConfigureServer,
 	callLoad,
+	callResolveId,
 	callTransformIndexHtml,
 	createViteHookContext,
 	getPlugin,
@@ -158,53 +160,42 @@ describe('Qwik Router Vite integration', () => {
 		expect(res.end).toHaveBeenCalledWith('preview ok');
 	});
 
-	test('collects modules that contain server function registrations from graph roots', async () => {
-		const resolvedVirtualId = '\0virtual:qwik-router-server-fns';
-		const modules = new Map([
-			[
-				'/app/routes/index.tsx',
-				{
-					id: '/app/routes/index.tsx',
-					code: 'export default {};',
-					importedIds: ['/app/shared.ts'],
-					dynamicallyImportedIds: ['/app/lazy.ts'],
-				},
-			],
-			[
-				'/app/shared.ts',
-				{
-					id: '/app/shared.ts',
-					code: 'import "virtual:qwik-router-server-fns";',
-					importedIds: [resolvedVirtualId],
-					dynamicallyImportedIds: [],
-				},
-			],
-			[
-				'/app/lazy.ts',
-				{
-					id: '/app/lazy.ts',
-					code: 'export const action = serverQrl(() => null);',
-					importedIds: [],
-					dynamicallyImportedIds: [],
-				},
-			],
-		]);
-		const context = {
-			resolve: async (id: string) => ({ id, external: false }),
-			load: async ({ id }: { id: string }) => modules.get(id),
-		};
+	test('eagerly imports router server function globs in server environments', async () => {
+		const plugin = serverFunctionsPlugin({
+			moduleGlobs: () => ['/src/routes/**/*.ts'],
+		});
 
-		const result = await collectServerFunctionModuleIds(
-			{ entries: ['/app/routes/index.tsx'], resolvedVirtualId },
-			context as never,
+		const resolved = await callResolveId(plugin, QWIK_ROUTER_SERVER_FUNCTIONS_ID);
+		const code = await callLoad(plugin, `\0${QWIK_ROUTER_SERVER_FUNCTIONS_ID}`, {
+			environment: { config: { consumer: 'server' }, mode: 'build' },
+		});
+
+		expect(resolved).toEqual({
+			id: `\0${QWIK_ROUTER_SERVER_FUNCTIONS_ID}`,
+			moduleSideEffects: 'no-treeshake',
+		});
+		expect(code).toContain(
+			'const modules0 = import.meta.glob("/src/routes/**/*.ts", { eager: true });',
 		);
+		expect(code).toContain('export default Object.assign({}, modules0);');
+	});
 
-		expect(result).toEqual(['/app/lazy.ts']);
+	test('uses an empty router server function module outside server builds', async () => {
+		const plugin = serverFunctionsPlugin({
+			moduleGlobs: () => ['/src/routes/**/*.ts'],
+		});
+
+		const code = await callLoad(plugin, `\0${QWIK_ROUTER_SERVER_FUNCTIONS_ID}`, {
+			environment: { config: { consumer: 'client' }, mode: 'build' },
+		});
+
+		expect(code).toBe('// No Qwik Router server functions');
 	});
 
 	test('configures a fetchable dev SSR environment', () => {
 		const plugin = getRouterPlugin();
 		const result = callConfigEnvironment(plugin, 'ssr', {});
+		const worker = getRouterPlugin({ serverEnvironment: 'worker' });
 
 		expect(result).toMatchObject({
 			consumer: 'server',
@@ -217,6 +208,10 @@ describe('Qwik Router Vite integration', () => {
 			},
 		});
 		expect(result.dev?.createEnvironment).toEqual(expect.any(Function));
+		expect(callConfigEnvironment(worker, 'ssr', {})).toEqual({});
+		expect(callConfigEnvironment(worker, 'worker', {}).dev?.createEnvironment).toEqual(
+			expect.any(Function),
+		);
 	});
 
 	test('does not replace a host-owned dev server environment', () => {
@@ -280,6 +275,7 @@ describe('Qwik Router Vite integration', () => {
 
 	test('does not fall back to a runnable server environment', async () => {
 		const plugin = getRouterPlugin({
+			serverEnvironment: 'worker',
 			platform: {
 				env: {
 					get: (key: string) =>
@@ -298,8 +294,9 @@ describe('Qwik Router Vite integration', () => {
 		const runnerImport = vi.fn(async (id: string) => {
 			throw new Error(`Unexpected import: ${id}`);
 		});
+		const dispatchFetch = vi.fn(async () => new Response('default ssr'));
 		const server = createMockDevServer({
-			ssr: createMockEnvironment({ consumer: 'server', runnerImport }),
+			ssr: createMockEnvironment({ consumer: 'server', dispatchFetch, runnerImport }),
 		});
 
 		const install = callConfigureServer(plugin, server) as () => void;
@@ -311,6 +308,7 @@ describe('Qwik Router Vite integration', () => {
 		const next = vi.fn();
 		await middleware(req, res, next);
 
+		expect(dispatchFetch).not.toHaveBeenCalled();
 		expect(runnerImport).not.toHaveBeenCalled();
 		expect(next).toHaveBeenCalledTimes(1);
 		expect(res.body).toBe('');

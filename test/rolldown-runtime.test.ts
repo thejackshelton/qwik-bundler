@@ -493,7 +493,7 @@ describe('Rolldown runtime integration', () => {
 		});
 		const plugin = qwikClient({
 			dev: true,
-			devServer: { environments: { client: { transformRequest } }, transformRequest },
+			devServer: { transformRequest },
 		});
 		optimizerMock.transformModules
 			.mockResolvedValueOnce({
@@ -558,7 +558,7 @@ describe('Rolldown runtime integration', () => {
 
 		expect(deleted).toContain('\0qwik:segment:client:/src/home.tsx_click_abc.js');
 		expect(await callLoad(plugin, (resolved as { id: string }).id)).toContain('"new"');
-		expect(transformRequest).toHaveBeenCalledWith('/src/home.tsx');
+		expect(transformRequest).toHaveBeenCalledWith('/src/home.tsx', 'client');
 	});
 
 	test('normalizes dev QRL URL forms to consistent segment identity', async () => {
@@ -742,7 +742,7 @@ describe('Rolldown runtime integration', () => {
 		});
 		const plugin = qwikClient({
 			dev: true,
-			devServer: { environments: { client: { transformRequest } }, transformRequest },
+			devServer: { transformRequest },
 		});
 		optimizerMock.transformModules.mockResolvedValueOnce({
 			modules: [
@@ -772,7 +772,7 @@ describe('Rolldown runtime integration', () => {
 		const resolved = await callResolveId(plugin, '/src/home.tsx_click_abc.js');
 		const code = await callLoad(plugin, (resolved as { id: string }).id);
 
-		expect(transformRequest).toHaveBeenCalledWith('/src/home.tsx');
+		expect(transformRequest).toHaveBeenCalledWith('/src/home.tsx', 'client');
 		expect(code).toContain('export const click = () => "click";');
 	});
 
@@ -780,13 +780,13 @@ describe('Rolldown runtime integration', () => {
 		const transformRequest = vi.fn().mockResolvedValue(null);
 		const plugin = qwikClient({
 			dev: true,
-			devServer: { environments: { client: { transformRequest } }, transformRequest },
+			devServer: { transformRequest },
 		});
 
 		const resolved = await callResolveId(plugin, '/src/home.tsx_click_abc.js');
 		await callLoad(plugin, (resolved as { id: string }).id);
 
-		expect(transformRequest).toHaveBeenCalledWith('/src/home.tsx');
+		expect(transformRequest).toHaveBeenCalledWith('/src/home.tsx', 'client');
 	});
 
 	test('resolves relative dev QRLs against their source importer', async () => {

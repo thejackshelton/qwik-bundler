@@ -4,6 +4,7 @@ import {
 	type EntryStrategy,
 	type SegmentAnalysis,
 	type TransformModule,
+	type TransformModulesOptions,
 } from '@qwik.dev/optimizer';
 import { dirname, join } from 'pathe';
 import type { Plugin, RolldownError, TransformPluginContext } from 'rolldown';
@@ -56,6 +57,7 @@ const QWIK_RUNTIME_MODULE = /[/\\]@qwik\.dev[/\\]core[/\\]/;
 const QWIK_PUBLIC_IMPORTS = ['@qwik.dev/core', '@builder.io/qwik'];
 const QWIK_IMPORTS =
 	/\b(?:import|export)\s+(?:[^'";]*?\s+from\s*)?['"](@qwik\.dev\/core(?:\/[^'"]*)?|@builder\.io\/qwik(?:\/[^'"]*)?)['"]/;
+const SERVER_REG_CTX_NAME = ['server'];
 const manifests = new Map<string, QwikManifest>();
 
 export const qwik = (options?: QwikRolldownOptions) => qwikClient(options);
@@ -282,9 +284,7 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 		context: TransformContext,
 		currentEnvironment: QwikEnvironment,
 	) {
-		const result = await (
-			await getOptimizer()
-		).transformModules({
+		const transformOptions = {
 			input: [dev.optimizerInput(code, id)],
 			entryStrategy: entryStrategy(currentEnvironment, options.entryStrategy),
 			minify: 'simplify',
@@ -304,7 +304,9 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 							? 'dev'
 							: 'prod',
 			isServer: currentEnvironment === 'server',
-		});
+			regCtxName: currentEnvironment === 'server' ? SERVER_REG_CTX_NAME : undefined,
+		} satisfies TransformModulesOptions;
+		const result = await (await getOptimizer()).transformModules(transformOptions);
 		reportDiagnostics(result.diagnostics, id, context);
 
 		for (const module of result.modules) {

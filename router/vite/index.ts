@@ -1,15 +1,15 @@
 import { basename, dirname, extname, join, relative, resolve } from 'pathe';
+import { withLeadingSlash, withTrailingSlash } from 'ufo';
 import type { ConfigEnv, EnvironmentOptions, PluginOption, UserConfig, ViteDevServer } from 'vite';
 import type { BundleGraphAdder, QwikManifest } from '../../src/types.ts';
-import { createDevSsrMiddleware, createRouterDevEnvironment, getRouterIndexTags } from './dev.ts';
+import { createRouterDevEnvironment } from './dev/environment.ts';
+import { createRouterDevRequestHandler } from './dev/request.ts';
+import { getRouterIndexTags } from './dev/styles.ts';
 import { configureRouterPreviewServer, type RouterPreviewOptions } from './preview.ts';
 import {
 	QWIK_ROUTER_SERVER_FUNCTIONS_ID,
 	serverFunctionsPlugin,
-	type CollectServerFunctionModuleOptions,
-	type ServerFunctionPluginContext,
 	type ServerFunctionsPluginOptions,
-	collectServerFunctionModuleIds,
 } from './server-functions.ts';
 import type {
 	BuiltRouterLayout,
@@ -20,25 +20,20 @@ import type {
 	QwikRouterVitePluginOptions,
 	QwikVitePluginApiHost,
 	RouterBuildOptions,
+	RouterServerFunctionsOptions,
 	RouterState,
 } from './types.ts';
 
-export {
-	QWIK_ROUTER_SERVER_FUNCTIONS_ID,
-	collectServerFunctionModuleIds,
-	configureRouterPreviewServer,
-	serverFunctionsPlugin,
-};
+export { QWIK_ROUTER_SERVER_FUNCTIONS_ID, configureRouterPreviewServer, serverFunctionsPlugin };
 export type {
 	BuiltRouterLayout,
 	BuiltRouterRoute,
-	CollectServerFunctionModuleOptions,
 	QwikCityVitePluginOptions,
 	QwikRouterPlugin,
 	QwikRouterPluginApi,
 	QwikRouterVitePluginOptions,
 	RouterPreviewOptions,
-	ServerFunctionPluginContext,
+	RouterServerFunctionsOptions,
 	ServerFunctionsPluginOptions,
 };
 
@@ -47,6 +42,14 @@ export const QWIK_ROUTER_ENTRIES_ID = '@qwik-router-entries';
 export const QWIK_ROUTER_SW_REGISTER_ID = '@qwik-router-sw-register';
 
 const QWIK_ROUTER = '@qwik.dev/router';
+const ROUTER_NO_EXTERNAL = [
+	QWIK_ROUTER,
+	QWIK_ROUTER_CONFIG_ID,
+	QWIK_ROUTER_ENTRIES_ID,
+	QWIK_ROUTER_SW_REGISTER_ID,
+	// TODO: Remove the Zod special case once Qwik Router accepts Standard Schema validators.
+	'zod',
+];
 const DEFAULT_CLIENT_INPUT = 'src/root.tsx';
 const ROUTE_EXTENSIONS = new Set(['.js', '.jsx', '.ts', '.tsx']);
 const ROUTE_BASENAMES = new Set(['index', 'layout', '404', 'error']);
@@ -111,14 +114,7 @@ function qwikRouterPlugin(
 			const environment: EnvironmentOptions = {
 				consumer: 'server',
 				resolve: {
-					noExternal: [
-						QWIK_ROUTER,
-						QWIK_ROUTER_CONFIG_ID,
-						QWIK_ROUTER_ENTRIES_ID,
-						QWIK_ROUTER_SW_REGISTER_ID,
-						// TODO: Remove the Zod special case once Qwik Router accepts Standard Schema validators.
-						'zod',
-					],
+					noExternal: ROUTER_NO_EXTERNAL,
 				},
 			} satisfies EnvironmentOptions;
 			if (options.devSsrServer !== false && !config.dev?.createEnvironment) {
@@ -161,7 +157,7 @@ function qwikRouterPlugin(
 			}
 
 			return () => {
-				server.middlewares.use(createDevSsrMiddleware(server, options));
+				server.middlewares.use(createRouterDevRequestHandler(server, options));
 			};
 		},
 
@@ -253,14 +249,7 @@ function routerViteConfig(options: QwikRouterVitePluginOptions): UserConfig {
 			],
 		},
 		ssr: {
-			noExternal: [
-				QWIK_ROUTER,
-				QWIK_ROUTER_CONFIG_ID,
-				QWIK_ROUTER_ENTRIES_ID,
-				QWIK_ROUTER_SW_REGISTER_ID,
-				// TODO: Remove the Zod special case once Qwik Router accepts Standard Schema validators.
-				'zod',
-			],
+			noExternal: ROUTER_NO_EXTERNAL,
 		},
 		server: {
 			watch: {
@@ -339,16 +328,19 @@ function generateRouterConfig(
 }
 
 function routeImportBase(state: RouterState) {
-	const rel = relative(state.rootDir, state.routesDir).split('/').filter(Boolean).join('/');
-	return `/${rel || '.'}`.replace('/.', '');
+	return importBase(state.rootDir, state.routesDir);
 }
 
 function serverPluginImportBase(state: RouterState) {
-	const rel = relative(state.rootDir, state.serverPluginsDir)
-		.split('/')
-		.filter(Boolean)
-		.join('/');
-	return `/${rel || '.'}`.replace('/.', '');
+	return importBase(state.rootDir, state.serverPluginsDir);
+}
+
+function importBase(rootDir: string, sourceDir: string) {
+	const rel = cleanRelativePath(relative(rootDir, sourceDir));
+	if (!rel) {
+		return '';
+	}
+	return withLeadingSlash(rel);
 }
 
 function routeModuleGlobs(state: RouterState) {
@@ -370,11 +362,9 @@ function rootImportPath(state: RouterState, path: string) {
 	if (path.startsWith('/')) {
 		return path;
 	}
-	const rel = relative(state.rootDir, resolve(state.rootDir, path))
-		.split('/')
-		.filter(Boolean)
-		.join('/');
-	return `/${rel}`;
+	return withLeadingSlash(
+		cleanRelativePath(relative(state.rootDir, resolve(state.rootDir, path))),
+	);
 }
 
 function routerConfigRuntimeCode() {
@@ -437,7 +427,10 @@ function routeBasename(filePath: string) {
 	const ext = extname(filePath);
 	const name = basename(filePath, ext);
 	const marker = name.search(/[.@-]/);
-	return marker === -1 ? name : name.slice(0, marker);
+	if (marker === -1) {
+		return name;
+	}
+	return name.slice(0, marker);
 }
 
 function routeUsesLayout(routePathname: string, layoutPathname: string) {
@@ -508,10 +501,17 @@ function manifestRoutes(state: RouterState, manifest: QwikManifest) {
 			id: `route${index}`,
 			filePath,
 			pathname,
-			routeName: pathname === '/' ? 'index' : pathname.slice(1).replaceAll('/', '_'),
+			routeName: routeName(pathname),
 			layouts: layouts.filter((layout) => routeUsesLayout(pathname, layout.pathname)),
 		};
 	});
+}
+
+function routeName(pathname: string) {
+	if (pathname === '/') {
+		return 'index';
+	}
+	return pathname.slice(1).replaceAll('/', '_');
 }
 
 function isManifestRouteSource(state: RouterState, origin: string) {
@@ -529,7 +529,7 @@ function manifestRoutePathname(state: RouterState, filePath: string) {
 	if (!rel || rel === '.') {
 		return '/';
 	}
-	return `/${rel.split('/').filter(Boolean).join('/')}`;
+	return withLeadingSlash(cleanRelativePath(rel));
 }
 
 function routeBundles(route: BuiltRouterRoute, manifest: QwikManifest) {
@@ -554,10 +554,11 @@ function routeBundles(route: BuiltRouterRoute, manifest: QwikManifest) {
 }
 
 function normalizeBase(base: string) {
-	if (!base.startsWith('/')) {
-		return `/${base}`;
-	}
-	return base.endsWith('/') ? base : `${base}/`;
+	return withTrailingSlash(withLeadingSlash(base));
+}
+
+function cleanRelativePath(path: string) {
+	return path.split('/').filter(Boolean).join('/');
 }
 
 function invalidateRouterConfig(server: ViteDevServer) {

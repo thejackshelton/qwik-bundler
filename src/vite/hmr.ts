@@ -2,13 +2,13 @@ import { joinURL, parsePath } from 'ufo';
 import type {
 	DevEnvironment,
 	EnvironmentModuleNode,
-	FetchableDevEnvironment,
 	HtmlTagDescriptor,
 	HotUpdateOptions,
 	ViteDevServer,
 } from 'vite';
 import { QWIK_HMR_BRIDGE_SOURCE } from '../hmr/bridge.ts';
 import type { QwikEnvironment } from '../types.ts';
+import { fetchableDevEnvironment, qwikEnvironment } from './environment.ts';
 
 export const QWIK_HMR_BRIDGE_ID = 'virtual:qwik-hmr-bridge';
 
@@ -51,8 +51,8 @@ export function createViteHmr(options: ViteHmrOptions) {
 				return undefined;
 			}
 
-			const env = environment.config.consumer;
-			if (env !== 'client' && env !== 'server') {
+			const env = qwikEnvironment(environment);
+			if (env === 'lib') {
 				return undefined;
 			}
 
@@ -111,8 +111,8 @@ function installFetchHmrBridge(server: ViteDevServer, options: ViteHmrOptions) {
 	// environments instead of Vite's transformIndexHtml hook. Wrap those Response
 	// objects so Node, workerd, and other Fetch-based runtimes share the same path.
 	for (const environment of Object.values(server.environments)) {
-		const fetchEnv = environment as Partial<Pick<FetchableDevEnvironment, 'dispatchFetch'>>;
-		if (!fetchEnv.dispatchFetch) continue;
+		const fetchEnv = fetchableDevEnvironment(environment);
+		if (!fetchEnv) continue;
 
 		const dispatchFetch = fetchEnv.dispatchFetch.bind(fetchEnv);
 		fetchEnv.dispatchFetch = async (request) => {

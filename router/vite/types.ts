@@ -1,7 +1,6 @@
-import type { DevEnvironment, EnvironmentModuleNode, Plugin } from 'vite';
+import type { EnvironmentModuleNode, Plugin } from 'vite';
 import type { BundleGraphAdder } from '../../src/types.ts';
 import type { RouterPreviewOptions } from './preview.ts';
-import type { ServerFunctionsPluginOptions } from './server-functions.ts';
 
 export interface QwikRouterVitePluginOptions {
 	/** Client build input to use when the host has not supplied one. Defaults to `src/root.tsx`. */
@@ -18,9 +17,9 @@ export interface QwikRouterVitePluginOptions {
 	preview?: RouterPreviewOptions | false;
 	/** Client manifest imported into server builds. Defaults to `dist/q-manifest.json`. */
 	clientManifest?: string | false;
-	/** Enable the basic dev SSR fallback middleware. Defaults to `true`. */
+	/** Enable router-owned dev SSR middleware. Defaults to `true`. */
 	devSsrServer?: boolean;
-	/** Dev server environment used for fetch-based SSR. Defaults to `ssr`, then any fetchable server environment. */
+	/** Dev server environment used for fetch-based SSR. Defaults to `ssr`. */
 	serverEnvironment?: string;
 	/** Match Qwik Router's trailing slash define. Defaults to `true`. */
 	trailingSlash?: boolean;
@@ -29,10 +28,15 @@ export interface QwikRouterVitePluginOptions {
 	/** Platform data passed to the dev middleware's Qwik Router adapter. */
 	platform?: Record<string, unknown>;
 	/** Server function virtual-module options for non-router hosts. */
-	serverFunctions?: Partial<Pick<ServerFunctionsPluginOptions, 'virtualId'>>;
+	serverFunctions?: RouterServerFunctionsOptions;
 }
 
 export type QwikCityVitePluginOptions = QwikRouterVitePluginOptions;
+
+export type RouterServerFunctionsOptions = {
+	/** Public virtual module id that SSR code can import for registration side effects. */
+	virtualId?: string;
+};
 
 export interface BuiltRouterRoute {
 	id: string;
@@ -81,15 +85,14 @@ export type QwikVitePluginApiHost = Plugin & {
 	};
 };
 
-export type DevSsrOptions = Pick<QwikRouterVitePluginOptions, 'platform' | 'serverEnvironment'>;
+export type RouterDevRequestOptions = Pick<
+	QwikRouterVitePluginOptions,
+	'platform' | 'serverEnvironment'
+>;
 
 export type ConnectRequest = Parameters<import('vite').Connect.NextHandleFunction>[0];
 export type ConnectResponse = Parameters<import('vite').Connect.NextHandleFunction>[1];
 export type ConnectNext = (error?: unknown) => void;
-
-export type FetchableServerEnvironment = DevEnvironment & {
-	dispatchFetch: (request: Request) => Promise<Response> | Response;
-};
 
 export type DevSsrEntry = {
 	default?: (options: unknown) => unknown;
