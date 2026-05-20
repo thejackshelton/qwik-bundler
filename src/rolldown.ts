@@ -179,17 +179,19 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 				return externalResolution;
 			}
 
-			if (!importer || !isRelative(source)) {
+			if (!importer) {
 				return null;
 			}
 
 			const importerPath = pathname(importer);
 			const importerSegment = segments.get(importerPath);
-			const from = importerSegment?.path ?? importerPath;
 
-			const id = segmentId(currentEnvironment, join(dirname(from), source));
-			if (segments.has(id)) {
-				return id;
+			if (isRelative(source)) {
+				const from = importerSegment?.path ?? importerPath;
+				const id = segmentId(currentEnvironment, join(dirname(from), source));
+				if (segments.has(id)) {
+					return id;
+				}
 			}
 
 			if (!importerSegment) {

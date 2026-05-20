@@ -885,6 +885,73 @@ describe('Rolldown runtime integration', () => {
 		});
 	});
 
+	test('resolves bare imports from optimizer segments through their source module', async () => {
+		optimizerMock.transformModules.mockResolvedValueOnce({
+			modules: [
+				{
+					path: '/workspace/app/node_modules/pkg/lib/widget.qwik.mjs',
+					isEntry: false,
+					code: 'import { qrl } from "@qwik.dev/core"; qrl(() => import("./widget.qwik.mjs_widget_component_abc.js"), "s_abc");',
+					map: null,
+					segment: null,
+					origPath: null,
+				},
+				{
+					path: '/workspace/app/node_modules/pkg/lib/widget.qwik.mjs_widget_component_abc.js',
+					isEntry: false,
+					code: 'import "@nested/dep/fn"; export const s_abc = () => "Hello";',
+					map: null,
+					segment: {
+						origin: '/workspace/app/node_modules/pkg/lib/widget.qwik.mjs',
+						name: 's_abc',
+						entry: null,
+						displayName: 'widget.qwik.mjs_widget_component',
+						hash: 'abc',
+						canonicalFilename: 'widget.qwik.mjs_widget_component_abc',
+						extension: 'js',
+						parent: null,
+						ctxKind: 'function',
+						ctxName: 'component',
+						captures: false,
+						loc: [0, 0],
+					},
+					origPath: null,
+				},
+			],
+			diagnostics: [],
+			isTypeScript: true,
+			isJsx: true,
+		});
+
+		const plugin = qwikClient();
+		callBuildStart(plugin, { cwd: '/workspace/app' });
+		await callTransform(
+			plugin,
+			"import { component$ } from '@qwik.dev/core';",
+			'/workspace/app/node_modules/pkg/lib/widget.qwik.mjs',
+		);
+
+		const resolvedId = await callResolveId(
+			plugin,
+			'./widget.qwik.mjs_widget_component_abc.js',
+			'/workspace/app/node_modules/pkg/lib/widget.qwik.mjs',
+		);
+		const resolve = vi.fn().mockResolvedValue({
+			id: '/workspace/app/node_modules/pkg/node_modules/@nested/dep/fn.js',
+		});
+
+		expect(
+			await callResolveId(plugin, '@nested/dep/fn', resolvedId as string, { resolve }),
+		).toEqual({
+			id: '/workspace/app/node_modules/pkg/node_modules/@nested/dep/fn.js',
+		});
+		expect(resolve).toHaveBeenCalledWith(
+			'@nested/dep/fn',
+			'/workspace/app/node_modules/pkg/lib/widget.qwik.mjs',
+			{ skipSelf: true },
+		);
+	});
+
 	test('resolves QRL segments relative to transformed virtual importers', async () => {
 		const importer = '\0fixture-virtual:/workspace/.cache/qwik-lib/index.qwik.mjs#virtual';
 		const virtualPath = '\0fixture-virtual:/workspace/.cache/qwik-lib/index.qwik.mjs';
