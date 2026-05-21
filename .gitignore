@@ -8,3 +8,4 @@ fixtures/*/lib/
 fixtures/*/server/
 fixtures/*/.output/
 .opencode
+HMR_FIX_SPEC.md

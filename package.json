@@ -1,7 +1,6 @@
 {
 	"name": "qwik-bundler",
 	"version": "0.0.0",
-	"private": true,
 	"files": [
 		"dist"
 	],
@@ -12,9 +11,14 @@
 		"./vite": "./dist/vite/index.mjs",
 		"./package.json": "./package.json"
 	},
+	"publishConfig": {
+		"access": "public"
+	},
 	"scripts": {
 		"build": "vp pack && pnpm sync:deno-fixture",
 		"sync:deno-fixture": "rm -rf fixtures/vite-deno-workspace/qwik-bundler/dist && cp -R dist fixtures/vite-deno-workspace/qwik-bundler/",
+		"release": "bumpp && pnpm publish",
+		"prepublishOnly": "pnpm run build",
 		"test": "vp test",
 		"test:hmr-leakage": "pnpm build && pnpm --filter @fixtures/vite-csr build && pnpm --filter @fixtures/vite-nitro-v3 build && pnpm --filter @fixtures/vite-library build && pnpm --filter @fixtures/rolldown-library build && node scripts/check-hmr-leakage.mjs",
 		"test:hmr-browser": "node scripts/with-lock.mjs hmr-smoke \"pnpm build && node scripts/smoke-vite-csr-hmr.mjs\"",
@@ -28,22 +32,23 @@
 	},
 	"dependencies": {
 		"@qwik.dev/optimizer": "2.1.0-beta.2",
-		"@thi.ng/dgraph": "^2.1.205",
-		"pathe": "^2.0.3",
-		"ufo": "^1.6.4"
+		"@thi.ng/dgraph": "2.1.205",
+		"pathe": "2.0.3",
+		"ufo": "1.6.4"
 	},
 	"devDependencies": {
-		"@types/node": "^24.10.1",
-		"playwright": "^1.59.1",
-		"rolldown": "^1.0.0-rc.18",
-		"typescript": "^5.9.3",
-		"vite": "^8.0.10",
-		"vite-plus": "^0.1.20",
-		"vitest": "^4.0.18"
+		"@types/node": "24.12.2",
+		"bumpp": "10.4.1",
+		"playwright": "1.59.1",
+		"rolldown": "1.0.2",
+		"typescript": "5.9.3",
+		"vite": "8.0.10",
+		"vite-plus": "0.1.20",
+		"vitest": "4.1.5"
 	},
 	"peerDependencies": {
-		"rolldown": "^1.0.0-rc.18",
-		"vite": "^8.0.10"
+		"rolldown": "1.0.2",
+		"vite": "8.0.10"
 	},
 	"peerDependenciesMeta": {
 		"rolldown": {
