@@ -1,5 +1,13 @@
 import { defDGraph } from '@thi.ng/dgraph';
-import type { BundleGraphAdder, QwikBundle, QwikBundleGraph, QwikManifest } from '../types.ts';
+import { normalize } from 'pathe';
+import { withoutLeadingSlash } from 'ufo';
+import type {
+	BundleGraphAdder,
+	PreloadGraphEntriesAdder,
+	QwikBundle,
+	QwikBundleGraph,
+	QwikManifest,
+} from '../types.ts';
 
 type BundleGraphEdge = [string, string | null];
 type BundleGraphRecord = Partial<QwikBundle>;
@@ -53,6 +61,28 @@ export function convertManifestToBundleGraph(
 	]);
 }
 
+export function createPreloadGraphAdder(addEntries: PreloadGraphEntriesAdder): BundleGraphAdder {
+	return (manifest) =>
+		addEntries({
+			manifest,
+			hasBundle: (bundleName) => !!manifest.bundles[bundleName],
+			bundlesForOrigins: (origins) => bundlesForOrigins(manifest, origins),
+		});
+}
+
+function bundlesForOrigins(manifest: QwikManifest, origins: readonly string[]) {
+	const normalizedOrigins = new Set(origins.map(normalizeManifestOrigin));
+	const bundles: string[] = [];
+	for (const [bundleName, bundle] of Object.entries(manifest.bundles)) {
+		if (
+			bundle.origins?.some((origin) => normalizedOrigins.has(normalizeManifestOrigin(origin)))
+		) {
+			bundles.push(bundleName);
+		}
+	}
+	return bundles.sort();
+}
+
 function bundleGraphRecords(manifest: QwikManifest, bundleGraphAdders?: Set<BundleGraphAdder>) {
 	const graph: Record<string, BundleGraphRecord> = { ...manifest.bundles };
 	for (const [symbol, bundleName] of Object.entries(manifest.mapping)) {
@@ -97,7 +127,10 @@ function bundleGraphRecords(manifest: QwikManifest, bundleGraphAdders?: Set<Bund
 			imports: qwikBundle.imports?.filter((dep) => graph[dep]) ?? [],
 			dynamicImports:
 				qwikBundle.dynamicImports?.filter(
-					(dep) => isSymbolGraphNode(qwikBundle) || hasQwikSymbols(dep, graph),
+					(dep) =>
+						(isGraphOnlyNode(bundleName, manifest) && !!graph[dep]) ||
+						isSymbolGraphNode(qwikBundle) ||
+						hasQwikSymbols(dep, graph),
 				) ?? [],
 		};
 	}
@@ -116,6 +149,10 @@ function bundleGraphRecords(manifest: QwikManifest, bundleGraphAdders?: Set<Bund
 
 function isSymbolGraphNode(bundle: BundleGraphRecord) {
 	return bundle.size === 0 && bundle.total === 0 && bundle.dynamicImports?.length === 1;
+}
+
+function isGraphOnlyNode(bundleName: string, manifest: QwikManifest) {
+	return !manifest.bundles[bundleName];
 }
 
 function hasQwikSymbols(dep: string, graph: Record<string, BundleGraphRecord>) {
@@ -155,4 +192,8 @@ function* bundleGraphEdges(graph: Record<string, BundleGraphRecord>): Generator<
 
 function getSymbolHash(symbolName: string) {
 	return symbolName.slice(symbolName.lastIndexOf('_') + 1);
+}
+
+function normalizeManifestOrigin(origin: string) {
+	return withoutLeadingSlash(normalize(origin));
 }

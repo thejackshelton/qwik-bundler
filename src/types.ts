@@ -123,7 +123,20 @@ export type GlobalInjections = {
 /** Compact preload graph format consumed by Qwik's runtime preloader. */
 export type QwikBundleGraph = Array<string | number>;
 
+/** Named preload graph entries keyed by symbols, routes, or framework-owned preload keys. */
+export type PreloadGraphEntries = Record<string, { imports?: string[]; dynamicImports?: string[] }>;
+
+/** Helper context for integrations that add entries to Qwik's runtime preload graph. */
+export interface PreloadGraphContext {
+	readonly manifest: QwikManifest;
+	readonly hasBundle: (bundleName: string) => boolean;
+	readonly bundlesForOrigins: (origins: readonly string[]) => string[];
+}
+
+/** Extension point for apps/adapters to add named runtime preload graph entries. */
+export type PreloadGraphEntriesAdder = (
+	context: PreloadGraphContext,
+) => PreloadGraphEntries | undefined;
+
 /** Extension point for apps/adapters to add route or framework-specific preload nodes. */
-export type BundleGraphAdder = (
-	manifest: QwikManifest,
-) => Record<string, { imports?: string[]; dynamicImports?: string[] }> | undefined;
+export type BundleGraphAdder = (manifest: QwikManifest) => PreloadGraphEntries | undefined;

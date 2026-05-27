@@ -210,8 +210,8 @@ importers:
         specifier: 3.0.260429-beta
         version: 3.0.260429-beta(chokidar@5.0.0)(dotenv@17.4.2)(giget@3.2.0)(jiti@2.7.0)(miniflare@4.20260507.1)(rollup@4.60.2)(vite@8.0.10(@types/node@24.12.2)(esbuild@0.27.3)(jiti@2.7.0)(yaml@2.8.3))
       qwik-bundler:
-        specifier: workspace:*
-        version: link:../..
+        specifier: '0.1'
+        version: 0.1.0(rolldown@1.0.2)(vite@8.0.10(@types/node@24.12.2)(esbuild@0.27.3)(jiti@2.7.0)(yaml@2.8.3))
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -2644,6 +2644,18 @@ packages:
 
   quansync@1.0.0:
     resolution: {integrity: sha512-5xZacEEufv3HSTPQuchrvV6soaiACMFnq1H8wkVioctoH3TRha9Sz66lOxRwPK/qZj7HPiSveih9yAyh98gvqA==}
+
+  qwik-bundler@0.1.0:
+    resolution: {integrity: sha512-O67XXJqQcCQGuL3Kw8BALisZx1akEdy9W78/l2ymnD1nalliB+9fkvki3hQ6gfqtbPTDzRTY4GCrBas2MPk0QQ==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      rolldown: 1.0.2
+      vite: 8.0.10
+    peerDependenciesMeta:
+      rolldown:
+        optional: true
+      vite:
+        optional: true
 
   rc9@3.0.1:
     resolution: {integrity: sha512-gMDyleLWVE+i6Sgtc0QbbY6pEKqYs97NGi6isHQPqYlLemPoO8dxQ3uGi0f4NiP98c+jMW6cG1Kx9dDwfvqARQ==}
@@ -5337,6 +5349,16 @@ snapshots:
   property-information@7.1.0: {}
 
   quansync@1.0.0: {}
+
+  qwik-bundler@0.1.0(rolldown@1.0.2)(vite@8.0.10(@types/node@24.12.2)(esbuild@0.27.3)(jiti@2.7.0)(yaml@2.8.3)):
+    dependencies:
+      '@qwik.dev/optimizer': 2.1.0-beta.2
+      '@thi.ng/dgraph': 2.1.205
+      pathe: 2.0.3
+      ufo: 1.6.4
+    optionalDependencies:
+      rolldown: 1.0.2
+      vite: 8.0.10(@types/node@24.12.2)(esbuild@0.27.3)(jiti@2.7.0)(yaml@2.8.3)
 
   rc9@3.0.1:
     dependencies:

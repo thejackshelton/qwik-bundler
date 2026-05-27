@@ -50,12 +50,14 @@ describe('Vite plugin hooks', () => {
 			api?: {
 				getManifest?: () => QwikManifest | null;
 				registerBundleGraphAdder?: (adder: () => Record<string, never>) => void;
+				registerPreloadGraphEntries?: (adder: () => Record<string, never>) => void;
 			};
 		};
 
 		expect(plugin.name).toBe('vite-plugin-qwik');
 		expect(plugin.api?.getManifest?.()).toBe(null);
 		expect(plugin.api?.registerBundleGraphAdder).toEqual(expect.any(Function));
+		expect(plugin.api?.registerPreloadGraphEntries).toEqual(expect.any(Function));
 	});
 
 	test('uses Vite config root for optimizer paths', async () => {

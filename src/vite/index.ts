@@ -9,11 +9,13 @@ import type {
 	ViteDevServer,
 } from 'vite';
 import type { OutputOptions } from 'rolldown';
+import { createPreloadGraphAdder } from '../build/bundle-graph.ts';
 import { outputDefaults } from '../build/chunking.ts';
 import { plugin as qwikRolldown } from '../rolldown.ts';
 import { qwikViteExternal } from '../qwik-external.ts';
 import type {
 	BundleGraphAdder,
+	PreloadGraphEntriesAdder,
 	QwikEnvironment,
 	QwikManifest,
 	QwikRolldownOptions,
@@ -23,6 +25,9 @@ import { createViteHmr } from './hmr.ts';
 
 export type {
 	BundleGraphAdder,
+	PreloadGraphContext,
+	PreloadGraphEntries,
+	PreloadGraphEntriesAdder,
 	QwikEnvironment,
 	QwikManifest,
 	QwikRolldownOptions,
@@ -67,6 +72,8 @@ export function qwik(options: VitePluginOptions = {}): Plugin[] {
 			...(basePlugin.api as QwikPluginApi),
 			getManifest: () => manifest,
 			registerBundleGraphAdder: (adder: BundleGraphAdder) => bundleGraphAdders.add(adder),
+			registerPreloadGraphEntries: (adder: PreloadGraphEntriesAdder) =>
+				bundleGraphAdders.add(createPreloadGraphAdder(adder)),
 		},
 		...external,
 		configResolved(resolvedConfig) {
@@ -151,7 +158,9 @@ async function buildQwikClient(builder: ViteBuilder, options: VitePluginOptions)
 }
 
 function skipDuplicateClientBuilds(builder: ViteBuilder, name: string) {
-	const guarded = builder as ViteBuilder & { [QWIK_SKIP_DUPLICATE_CLIENT_BUILD]?: true };
+	const guarded = builder as ViteBuilder & {
+		[QWIK_SKIP_DUPLICATE_CLIENT_BUILD]?: true;
+	};
 	if (guarded[QWIK_SKIP_DUPLICATE_CLIENT_BUILD]) {
 		return;
 	}
@@ -205,6 +214,7 @@ type QwikPluginApi = {
 	invalidateDevSegments: (parent: string, environment?: QwikEnvironment) => string[];
 	getManifest?: () => QwikManifest | null;
 	registerBundleGraphAdder?: (adder: BundleGraphAdder) => void;
+	registerPreloadGraphEntries?: (adder: PreloadGraphEntriesAdder) => void;
 };
 
 function getBuildEnvironment(context: unknown): QwikEnvironment {

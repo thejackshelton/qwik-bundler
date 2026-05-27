@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
-import { convertManifestToBundleGraph } from '../src/build/bundle-graph';
+import { convertManifestToBundleGraph, createPreloadGraphAdder } from '../src/build/bundle-graph';
 import { createManifest, QWIK_MANIFEST } from '../src/build/manifest';
 import { qwikClient, qwikServer } from '../src/rolldown';
 import type { QwikManifestBundle } from '../src/build/manifest';
@@ -598,6 +598,88 @@ describe('Qwik manifest output', () => {
 		);
 
 		expect(graphDynamicDeps(graph, '/dashboard/')).toEqual(['q-route.js']);
+	});
+
+	test('adapts preload graph entries with bundle origin helpers', () => {
+		const manifest = {
+			bundles: {
+				'q-route-entry.js': {
+					size: 100,
+					total: 100,
+					origins: ['pages/links.tsx'],
+				},
+				'q-other.js': {
+					size: 100,
+					total: 100,
+					origins: ['pages/other.tsx'],
+				},
+			},
+			mapping: {},
+			symbols: {},
+			manifestHash: '',
+			version: '1',
+		} as QwikManifest;
+
+		const graph = convertManifestToBundleGraph(
+			manifest,
+			new Set([
+				createPreloadGraphAdder(({ hasBundle, bundlesForOrigins }) => {
+					expect(hasBundle('q-route-entry.js')).toBe(true);
+					expect(hasBundle('q-missing.js')).toBe(false);
+					return {
+						'/links': {
+							dynamicImports: [
+								...bundlesForOrigins(['/pages/links.tsx']),
+								'q-missing.js',
+							],
+						},
+					};
+				}),
+			]),
+		);
+
+		expect(graphDynamicDeps(graph, '/links')).toEqual(['q-route-entry.js']);
+	});
+
+	test('keeps bundle graph adder dynamic imports to route entry bundles', () => {
+		const manifest = {
+			bundles: {
+				'q-route-entry.js': {
+					size: 100,
+					total: 100,
+					origins: ['pages/links.tsx'],
+					dynamicImports: ['q-page.js'],
+				},
+				'q-page.js': {
+					size: 100,
+					total: 100,
+					symbols: ['Links_component_abc12345'],
+					dynamicImports: ['q-click.js'],
+				},
+				'q-click.js': {
+					size: 50,
+					total: 50,
+					symbols: ['Links_onClick_ZuLcQT0WxjI'],
+				},
+			},
+			mapping: {
+				Links_component_abc12345: 'q-page.js',
+				Links_onClick_ZuLcQT0WxjI: 'q-click.js',
+			},
+			symbols: {},
+			manifestHash: '',
+			version: '1',
+		} as QwikManifest;
+
+		const graph = (convertManifestToBundleGraph as any)(
+			manifest,
+			new Set([
+				() => ({ '/links': { dynamicImports: ['q-route-entry.js', 'q-missing.js'] } }),
+			]),
+		);
+
+		expect(graphDynamicDeps(graph, '/links')).toEqual(['q-route-entry.js']);
+		expect(graphDynamicDeps(graph, 'q-route-entry.js')).toEqual(['q-page.js']);
 	});
 
 	test('filters non-Qwik dynamic imports from bundle graph nodes', () => {
