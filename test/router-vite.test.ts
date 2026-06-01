@@ -17,6 +17,7 @@ import {
 	callConfigureServer,
 	callLoad,
 	callResolveId,
+	callTransform,
 	callTransformIndexHtml,
 	createViteHookContext,
 	getPlugin,
@@ -79,7 +80,9 @@ describe('Qwik Router Vite integration', () => {
 		await mkdir(resolve(root, 'src/routes/about'), { recursive: true });
 		await writeFile(resolve(root, 'src/routes/index.tsx'), 'export default {};');
 		await writeFile(resolve(root, 'src/routes/layout.tsx'), 'export default {};');
+		await writeFile(resolve(root, 'src/routes/layout.docs.mdx'), 'export default {};');
 		await writeFile(resolve(root, 'src/routes/about/index.tsx'), 'export default {};');
+		await writeFile(resolve(root, 'src/routes/about/index.mdx'), 'export default {};');
 
 		const plugin = getRouterPlugin();
 		callConfigResolved(plugin, {
@@ -94,7 +97,9 @@ describe('Qwik Router Vite integration', () => {
 		expect(code).toContain('import "virtual:qwik-router-server-fns";');
 		expect(code).toContain('const routeModules = import.meta.glob(');
 		expect(code).toContain('"/src/routes/**/index*.tsx"');
+		expect(code).toContain('"/src/routes/**/index*.mdx"');
 		expect(code).toContain('"/src/routes/**/layout*.tsx"');
+		expect(code).toContain('"/src/routes/**/layout*.mdx"');
 		expect(code).toContain(
 			'export const routes = createRoutes(routeModules, false, "/src/routes");',
 		);
@@ -190,6 +195,54 @@ describe('Qwik Router Vite integration', () => {
 		});
 
 		expect(code).toBe('// No Qwik Router server functions');
+	});
+
+	test('discovers server functions from MDX route modules', async () => {
+		const plugins = qwikRouter() as Plugin[];
+		const router = getPlugin(plugins, 'vite-plugin-qwik-router');
+		const serverFunctions = getPlugin(plugins, 'vite-plugin-qwik-router-server-functions');
+		callConfigResolved(router, {
+			base: '/',
+			build: {},
+			plugins: [],
+			root: '/project',
+		});
+
+		const code = await callLoad(serverFunctions, `\0${QWIK_ROUTER_SERVER_FUNCTIONS_ID}`, {
+			environment: { config: { consumer: 'server' }, mode: 'build' },
+		});
+
+		expect(code).toContain(
+			'const modules0 = import.meta.glob("/src/routes/**/*.{js,jsx,ts,tsx,mdx}", { eager: true });',
+		);
+	});
+
+	test('compiles MDX route modules through Satteri for Qwik JSX', async () => {
+		const plugin = getRouterPlugin();
+		callConfigResolved(plugin, {
+			base: '/',
+			build: {},
+			plugins: [],
+			root: '/project',
+		});
+
+		const result = await callTransform(
+			plugin,
+			`import { component$ } from '@qwik.dev/core';
+
+export const Badge = component$(() => <strong>MDX badge</strong>);
+
+# Hello MDX
+
+<Badge />
+`,
+			'/project/src/routes/docs/index.mdx',
+		);
+
+		expect(result?.code).toContain('@qwik.dev/core/jsx-runtime');
+		expect(result?.code).toContain('function MDXContent');
+		expect(result?.code).toContain('Hello MDX');
+		expect(result?.code).toContain('export default MDXContent');
 	});
 
 	test('configures a fetchable dev SSR environment', () => {

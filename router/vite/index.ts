@@ -5,6 +5,7 @@ import type { BundleGraphAdder, QwikManifest } from '../../src/types.ts';
 import { createRouterDevEnvironment } from './dev/environment.ts';
 import { createRouterDevRequestHandler } from './dev/request.ts';
 import { getRouterIndexTags } from './dev/styles.ts';
+import { isMdxRoute, transformMdxRoute } from './mdx.ts';
 import { configureRouterPreviewServer, type RouterPreviewOptions } from './preview.ts';
 import {
 	QWIK_ROUTER_SERVER_FUNCTIONS_ID,
@@ -51,7 +52,8 @@ const ROUTER_NO_EXTERNAL = [
 	'zod',
 ];
 const DEFAULT_CLIENT_INPUT = 'src/root.tsx';
-const ROUTE_EXTENSIONS = new Set(['.js', '.jsx', '.ts', '.tsx']);
+const ROUTE_EXTENSIONS = new Set(['.js', '.jsx', '.ts', '.tsx', '.mdx']);
+const ROUTE_GLOB_EXTENSIONS = [...ROUTE_EXTENSIONS].map((ext) => ext.slice(1)).join(',');
 const ROUTE_BASENAMES = new Set(['index', 'layout', '404', 'error']);
 
 /** @deprecated Use `qwikRouter` instead. */
@@ -198,6 +200,16 @@ function qwikRouterPlugin(
 				return 'export default function QwikRouterServiceWorker() { return null; }';
 			}
 			return null;
+		},
+
+		async transform(code, id) {
+			if (!isMdxRoute(id)) {
+				return null;
+			}
+			return {
+				code: await transformMdxRoute(code, id),
+				map: null,
+			};
 		},
 
 		async configurePreviewServer(server) {
@@ -351,7 +363,7 @@ function routeModuleGlobs(state: RouterState) {
 }
 
 function routeSourceGlob(state: RouterState) {
-	return `${routeImportBase(state)}/**/*.{js,jsx,ts,tsx}`;
+	return `${routeImportBase(state)}/**/*.{${ROUTE_GLOB_EXTENSIONS}}`;
 }
 
 function serverPluginGlob(state: RouterState) {
