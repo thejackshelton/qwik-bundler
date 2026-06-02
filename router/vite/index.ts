@@ -54,6 +54,7 @@ const ROUTER_NO_EXTERNAL = [
 	'zod',
 ];
 const DEFAULT_CLIENT_INPUT = 'src/root.tsx';
+const DEFAULT_SERVER_INPUT = 'src/entry.ssr.tsx';
 const ROUTER_OPTIMIZER_STRIP_NAMES = {
 	client: {
 		ctxName: ['route', 'zod$', 'validator$', 'globalAction$'],
@@ -96,7 +97,7 @@ export function qwikRouter(options: QwikRouterVitePluginOptions = {}): PluginOpt
 	const serverFunctions = serverFunctionsPlugin({
 		name: 'vite-plugin-qwik-router-server-functions',
 		virtualId: options.serverFunctions?.virtualId ?? QWIK_ROUTER_SERVER_FUNCTIONS_ID,
-		moduleGlobs: () => [...routeModuleGlobs(state), ...serverFunctionModuleGlobs(state)],
+		moduleGlobs: () => serverFunctionModuleGlobs(state),
 	});
 
 	return [router, serverFunctions];
@@ -131,8 +132,17 @@ function qwikRouterPlugin(
 			if (name !== (options.serverEnvironment ?? 'ssr')) {
 				return {};
 			}
+			const build = config.build ?? {};
+			const rolldownOptions = build.rolldownOptions ?? {};
 			const environment: EnvironmentOptions = {
 				consumer: 'server',
+				build: {
+					...build,
+					rolldownOptions: {
+						...rolldownOptions,
+						input: rolldownOptions.input ?? DEFAULT_SERVER_INPUT,
+					},
+				},
 				resolve: {
 					noExternal: ROUTER_NO_EXTERNAL,
 				},
@@ -209,7 +219,6 @@ function qwikRouterPlugin(
 					state,
 					options,
 					this.environment.config.consumer === 'server',
-					this.environment.mode === 'build',
 				);
 			}
 			if (id.endsWith(QWIK_ROUTER_ENTRIES_ID)) {
@@ -328,16 +337,8 @@ function generateRouterConfig(
 	state: RouterState,
 	options: QwikRouterVitePluginOptions,
 	isServer: boolean,
-	isBuild: boolean,
 ) {
 	const imports: string[] = [`import { isDev } from '@qwik.dev/core/build';`];
-	const setup: string[] = [];
-	if (isServer && isBuild && options.clientManifest !== false) {
-		imports.push(
-			`import manifest from ${JSON.stringify(rootImportPath(state, options.clientManifest ?? 'dist/q-manifest.json'))};`,
-		);
-		setup.push('globalThis.__QWIK_MANIFEST__ = manifest;');
-	}
 	if (isServer) {
 		imports.push(`import ${JSON.stringify(QWIK_ROUTER_SERVER_FUNCTIONS_ID)};`);
 	}
@@ -345,7 +346,6 @@ function generateRouterConfig(
 	return [
 		'/** Qwik Router Config */',
 		...imports,
-		...setup,
 		`const routeModules = import.meta.glob(${JSON.stringify(routeModuleGlobs(state))}${state.dynamicImports ? '' : ', { eager: true }'});`,
 		`const serverPluginModules = import.meta.glob(${JSON.stringify(serverPluginGlob(state))}, { eager: true });`,
 		routerConfigRuntimeCode(),
@@ -388,15 +388,6 @@ function serverFunctionModuleGlobs(state: RouterState) {
 
 function serverPluginGlob(state: RouterState) {
 	return `${serverPluginImportBase(state)}/**/plugin@*.{js,jsx,ts,tsx}`;
-}
-
-function rootImportPath(state: RouterState, path: string) {
-	if (path.startsWith('/')) {
-		return path;
-	}
-	return withLeadingSlash(
-		cleanRelativePath(relative(state.rootDir, resolve(state.rootDir, path))),
-	);
 }
 
 function routerConfigRuntimeCode() {

@@ -7,6 +7,7 @@
 	"type": "module",
 	"exports": {
 		"./rolldown": "./dist/rolldown.mjs",
+		"./adapters/static/vite": "./dist/adapters/static/vite.mjs",
 		"./router/vite": "./dist/router/vite/index.mjs",
 		"./vite": "./dist/vite/index.mjs",
 		"./package.json": "./package.json"
@@ -43,13 +44,13 @@
 		"playwright": "1.59.1",
 		"rolldown": "1.0.2",
 		"typescript": "5.9.3",
-		"vite": "8.0.10",
+		"vite": "8.0.16",
 		"vite-plus": "0.1.20",
 		"vitest": "4.1.5"
 	},
 	"peerDependencies": {
 		"rolldown": "1.0.2",
-		"vite": "8.0.10"
+		"vite": "8.0.16"
 	},
 	"peerDependenciesMeta": {
 		"rolldown": {

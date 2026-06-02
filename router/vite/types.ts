@@ -17,8 +17,6 @@ export interface QwikRouterVitePluginOptions {
 	staticImportRoutes?: boolean;
 	/** Configure Vite preview to serve the built SSR preview entry. */
 	preview?: RouterPreviewOptions | false;
-	/** Client manifest imported into server builds. Defaults to `dist/q-manifest.json`. */
-	clientManifest?: string | false;
 	/** Enable router-owned dev SSR middleware. Defaults to `true`. */
 	devSsrServer?: boolean;
 	/** Dev server environment used for fetch-based SSR. Defaults to `ssr`. */

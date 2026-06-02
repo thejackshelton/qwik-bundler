@@ -63,17 +63,24 @@ export function mergeOptimizerStripNames(
 	target.server.ctxName = unique(target.server.ctxName, next.server?.ctxName);
 }
 
+// TODO: Remove once Qwik core stops producing this Terser-shaped prod output and
+// Rolldown owns the annotation handling directly.
+export function fixPureAnnotations(code: string): string {
+	return code
+		.replace(/\/\*\s*[#@]__PURE__\s*\*\/\s*return\s+/g, 'return /* @__PURE__ */ ')
+		.replace(/\/\*\s*[#@]__PURE__\s*\*\/(\s*)(?=[^\sA-Za-z_$(])/g, '$1');
+}
+
 export function makeConstPropsDiffable(code: string, parse: Parse) {
 	const importSpecifier = findJsxSortedImport(parse(code) as Program);
 	if (!importSpecifier) {
 		return code;
 	}
 
-	const { declaration, specifier } = importSpecifier;
-	const moduleSource = code.slice(declaration.source.start, declaration.source.end);
+	const { specifier } = importSpecifier;
 	const before = code.slice(0, specifier.start);
 	const after = code.slice(specifier.end);
-	return `${before}${jsxSplitSpecifier()}${after}\n${jsxSortedHmrShim(moduleSource)}`;
+	return `${before}${jsxSplitSpecifier()}${after}\n${jsxSortedHmrShim()}`;
 }
 
 function findJsxSortedImport(program: Program) {
@@ -100,7 +107,7 @@ function jsxSplitSpecifier() {
 	return '_jsxSplit as __qwikHmrJsxSplit';
 }
 
-function jsxSortedHmrShim(moduleSource: string) {
+function jsxSortedHmrShim() {
 	return (
 		'const _jsxSorted=(type,varProps,constProps,children,flags,key,dev)=>' +
 		'__qwikHmrJsxSplit(type,{...constProps,...varProps},null,children,flags,key??(dev&&((s)=>s?`${dev.fileName}:${dev.lineNumber}:${dev.columnNumber}:${s}`:null)(Array.isArray(children)?children.filter((c)=>typeof c==="string").join("|"):typeof children==="string"?children:"")),dev);'

@@ -3,7 +3,6 @@ import { component$, useSignal } from '@qwik.dev/core';
 export default component$(() => {
 	const count = useSignal(0);
 	const newCount = useSignal(0);
-	const thirdState = useSignal(0);
 
 	return (
 		<main>

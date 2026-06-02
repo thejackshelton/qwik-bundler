@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { parseAst } from 'rolldown/parseAst';
 import { plugin as qwikPlugin, qwikClient, qwikLib, qwikServer } from '../src/rolldown';
-import { makeConstPropsDiffable } from '../src/hmr/optimizer';
+import { fixPureAnnotations, makeConstPropsDiffable } from '../src/hmr/optimizer';
 import { callBuildStart, callLoad, callOptions, callResolveId, callTransform } from './helpers';
 
 const optimizerMock = vi.hoisted(() => ({
@@ -114,6 +114,27 @@ describe('Rolldown runtime integration', () => {
 			name: 'preloader',
 			preserveSignature: 'allow-extension',
 		});
+	});
+
+	test('repairs Qwik core prod pure annotations before Rolldown parses them', async () => {
+		const plugin = qwikClient();
+		const code =
+			'case 1: /* @__PURE__ */ return new Set();\nconst value = /*#__PURE__*/ "" + fn;';
+
+		expect(fixPureAnnotations(code)).toBe(
+			'case 1: return /* @__PURE__ */ new Set();\nconst value =  "" + fn;',
+		);
+		await expect(
+			callTransform(
+				plugin,
+				code,
+				'/workspace/app/node_modules/.pnpm/@qwik.dev+core@2.0.0-beta.36/node_modules/@qwik.dev/core/dist/core.prod.mjs',
+			),
+		).resolves.toEqual({
+			code: 'case 1: return /* @__PURE__ */ new Set();\nconst value =  "" + fn;',
+			map: null,
+		});
+		expect(optimizerMock.transformModules).not.toHaveBeenCalled();
 	});
 
 	test('serves dev Qwik handlers without emitting build chunks', async () => {
@@ -833,7 +854,7 @@ describe('Rolldown runtime integration', () => {
 				{
 					path: '/workspace/app/src/root.tsx_root_component_abc.js',
 					isEntry: false,
-					code: 'export const s_abc = () => "Hello";',
+					code: 'import { qrl } from "@qwik.dev/core"; export const s_abc = qrl(() => import("./root.tsx_root_component_abc.js__val.js"), "s_val");',
 					map: null,
 					segment: {
 						origin: '/workspace/app/src/root.tsx',
@@ -849,6 +870,14 @@ describe('Rolldown runtime integration', () => {
 						captures: false,
 						loc: [0, 0],
 					},
+					origPath: null,
+				},
+				{
+					path: '/workspace/app/src/root.tsx_root_component_abc.js__val.js',
+					isEntry: true,
+					code: 'export const s_val = () => "Hello";',
+					map: null,
+					segment: null,
 					origPath: null,
 				},
 			],
@@ -873,7 +902,28 @@ describe('Rolldown runtime integration', () => {
 
 		expect(typeof resolvedId).toBe('string');
 		expect(await callLoad(plugin, resolvedId as string)).toBe(
-			'export const s_abc = () => "Hello";',
+			'import { qrl } from "@qwik.dev/core"; export const s_abc = qrl(() => import("./root.tsx_root_component_abc.js__val.js"), "s_val");',
+		);
+
+		optimizerMock.transformModules.mockClear();
+		expect(
+			await callTransform(
+				plugin,
+				'import { _val, inlinedQrl } from "@qwik.dev/core"; export const s_abc = inlinedQrl(_val, "_val", []);',
+				resolvedId as string,
+			),
+		).toBeNull();
+		expect(optimizerMock.transformModules).not.toHaveBeenCalled();
+
+		const resolvedValId = await callResolveId(
+			plugin,
+			'./root.tsx_root_component_abc.js__val.js',
+			resolvedId as string,
+		);
+
+		expect(typeof resolvedValId).toBe('string');
+		expect(await callLoad(plugin, resolvedValId as string)).toBe(
+			'export const s_val = () => "Hello";',
 		);
 
 		const resolve = vi.fn().mockResolvedValue({ id: '/workspace/app/src/home.tsx' });

@@ -59,8 +59,17 @@ export function callBuildStart(
 	);
 }
 
-export function callBuildApp(plugin: PluginHooks, builder: unknown) {
-	return getHook(plugin.buildApp, 'buildApp').call({}, builder);
+export function callBuildApp(plugin: PluginHooks, builder: unknown, context: HookContext = {}) {
+	return getHook(plugin.buildApp, 'buildApp').call(
+		{
+			error: vi.fn((value: unknown) => {
+				throw value instanceof Error ? value : new Error(String(value));
+			}),
+			warn: vi.fn(),
+			...context,
+		},
+		builder,
+	);
 }
 
 export function callTransform(
@@ -84,12 +93,20 @@ export function callTransform(
 }
 
 function parseImports(code: string) {
-	const body = [
+	const body: unknown[] = [
 		...code.matchAll(/(?:import|export)\s+(?:[^'";]+\s+from\s+)?['"]([^'"]+)['"]/g),
 	].map((match) => ({
 		type: match[0].startsWith('import') ? 'ImportDeclaration' : 'ExportNamedDeclaration',
 		source: { value: match[1] },
 	}));
+	body.push(
+		...[...code.matchAll(/(['"])(.*?)\1/g)].map((match) => ({
+			type: 'Literal',
+			value: match[2],
+			start: match.index,
+			end: (match.index ?? 0) + match[0].length,
+		})),
+	);
 	return { body };
 }
 
@@ -118,8 +135,22 @@ export function callLoad(plugin: PluginHooks, id: string, context: HookContext =
 	return getHook(plugin.load, 'load').call(context, id, undefined);
 }
 
-export function callGenerateBundle(plugin: PluginHooks, bundle: unknown, emitFile = vi.fn()) {
-	return getHook(plugin.generateBundle, 'generateBundle').call({ emitFile }, {}, bundle, false);
+export function callGenerateBundle(
+	plugin: PluginHooks,
+	bundle: unknown,
+	emitFile = vi.fn(),
+	context: HookContext = {},
+) {
+	return getHook(plugin.generateBundle, 'generateBundle').call(
+		{
+			emitFile,
+			parse: vi.fn(parseImports),
+			...context,
+		},
+		{},
+		bundle,
+		false,
+	);
 }
 
 export function callConfig(
@@ -159,7 +190,10 @@ export function createViteHookContext(
 	build: { lib?: unknown } = {},
 ): HookContext {
 	return {
-		environment: { config: { consumer, build } },
+		environment: {
+			config: { consumer, build },
+			name: consumer === 'server' ? 'ssr' : 'client',
+		},
 		emitFile: vi.fn(),
 		resolve: vi.fn(),
 	};

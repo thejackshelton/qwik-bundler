@@ -10,11 +10,15 @@ import {
 	qwikRouter,
 	serverFunctionsPlugin,
 } from '../router/vite/index.ts';
+import { staticAdapter } from '../adapters/static/vite.ts';
 import {
+	callBuildStart,
+	callBuildApp,
 	callConfig,
 	callConfigEnvironment,
 	callConfigResolved,
 	callConfigureServer,
+	callGenerateBundle,
 	callLoad,
 	callResolveId,
 	callTransform,
@@ -147,7 +151,7 @@ describe('Qwik Router Vite integration', () => {
 		);
 	});
 
-	test('seeds the client manifest during server builds', async () => {
+	test('leaves server manifest handling to the Qwik bundler', async () => {
 		const root = await tempProject();
 		await mkdir(resolve(root, 'src/routes'), { recursive: true });
 		await writeFile(resolve(root, 'src/routes/index.tsx'), 'export default {};');
@@ -164,8 +168,8 @@ describe('Qwik Router Vite integration', () => {
 			environment: { config: { consumer: 'server' }, mode: 'build' },
 		});
 
-		expect(code).toContain('import manifest from "/dist/q-manifest.json";');
-		expect(code).toContain('globalThis.__QWIK_MANIFEST__ = manifest;');
+		expect(code).not.toContain('q-manifest.json');
+		expect(code).not.toContain('globalThis.__QWIK_MANIFEST__');
 	});
 
 	test('passes trailing slash configuration through to the generated router config', async () => {
@@ -236,7 +240,7 @@ describe('Qwik Router Vite integration', () => {
 		expect(code).toBe('// No Qwik Router server functions');
 	});
 
-	test('discovers server functions from MDX route modules', async () => {
+	test('does not statically import route modules for server function registration', async () => {
 		const plugins = qwikRouter() as Plugin[];
 		const router = getPlugin(plugins, 'vite-plugin-qwik-router');
 		const serverFunctions = getPlugin(plugins, 'vite-plugin-qwik-router-server-functions');
@@ -251,7 +255,8 @@ describe('Qwik Router Vite integration', () => {
 			environment: { config: { consumer: 'server' }, mode: 'build' },
 		});
 
-		expect(code).toContain('import.meta.glob("/src/routes/**/index*.mdx", { eager: true });');
+		expect(code).not.toContain('/src/routes/**/index');
+		expect(code).not.toContain('/src/routes/**/layout');
 		expect(code).toContain('import.meta.glob("/src/**/*.server.ts", { eager: true });');
 		expect(code).not.toContain('/src/routes/**/*.{js,jsx,ts,tsx,mdx}');
 	});
@@ -331,6 +336,11 @@ export const Badge = component$(() => <strong>MDX badge</strong>);
 
 		expect(result).toMatchObject({
 			consumer: 'server',
+			build: {
+				rolldownOptions: {
+					input: 'src/entry.ssr.tsx',
+				},
+			},
 			resolve: {
 				noExternal: expect.arrayContaining([
 					'@qwik.dev/router',
@@ -346,6 +356,26 @@ export const Badge = component$(() => <strong>MDX badge</strong>);
 		);
 	});
 
+	test('does not replace a host-owned SSR environment input', () => {
+		const plugin = getRouterPlugin();
+
+		expect(
+			callConfigEnvironment(plugin, 'ssr', {
+				build: {
+					rolldownOptions: {
+						input: 'src/adapter-entry.tsx',
+					},
+				},
+			}),
+		).toMatchObject({
+			build: {
+				rolldownOptions: {
+					input: 'src/adapter-entry.tsx',
+				},
+			},
+		});
+	});
+
 	test('does not replace a host-owned dev server environment', () => {
 		const plugin = getRouterPlugin();
 		const createEnvironment = vi.fn();
@@ -355,6 +385,146 @@ export const Badge = component$(() => <strong>MDX badge</strong>);
 
 		expect(result.resolve?.noExternal).toContain('@qwik.dev/router');
 		expect(result.dev?.createEnvironment).toBeUndefined();
+	});
+
+	test('static adapter computes SSG paths without Qwik Vite path getters', async () => {
+		const root = await tempProject();
+		const plugins = staticAdapter({ origin: 'qds.dev' }) as Plugin[];
+		const adapter = getPlugin(plugins, 'vite-plugin-qwik-router-ssg-static-site-generation');
+		const emitFile = vi.fn();
+		const config = await callConfig(
+			adapter,
+			{ build: { ssr: true } },
+			{ command: 'build', mode: 'production' },
+		);
+
+		expect(config).toMatchObject({ build: { outDir: 'server', ssr: true } });
+		callConfigResolved(adapter, {
+			command: 'build',
+			root,
+			build: { outDir: 'server', assetsDir: 'server-assets' },
+			environments: {
+				client: {
+					build: { outDir: 'server', assetsDir: 'assets' },
+				},
+			},
+			plugins: [
+				{
+					name: 'vite-plugin-qwik-router',
+					api: {
+						getBasePathname: () => '/docs/',
+						getRoutes: () => [],
+						getServiceWorkers: () => [],
+					},
+				},
+				{ name: 'vite-plugin-qwik', api: { getManifest: () => null } },
+			],
+		});
+
+		const code = callLoad(
+			adapter,
+			'\0@qwik-ssg-entry',
+			createViteHookContext('server'),
+		) as string;
+
+		expect(callResolveId(adapter, '@qwik-ssg-entry')).toBe('\0@qwik-ssg-entry');
+		expect(code).toContain(
+			`import render from ${JSON.stringify(resolve(root, 'src/entry.ssr'))};`,
+		);
+		expect(code).toContain(
+			`import manifest from ${JSON.stringify(resolve(root, 'dist/q-manifest.json'))};`,
+		);
+		expect(code).toContain('globalThis.__QWIK_MANIFEST__ = manifest;');
+		expect(code).toContain(`"outDir":${JSON.stringify(resolve(root, 'dist'))}`);
+		callBuildStart(
+			adapter,
+			{ cwd: root },
+			{
+				...createViteHookContext('server', {}),
+				emitFile,
+			},
+		);
+		expect(emitFile).toHaveBeenCalledWith({
+			id: '@qwik-ssg-entry',
+			type: 'chunk',
+			fileName: 'run-ssg.js',
+		});
+	});
+
+	test('static adapter builds environments and delegates generation', async () => {
+		const root = await tempProject();
+		const serverChunk = 'assets/server.js';
+		const generate = vi.fn();
+		const warn = vi.fn();
+		const plugins = staticAdapter({
+			generate,
+			origin: 'qds.dev',
+			ssg: null,
+		}) as Plugin[];
+		const adapter = getPlugin(plugins, 'vite-plugin-qwik-router-ssg-static-site-generation');
+
+		callConfigResolved(adapter, {
+			command: 'build',
+			root,
+			build: { outDir: 'server' },
+			environments: {
+				client: {
+					build: { outDir: 'dist', assetsDir: 'assets' },
+				},
+			},
+			plugins: [
+				{
+					name: 'vite-plugin-qwik-router',
+					api: {
+						getBasePathname: () => '/docs/',
+						getRoutes: () => [],
+						getServiceWorkers: () => [],
+					},
+				},
+			],
+		});
+		await callGenerateBundle(
+			adapter,
+			{
+				[serverChunk]: {
+					type: 'chunk',
+					fileName: serverChunk,
+					isEntry: true,
+					code: '',
+				},
+			},
+			vi.fn(),
+			createViteHookContext('server'),
+		);
+
+		const clientEnvironment = { isBuilt: false, name: 'client' };
+		const serverEnvironment = { isBuilt: false, name: 'ssr' };
+		const build = vi.fn(async (environment: typeof clientEnvironment) => {
+			environment.isBuilt = true;
+		});
+		await callBuildApp(
+			adapter,
+			{
+				build,
+				config: {},
+				environments: {
+					client: clientEnvironment,
+					ssr: serverEnvironment,
+				},
+			},
+			{ warn },
+		);
+
+		expect(build).toHaveBeenCalledWith(clientEnvironment);
+		expect(build).toHaveBeenCalledWith(serverEnvironment);
+		expect(generate).toHaveBeenCalledWith(
+			expect.objectContaining({
+				outputEntries: [serverChunk],
+				clientOutDir: resolve(root, 'dist'),
+				serverOutDir: resolve(root, 'server'),
+			}),
+		);
+		expect(warn).toHaveBeenCalledOnce();
 	});
 
 	test('dispatches dev SSR through a fetchable server environment', async () => {

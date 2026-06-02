@@ -111,10 +111,12 @@ describe('Vite config integration', () => {
 		const plugin = getQwikPlugin();
 		const config: UserConfig = {
 			optimizeDeps: { exclude: ['existing'] },
+			resolve: { conditions: ['browser', 'worker', 'import', 'default'] },
 		};
 
 		await callConfig(plugin, config, { command: 'serve', mode: 'development' });
 
+		expect(config.resolve?.conditions).toEqual(['browser', 'worker', 'import', 'default']);
 		expect(config.optimizeDeps).toMatchObject({
 			exclude: [
 				'existing',

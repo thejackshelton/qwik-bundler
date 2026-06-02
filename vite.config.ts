@@ -10,6 +10,7 @@ export default defineConfig({
 		},
 		entry: {
 			rolldown: './src/rolldown.ts',
+			'adapters/static/vite': './adapters/static/vite.ts',
 			'router/vite/index': './router/vite/index.ts',
 			'vite/index': './src/vite/index.ts',
 		},
@@ -19,6 +20,7 @@ export default defineConfig({
 		exports: {
 			customExports: () => ({
 				'./rolldown': './dist/rolldown.mjs',
+				'./adapters/static/vite': './dist/adapters/static/vite.mjs',
 				'./router/vite': './dist/router/vite/index.mjs',
 				'./vite': './dist/vite/index.mjs',
 				'./package.json': './package.json',

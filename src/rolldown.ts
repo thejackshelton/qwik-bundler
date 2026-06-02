@@ -15,6 +15,7 @@ import { createQwikDev } from './dev.ts';
 import { comptimeConfig, replaceExperimental } from './features.ts';
 import {
 	applyOptimizerStripNames,
+	fixPureAnnotations,
 	makeConstPropsDiffable,
 	mergeOptimizerStripNames,
 } from './hmr/optimizer.ts';
@@ -62,6 +63,7 @@ const JS_OR_TS_SOURCE_FILE = /\.[cm]?[jt]sx?$/;
 const OPTIMIZER_SOURCE_FILE = /(?:\.[cm]?tsx?|\.jsx|\.mdx?)$/;
 const QWIK_LIBRARY_SOURCE_FILE = /\.qwik\.[cm]?[jt]sx?$/;
 const QWIK_RUNTIME_MODULE = /[/\\]@qwik\.dev[/\\]core[/\\]/;
+const QWIK_CORE_PROD_MODULE = /[/\\]@qwik\.dev[/\\]core[/\\].*[/\\]core\.prod\.mjs$/;
 const QWIK_PUBLIC_IMPORTS = ['@qwik.dev/core', '@builder.io/qwik'];
 const QWIK_IMPORTS =
 	/\b(?:import|export)\s+(?:[^'";]*?\s+from\s*)?['"](@qwik\.dev\/core(?:\/[^'"]*)?|@builder\.io\/qwik(?:\/[^'"]*)?)['"]/;
@@ -249,6 +251,17 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 		async transform(code, id) {
 			const currentEnvironment = getEnvironment(this);
 			const path = pathname(id);
+			if (id.startsWith(SEGMENT) || segments.has(path)) {
+				return null;
+			}
+
+			if (QWIK_CORE_PROD_MODULE.test(path)) {
+				const fixed = fixPureAnnotations(code);
+				if (fixed !== code) {
+					return { code: fixed, map: null };
+				}
+			}
+
 			const replaced = replaceExperimental(code, currentEnvironment, options.experimental);
 			const optimize = shouldOptimize(replaced ?? code, path);
 			const transformed = optimize
@@ -340,7 +353,7 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 		reportDiagnostics(result.diagnostics, id, context);
 
 		for (const module of result.modules) {
-			if (!module.segment) {
+			if (!module.segment && !module.isEntry) {
 				continue;
 			}
 
@@ -348,7 +361,9 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 			segments.set(id, module);
 			dev.recordSegment(module, currentEnvironment);
 			if (currentEnvironment === 'client') {
-				symbols.set(module.segment.name, module.segment);
+				if (module.segment) {
+					symbols.set(module.segment.name, module.segment);
+				}
 				if (!dev.isEnabled()) {
 					context.emitFile({ type: 'chunk', id, preserveSignature: 'strict' });
 				}
