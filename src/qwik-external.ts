@@ -20,6 +20,7 @@ const QWIK_OPTIMIZE_DEPS_EXCLUDE = [
 	'@qwik.dev/core/build',
 	'@qwik.dev/core/loader',
 	'@qwik.dev/core/preloader',
+	'@qwik-client-manifest',
 	'@builder.io/qwik',
 ];
 

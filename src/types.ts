@@ -29,8 +29,23 @@ export interface QwikRolldownOptions {
 	onManifest?: (manifest: QwikManifest) => void;
 	/** Options forwarded directly to the Qwik optimizer. */
 	optimizerOptions?: OptimizerOptions;
+	/** Additive optimizer strip names for framework-owned APIs. */
+	optimizerStripNames?: QwikOptimizerStripNames;
 	/** Project root used for stable manifest origins and client/server manifest sharing. */
 	rootDir?: string;
+}
+
+/** Additional optimizer strip names provided by a router or meta-framework. */
+export interface QwikOptimizerStripNames {
+	/** Names stripped from client output, usually server-only QRL contexts and route exports. */
+	client?: {
+		ctxName?: readonly string[];
+		exports?: readonly string[];
+	};
+	/** Names stripped from server output, usually browser-only QRL contexts. */
+	server?: {
+		ctxName?: readonly string[];
+	};
 }
 
 /** Production manifest consumed by Qwik SSR, preload code, and static HTML helpers. */

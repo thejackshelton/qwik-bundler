@@ -1,7 +1,7 @@
 import { basename, dirname, extname, join, relative, resolve } from 'pathe';
 import { withLeadingSlash, withTrailingSlash } from 'ufo';
 import type { ConfigEnv, EnvironmentOptions, PluginOption, UserConfig, ViteDevServer } from 'vite';
-import type { BundleGraphAdder, QwikManifest } from '../../src/types.ts';
+import type { BundleGraphAdder, QwikManifest, QwikOptimizerStripNames } from '../../src/types.ts';
 import { createRouterDevEnvironment } from './dev/environment.ts';
 import { createRouterDevRequestHandler } from './dev/request.ts';
 import { getRouterIndexTags } from './dev/styles.ts';
@@ -21,6 +21,7 @@ import type {
 	QwikRouterVitePluginOptions,
 	QwikVitePluginApiHost,
 	RouterBuildOptions,
+	RouterMdxOptions,
 	RouterServerFunctionsOptions,
 	RouterState,
 } from './types.ts';
@@ -33,6 +34,7 @@ export type {
 	QwikRouterPlugin,
 	QwikRouterPluginApi,
 	QwikRouterVitePluginOptions,
+	RouterMdxOptions,
 	RouterPreviewOptions,
 	RouterServerFunctionsOptions,
 	ServerFunctionsPluginOptions,
@@ -52,9 +54,25 @@ const ROUTER_NO_EXTERNAL = [
 	'zod',
 ];
 const DEFAULT_CLIENT_INPUT = 'src/root.tsx';
+const ROUTER_OPTIMIZER_STRIP_NAMES = {
+	client: {
+		ctxName: ['route', 'zod$', 'validator$', 'globalAction$'],
+		exports: [
+			'onGet',
+			'onPost',
+			'onPut',
+			'onRequest',
+			'onDelete',
+			'onHead',
+			'onOptions',
+			'onPatch',
+			'onStaticGenerate',
+		],
+	},
+} satisfies QwikOptimizerStripNames;
 const ROUTE_EXTENSIONS = new Set(['.js', '.jsx', '.ts', '.tsx', '.mdx']);
-const ROUTE_GLOB_EXTENSIONS = [...ROUTE_EXTENSIONS].map((ext) => ext.slice(1)).join(',');
 const ROUTE_BASENAMES = new Set(['index', 'layout', '404', 'error']);
+const SERVER_MODULE_EXTENSIONS = ['.js', '.jsx', '.ts', '.tsx'];
 
 /** @deprecated Use `qwikRouter` instead. */
 export function qwikCity(options?: QwikCityVitePluginOptions): PluginOption[] {
@@ -78,7 +96,7 @@ export function qwikRouter(options: QwikRouterVitePluginOptions = {}): PluginOpt
 	const serverFunctions = serverFunctionsPlugin({
 		name: 'vite-plugin-qwik-router-server-functions',
 		virtualId: options.serverFunctions?.virtualId ?? QWIK_ROUTER_SERVER_FUNCTIONS_ID,
-		moduleGlobs: () => [routeSourceGlob(state)],
+		moduleGlobs: () => [...routeModuleGlobs(state), ...serverFunctionModuleGlobs(state)],
 	});
 
 	return [router, serverFunctions];
@@ -140,6 +158,7 @@ function qwikRouterPlugin(
 				(plugin) => plugin.name === 'vite-plugin-qwik',
 			) as QwikVitePluginApiHost | undefined;
 			qwikPlugin?.api?.registerBundleGraphAdder?.(createRouteBundleGraphAdder(state));
+			qwikPlugin?.api?.registerOptimizerStripNames?.(ROUTER_OPTIMIZER_STRIP_NAMES);
 		},
 
 		configureServer(server) {
@@ -207,7 +226,7 @@ function qwikRouterPlugin(
 				return null;
 			}
 			return {
-				code: await transformMdxRoute(code, id),
+				code: await transformMdxRoute(code, id, options.mdx),
 				map: null,
 			};
 		},
@@ -362,8 +381,9 @@ function routeModuleGlobs(state: RouterState) {
 	);
 }
 
-function routeSourceGlob(state: RouterState) {
-	return `${routeImportBase(state)}/**/*.{${ROUTE_GLOB_EXTENSIONS}}`;
+function serverFunctionModuleGlobs(state: RouterState) {
+	const base = importBase(state.rootDir, dirname(state.routesDir));
+	return SERVER_MODULE_EXTENSIONS.map((ext) => `${base}/**/*.server${ext}`);
 }
 
 function serverPluginGlob(state: RouterState) {

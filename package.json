@@ -31,9 +31,10 @@
 		"prepare": "vp config"
 	},
 	"dependencies": {
-		"@qwik.dev/optimizer": "2.1.0-beta.2",
+		"@qwik.dev/optimizer": "2.1.0-beta.5",
 		"@thi.ng/dgraph": "2.1.205",
 		"pathe": "2.0.3",
+		"satteri": "0.6.3",
 		"ufo": "1.6.4"
 	},
 	"devDependencies": {
@@ -41,7 +42,6 @@
 		"bumpp": "10.4.1",
 		"playwright": "1.59.1",
 		"rolldown": "1.0.2",
-		"satteri": "0.6.3",
 		"typescript": "5.9.3",
 		"vite": "8.0.10",
 		"vite-plus": "0.1.20",
@@ -62,8 +62,5 @@
 	"engines": {
 		"node": ">=22"
 	},
-	"packageManager": "pnpm@10.33.2",
-	"inlinedDependencies": {
-		"satteri": "0.6.3"
-	}
+	"packageManager": "pnpm@10.33.2"
 }

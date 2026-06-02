@@ -51,6 +51,7 @@ describe('Vite plugin hooks', () => {
 				getManifest?: () => QwikManifest | null;
 				registerBundleGraphAdder?: (adder: () => Record<string, never>) => void;
 				registerPreloadGraphEntries?: (adder: () => Record<string, never>) => void;
+				registerOptimizerStripNames?: (names: unknown) => void;
 			};
 		};
 
@@ -58,6 +59,39 @@ describe('Vite plugin hooks', () => {
 		expect(plugin.api?.getManifest?.()).toBe(null);
 		expect(plugin.api?.registerBundleGraphAdder).toEqual(expect.any(Function));
 		expect(plugin.api?.registerPreloadGraphEntries).toEqual(expect.any(Function));
+		expect(plugin.api?.registerOptimizerStripNames).toEqual(expect.any(Function));
+	});
+
+	test('does not force the optimizer transform ahead of earlier Vite transforms', () => {
+		const plugin = getQwikPlugin();
+		const transform = plugin.transform as { order?: string };
+
+		expect(transform.order).toBeUndefined();
+	});
+
+	test('serves the Qwik client manifest virtual module required by current Qwik core dev SSR', async () => {
+		const plugin = getQwikPlugin();
+
+		callConfigResolved(plugin, {
+			command: 'serve',
+			root: '/workspace/app',
+			build: {
+				rolldownOptions: { input: 'src/root.tsx' },
+				rollupOptions: {},
+			},
+		});
+
+		expect(
+			await callResolveId(
+				plugin,
+				'@qwik-client-manifest',
+				'/workspace/app/node_modules/@qwik.dev/core/dist/server.mjs',
+				createViteHookContext('server'),
+			),
+		).toBe('@qwik-client-manifest');
+		expect(
+			await callLoad(plugin, '@qwik-client-manifest', createViteHookContext('server')),
+		).toBe('export const manifest = undefined;');
 	});
 
 	test('uses Vite config root for optimizer paths', async () => {
@@ -113,6 +147,43 @@ describe('Vite plugin hooks', () => {
 			}),
 		);
 		expectTransformModulesNeverCalledWithHmr();
+	});
+
+	test('lets framework plugins register optimizer strip names', async () => {
+		const plugin = getQwikPlugin() as ReturnType<typeof getQwikPlugin> & {
+			api?: {
+				registerOptimizerStripNames?: (names: {
+					client?: { ctxName?: string[]; exports?: string[] };
+				}) => void;
+			};
+		};
+
+		plugin.api?.registerOptimizerStripNames?.({
+			client: {
+				ctxName: ['route', 'loader$'],
+				exports: ['onGet', 'loader'],
+			},
+		});
+		callConfigResolved(plugin, {
+			root: '/workspace/app',
+			build: {
+				rolldownOptions: { input: 'src/root.tsx' },
+				rollupOptions: {},
+			},
+		});
+		await callTransform(
+			plugin,
+			"import { component$ } from '@qwik.dev/core'; export const loader = () => null;",
+			'/workspace/app/src/routes/index.tsx',
+			createViteHookContext(),
+		);
+
+		expect(optimizerMock.transformModules).toHaveBeenCalledWith(
+			expect.objectContaining({
+				stripCtxName: expect.arrayContaining(['route', 'server', 'loader$']),
+				stripExports: expect.arrayContaining(['onGet', 'loader']),
+			}),
+		);
 	});
 
 	test('GATE-04 uses production optimizer mode for Vite client builds', async () => {

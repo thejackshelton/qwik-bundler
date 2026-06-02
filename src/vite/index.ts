@@ -18,6 +18,7 @@ import type {
 	PreloadGraphEntriesAdder,
 	QwikEnvironment,
 	QwikManifest,
+	QwikOptimizerStripNames,
 	QwikRolldownOptions,
 } from '../types.ts';
 import { qwikEnvironment, transformQwikRequest, viteEnvironmentName } from './environment.ts';
@@ -30,6 +31,7 @@ export type {
 	PreloadGraphEntriesAdder,
 	QwikEnvironment,
 	QwikManifest,
+	QwikOptimizerStripNames,
 	QwikRolldownOptions,
 } from '../types.ts';
 
@@ -135,7 +137,6 @@ export function qwik(options: VitePluginOptions = {}): Plugin[] {
 			return hmr.load(id) ?? runHook(basePlugin.load, this, id, loadOptions);
 		},
 		transform: {
-			order: 'pre',
 			handler(code, id, transformOptions) {
 				return runHook(basePlugin.transform, this, code, id, transformOptions);
 			},
@@ -215,6 +216,7 @@ type QwikPluginApi = {
 	getManifest?: () => QwikManifest | null;
 	registerBundleGraphAdder?: (adder: BundleGraphAdder) => void;
 	registerPreloadGraphEntries?: (adder: PreloadGraphEntriesAdder) => void;
+	registerOptimizerStripNames?: (names: QwikOptimizerStripNames) => void;
 };
 
 function getBuildEnvironment(context: unknown): QwikEnvironment {

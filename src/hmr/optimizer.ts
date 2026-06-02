@@ -1,6 +1,19 @@
 // TODO: Put this in the Qwik optimizer directly.
 
+import type { TransformModulesOptions } from '@qwik.dev/optimizer';
+import type { QwikEnvironment, QwikOptimizerStripNames } from '../types.ts';
+
 type Parse = (input: string) => unknown;
+
+const SERVER_OUTPUT_REG_CTX_NAME = ['server'];
+const SERVER_OUTPUT_STRIP_CTX_NAME = [
+	'useClient',
+	'useBrowser',
+	'useVisibleTask',
+	'client',
+	'browser',
+];
+const CLIENT_OUTPUT_STRIP_CTX_NAME = ['useServer', 'server'];
 
 interface Program {
 	body?: Node[];
@@ -18,6 +31,36 @@ interface ImportSpecifier {
 	local?: { name?: string };
 	start: number;
 	end: number;
+}
+
+export function applyOptimizerStripNames(
+	options: TransformModulesOptions,
+	environment: QwikEnvironment,
+	extra: QwikOptimizerStripNames,
+) {
+	if (environment === 'server') {
+		options.stripCtxName = unique(SERVER_OUTPUT_STRIP_CTX_NAME, extra.server?.ctxName);
+		options.stripEventHandlers = true;
+		options.regCtxName = SERVER_OUTPUT_REG_CTX_NAME;
+	} else if (environment === 'client') {
+		options.stripCtxName = unique(CLIENT_OUTPUT_STRIP_CTX_NAME, extra.client?.ctxName);
+		const stripExports = unique(undefined, extra.client?.exports);
+		if (stripExports.length) {
+			options.stripExports = stripExports;
+		}
+	}
+}
+
+export function mergeOptimizerStripNames(
+	target: QwikOptimizerStripNames,
+	next: QwikOptimizerStripNames | undefined,
+) {
+	if (!next) return;
+	target.client ??= {};
+	target.server ??= {};
+	target.client.ctxName = unique(target.client.ctxName, next.client?.ctxName);
+	target.client.exports = unique(target.client.exports, next.client?.exports);
+	target.server.ctxName = unique(target.server.ctxName, next.server?.ctxName);
 }
 
 export function makeConstPropsDiffable(code: string, parse: Parse) {
@@ -62,4 +105,11 @@ function jsxSortedHmrShim(moduleSource: string) {
 		'const _jsxSorted=(type,varProps,constProps,children,flags,key,dev)=>' +
 		'__qwikHmrJsxSplit(type,{...constProps,...varProps},null,children,flags,key??(dev&&((s)=>s?`${dev.fileName}:${dev.lineNumber}:${dev.columnNumber}:${s}`:null)(Array.isArray(children)?children.filter((c)=>typeof c==="string").join("|"):typeof children==="string"?children:"")),dev);'
 	);
+}
+
+function unique(
+	base: readonly string[] | undefined,
+	extra: readonly string[] | undefined,
+): string[] {
+	return [...new Set([...(base ?? []), ...(extra ?? [])])];
 }

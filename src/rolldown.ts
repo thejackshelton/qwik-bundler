@@ -13,7 +13,11 @@ import { outputDefaults, Q_BUNDLE_GRAPH, Q_BUILD_PREFIX, QWIK_BUILD } from './bu
 import { injectQwikPreloaderTags } from './build/static-html.ts';
 import { createQwikDev } from './dev.ts';
 import { comptimeConfig, replaceExperimental } from './features.ts';
-import { makeConstPropsDiffable } from './hmr/optimizer.ts';
+import {
+	applyOptimizerStripNames,
+	makeConstPropsDiffable,
+	mergeOptimizerStripNames,
+} from './hmr/optimizer.ts';
 import {
 	createManifest,
 	injectManifest,
@@ -24,6 +28,7 @@ import { qwikExternal } from './qwik-external.ts';
 import type {
 	QwikEnvironment,
 	QwikManifest,
+	QwikOptimizerStripNames,
 	QwikRolldownOptions,
 	ServerQwikManifest,
 } from './types.ts';
@@ -37,6 +42,7 @@ export type {
 	QwikDevServer,
 	QwikEnvironment,
 	QwikManifest,
+	QwikOptimizerStripNames,
 	QwikRolldownOptions,
 	QwikSymbol,
 	ServerQwikManifest,
@@ -47,17 +53,18 @@ type Environment = QwikEnvironment | ((context: unknown) => QwikEnvironment);
 
 const QWIK_HANDLERS = '@qwik.dev/core/handlers.mjs';
 const QWIK_PRELOADER = '@qwik.dev/core/preloader';
+// TODO: Remove once everyone is off @qwik-client-manifest.
+const QWIK_CLIENT_MANIFEST = '@qwik-client-manifest';
 const QWIK_HANDLERS_ENTRY = 'qwik:handlers';
 const QWIK_PRELOADER_ENTRY = 'qwik:preloader';
 const SEGMENT = '\0qwik:segment:';
 const JS_OR_TS_SOURCE_FILE = /\.[cm]?[jt]sx?$/;
-const TS_OR_JSX_SOURCE_FILE = /(?:\.[cm]?tsx?|\.jsx)$/;
+const OPTIMIZER_SOURCE_FILE = /(?:\.[cm]?tsx?|\.jsx|\.mdx?)$/;
 const QWIK_LIBRARY_SOURCE_FILE = /\.qwik\.[cm]?[jt]sx?$/;
 const QWIK_RUNTIME_MODULE = /[/\\]@qwik\.dev[/\\]core[/\\]/;
 const QWIK_PUBLIC_IMPORTS = ['@qwik.dev/core', '@builder.io/qwik'];
 const QWIK_IMPORTS =
 	/\b(?:import|export)\s+(?:[^'";]*?\s+from\s*)?['"](@qwik\.dev\/core(?:\/[^'"]*)?|@builder\.io\/qwik(?:\/[^'"]*)?)['"]/;
-const SERVER_REG_CTX_NAME = ['server'];
 const manifests = new Map<string, QwikManifest>();
 
 export const qwik = (options?: QwikRolldownOptions) => qwikClient(options);
@@ -68,6 +75,8 @@ export const qwikLib = (options: QwikRolldownOptions = {}) => plugin('lib', opti
 export function plugin(environment: Environment, options: QwikRolldownOptions = {}): Plugin {
 	const segments = new Map<string, TransformModule>();
 	const symbols = new Map<string, SegmentAnalysis>();
+	const optimizerStripNames: QwikOptimizerStripNames = {};
+	mergeOptimizerStripNames(optimizerStripNames, options.optimizerStripNames);
 	// TODO: Remove this Qwik library noExternal workaround after https://github.com/QwikDev/qwik-evolution/discussions/318.
 	const external = qwikExternal();
 	let manifest: QwikManifest | ServerQwikManifest | null = null;
@@ -103,6 +112,9 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 	return {
 		api: {
 			invalidateDevSegments: dev.invalidate,
+			registerOptimizerStripNames: (names: QwikOptimizerStripNames) => {
+				mergeOptimizerStripNames(optimizerStripNames, names);
+			},
 		},
 		name,
 		options(input) {
@@ -161,6 +173,9 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 			if (source === QWIK_BUILD) {
 				return QWIK_BUILD;
 			}
+			if (source === QWIK_CLIENT_MANIFEST) {
+				return QWIK_CLIENT_MANIFEST;
+			}
 			if (source === QWIK_HANDLERS_ENTRY || source === QWIK_PRELOADER_ENTRY) {
 				return source;
 			}
@@ -207,6 +222,12 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 				const server = getEnvironment(this) === 'server';
 				const isDev = dev.isEnabled();
 				return `globalThis.qDev=${isDev};export const isServer=${server};export const isBrowser=${!server};export const isDev=${isDev};`;
+			}
+			if (id === QWIK_CLIENT_MANIFEST) {
+				if (dev.isEnabled()) {
+					return 'export const manifest = undefined;';
+				}
+				return `export const manifest = ${QWIK_MANIFEST};`;
 			}
 			if (id === QWIK_HANDLERS_ENTRY) {
 				return `export { _chk, _rsc, _res, _run, _task, _val, _eaC, _eaT, _suC, _suT } from '${QWIK_HANDLERS}';`;
@@ -278,7 +299,12 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 				}
 			},
 		},
-	} as Plugin & { api: { invalidateDevSegments: typeof dev.invalidate } };
+	} as Plugin & {
+		api: {
+			invalidateDevSegments: typeof dev.invalidate;
+			registerOptimizerStripNames: (names: QwikOptimizerStripNames) => void;
+		};
+	};
 
 	async function transform(
 		code: string,
@@ -306,8 +332,10 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 							? 'dev'
 							: 'prod',
 			isServer: currentEnvironment === 'server',
-			regCtxName: currentEnvironment === 'server' ? SERVER_REG_CTX_NAME : undefined,
 		} satisfies TransformModulesOptions;
+
+		applyOptimizerStripNames(transformOptions, currentEnvironment, optimizerStripNames);
+
 		const result = await (await getOptimizer()).transformModules(transformOptions);
 		reportDiagnostics(result.diagnostics, id, context);
 
@@ -387,7 +415,7 @@ function createPluginError(id: string, message: string): RolldownError {
 function shouldOptimize(code: string, path: string) {
 	if (QWIK_RUNTIME_MODULE.test(path)) return false;
 	if (QWIK_LIBRARY_SOURCE_FILE.test(path)) return true;
-	if (TS_OR_JSX_SOURCE_FILE.test(path)) return true;
+	if (OPTIMIZER_SOURCE_FILE.test(path)) return true;
 	if (!JS_OR_TS_SOURCE_FILE.test(path)) return false;
 	return importsQwik(code);
 }

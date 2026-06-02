@@ -57,6 +57,45 @@ describe('Qwik Router Vite integration', () => {
 		expect(config.build?.rolldownOptions?.input).toBe('src/custom-root.tsx');
 	});
 
+	test('registers router-owned optimizer strip names with the Qwik plugin', () => {
+		const plugin = getRouterPlugin();
+		const registerBundleGraphAdder = vi.fn();
+		const registerOptimizerStripNames = vi.fn();
+
+		callConfigResolved(plugin, {
+			base: '/',
+			build: {},
+			plugins: [
+				{
+					name: 'vite-plugin-qwik',
+					api: {
+						registerBundleGraphAdder,
+						registerOptimizerStripNames,
+					},
+				},
+			],
+			root: '/workspace/app',
+		});
+
+		expect(registerBundleGraphAdder).toHaveBeenCalledTimes(1);
+		expect(registerOptimizerStripNames).toHaveBeenCalledWith({
+			client: {
+				ctxName: ['route', 'zod$', 'validator$', 'globalAction$'],
+				exports: [
+					'onGet',
+					'onPost',
+					'onPut',
+					'onRequest',
+					'onDelete',
+					'onHead',
+					'onOptions',
+					'onPatch',
+					'onStaticGenerate',
+				],
+			},
+		});
+	});
+
 	test('sets the default input on an existing client environment', async () => {
 		const plugin = getRouterPlugin();
 		const config: UserConfig = {
@@ -212,9 +251,28 @@ describe('Qwik Router Vite integration', () => {
 			environment: { config: { consumer: 'server' }, mode: 'build' },
 		});
 
-		expect(code).toContain(
-			'const modules0 = import.meta.glob("/src/routes/**/*.{js,jsx,ts,tsx,mdx}", { eager: true });',
-		);
+		expect(code).toContain('import.meta.glob("/src/routes/**/index*.mdx", { eager: true });');
+		expect(code).toContain('import.meta.glob("/src/**/*.server.ts", { eager: true });');
+		expect(code).not.toContain('/src/routes/**/*.{js,jsx,ts,tsx,mdx}');
+	});
+
+	test('eagerly imports source server modules for navigation RPC registration', async () => {
+		const plugins = qwikRouter() as Plugin[];
+		const router = getPlugin(plugins, 'vite-plugin-qwik-router');
+		const serverFunctions = getPlugin(plugins, 'vite-plugin-qwik-router-server-functions');
+		callConfigResolved(router, {
+			base: '/',
+			build: {},
+			plugins: [],
+			root: '/project',
+		});
+
+		const code = await callLoad(serverFunctions, `\0${QWIK_ROUTER_SERVER_FUNCTIONS_ID}`, {
+			environment: { config: { consumer: 'server' }, mode: 'serve' },
+		});
+
+		expect(code).toContain('import.meta.glob("/src/**/*.server.ts", { eager: true });');
+		expect(code).toContain('import.meta.glob("/src/**/*.server.tsx", { eager: true });');
 	});
 
 	test('compiles MDX route modules through Satteri for Qwik JSX', async () => {
@@ -243,6 +301,27 @@ export const Badge = component$(() => <strong>MDX badge</strong>);
 		expect(result?.code).toContain('function MDXContent');
 		expect(result?.code).toContain('Hello MDX');
 		expect(result?.code).toContain('export default MDXContent');
+	});
+
+	test('passes provider imports to Satteri for MDX components', async () => {
+		const plugin = getRouterPlugin({ mdx: { providerImportSource: '~/mdx/provider' } });
+		callConfigResolved(plugin, {
+			base: '/',
+			build: {},
+			plugins: [],
+			root: '/project',
+		});
+
+		const result = await callTransform(
+			plugin,
+			'<Subtitle>MDX subtitle</Subtitle>',
+			'/project/src/routes/docs/index.mdx',
+		);
+
+		expect(result?.code).toContain(
+			'import { useMDXComponents as _provideComponents } from "~/mdx/provider";',
+		);
+		expect(result?.code).toContain('_provideComponents()');
 	});
 
 	test('configures a fetchable dev SSR environment', () => {

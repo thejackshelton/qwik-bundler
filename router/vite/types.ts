@@ -1,10 +1,12 @@
 import type { EnvironmentModuleNode, Plugin } from 'vite';
-import type { BundleGraphAdder } from '../../src/types.ts';
+import type { BundleGraphAdder, QwikOptimizerStripNames } from '../../src/types.ts';
 import type { RouterPreviewOptions } from './preview.ts';
 
 export interface QwikRouterVitePluginOptions {
 	/** Client build input to use when the host has not supplied one. Defaults to `src/root.tsx`. */
 	clientInput?: string | string[] | Record<string, string>;
+	/** Lightweight MDX compile options supported by the Satteri route transform. */
+	mdx?: RouterMdxOptions;
 	/** Environment name used for the client build. Defaults to `client`. */
 	clientEnvironment?: string;
 	/** Directory containing Qwik Router routes. Defaults to `src/routes`. */
@@ -32,6 +34,11 @@ export interface QwikRouterVitePluginOptions {
 }
 
 export type QwikCityVitePluginOptions = QwikRouterVitePluginOptions;
+
+export interface RouterMdxOptions {
+	/** Import source providing `useMDXComponents` for unimported MDX components. */
+	providerImportSource?: string;
+}
 
 export type RouterServerFunctionsOptions = {
 	/** Public virtual module id that SSR code can import for registration side effects. */
@@ -82,6 +89,7 @@ export type RouterBuildOptions = {
 export type QwikVitePluginApiHost = Plugin & {
 	api?: {
 		registerBundleGraphAdder?: (adder: BundleGraphAdder) => void;
+		registerOptimizerStripNames?: (names: QwikOptimizerStripNames) => void;
 	};
 };
 

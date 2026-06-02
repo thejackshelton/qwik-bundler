@@ -187,6 +187,72 @@ describe('Rolldown optimizer transforms', () => {
 		);
 	});
 
+	test('uses default client optimizer strip settings', async () => {
+		const plugin = qwikClient();
+
+		callBuildStart(plugin, { cwd: '/workspace/app' });
+		await callTransform(
+			plugin,
+			"import { component$ } from '@qwik.dev/core'; export default component$(() => null);",
+			'/workspace/app/src/root.tsx',
+		);
+
+		expect(optimizerMock.transformModules).toHaveBeenCalledWith(
+			expect.objectContaining({
+				isServer: false,
+				stripCtxName: ['useServer', 'server'],
+			}),
+		);
+		expect(optimizerMock.transformModules.mock.calls.at(-1)?.[0]).not.toHaveProperty(
+			'stripExports',
+		);
+	});
+
+	test('uses default server optimizer strip and registration settings', async () => {
+		const plugin = qwikServer();
+
+		callBuildStart(plugin, { cwd: '/workspace/app' });
+		await callTransform(
+			plugin,
+			"import { routeLoader$ } from '@qwik.dev/router'; export const useData = routeLoader$(() => null);",
+			'/workspace/app/src/routes/index.tsx',
+		);
+
+		expect(optimizerMock.transformModules).toHaveBeenCalledWith(
+			expect.objectContaining({
+				isServer: true,
+				stripCtxName: ['useClient', 'useBrowser', 'useVisibleTask', 'client', 'browser'],
+				stripEventHandlers: true,
+				regCtxName: ['server'],
+			}),
+		);
+	});
+
+	test('merges framework-owned optimizer strip names', async () => {
+		const plugin = qwikClient({
+			optimizerStripNames: {
+				client: {
+					ctxName: ['route', 'loader$'],
+					exports: ['onGet', 'loader'],
+				},
+			},
+		});
+
+		callBuildStart(plugin, { cwd: '/workspace/app' });
+		await callTransform(
+			plugin,
+			"import { component$ } from '@qwik.dev/core'; export const loader = () => null;",
+			'/workspace/app/src/routes/index.tsx',
+		);
+
+		expect(optimizerMock.transformModules).toHaveBeenCalledWith(
+			expect.objectContaining({
+				stripCtxName: expect.arrayContaining(['route', 'server', 'loader$']),
+				stripExports: expect.arrayContaining(['onGet', 'loader']),
+			}),
+		);
+	});
+
 	test('optimizes plain JavaScript source files', async () => {
 		const plugin = qwikClient();
 
@@ -222,6 +288,28 @@ describe('Rolldown optimizer transforms', () => {
 					}),
 				],
 				isServer: true,
+			}),
+		);
+	});
+
+	test('optimizes compiled MDX route modules', async () => {
+		const plugin = qwikServer();
+
+		callBuildStart(plugin, { cwd: '/workspace/app' });
+		await callTransform(
+			plugin,
+			"import { component$ } from '@qwik.dev/core'; export default component$(() => <div />);",
+			'/workspace/app/src/routes/docs/index.mdx',
+		);
+
+		expect(optimizerMock.transformModules).toHaveBeenCalledWith(
+			expect.objectContaining({
+				isServer: true,
+				input: [
+					expect.objectContaining({
+						path: '/workspace/app/src/routes/docs/index.mdx',
+					}),
+				],
 			}),
 		);
 	});

@@ -5,6 +5,9 @@ export default defineConfig({
 		'*': 'vp check --fix',
 	},
 	pack: {
+		deps: {
+			neverBundle: ['satteri'],
+		},
 		entry: {
 			rolldown: './src/rolldown.ts',
 			'router/vite/index': './router/vite/index.ts',

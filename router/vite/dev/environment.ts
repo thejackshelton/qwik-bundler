@@ -40,11 +40,12 @@ async function renderDevRequest(
 	request: Request,
 	options: RouterDevRequestOptions,
 ) {
-	(globalThis as { __qwik?: unknown }).__qwik = undefined;
-	const [entry, requestHandler] = await Promise.all([
-		runner.import<DevSsrEntry>('src/entry.ssr'),
-		runner.import<RequestHandlerModule>('@qwik.dev/router/middleware/request-handler'),
-	]);
+	resetQwikRuntime();
+	const entry = await runner.import<DevSsrEntry>('src/entry.ssr');
+	resetQwikRuntime();
+	const requestHandler = await runner.import<RequestHandlerModule>(
+		'@qwik.dev/router/middleware/request-handler',
+	);
 	if (typeof entry.default !== 'function') {
 		return new Response('src/entry.ssr must export a default renderer', { status: 500 });
 	}
@@ -61,6 +62,10 @@ async function renderDevRequest(
 	void handled.completion.then(logCompletionError, logCompletionError);
 	const response = await handled.response;
 	return response ?? new Response('Not Found', { status: 404 });
+}
+
+function resetQwikRuntime() {
+	(globalThis as { __qwik?: unknown }).__qwik = undefined;
 }
 
 function logCompletionError(error: unknown) {
