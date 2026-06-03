@@ -100,6 +100,52 @@ describe('Qwik Router Vite integration', () => {
 		});
 	});
 
+	test('adds route bundle graph entries with runtime preload route keys', () => {
+		const plugin = getRouterPlugin();
+		const registerBundleGraphAdder = vi.fn();
+
+		callConfigResolved(plugin, {
+			base: '/',
+			build: {},
+			plugins: [
+				{
+					name: 'vite-plugin-qwik',
+					api: {
+						registerBundleGraphAdder,
+					},
+				},
+			],
+			root: '/project',
+		});
+
+		const addRouteBundles = registerBundleGraphAdder.mock.calls[0]?.[0];
+		expect(addRouteBundles).toEqual(expect.any(Function));
+
+		const graph = addRouteBundles({
+			bundles: {
+				'build/q-components-layout.js': {
+					origins: ['src/routes/components/layout.tsx'],
+				},
+				'build/q-root.js': {
+					origins: ['src/routes/index.tsx'],
+				},
+				'build/q-textbox.js': {
+					origins: ['src/routes/components/textbox/index.mdx'],
+				},
+			},
+		});
+
+		expect(graph).toEqual({
+			'/': {
+				dynamicImports: ['build/q-root.js'],
+			},
+			'components/textbox/': {
+				dynamicImports: ['build/q-components-layout.js', 'build/q-textbox.js'],
+			},
+		});
+		expect(graph).not.toHaveProperty('components_textbox');
+	});
+
 	test('sets the default input on an existing client environment', async () => {
 		const plugin = getRouterPlugin();
 		const config: UserConfig = {
@@ -208,6 +254,33 @@ describe('Qwik Router Vite integration', () => {
 		expect(res.end).toHaveBeenCalledWith('preview ok');
 	});
 
+	test('aligns preview SSR builds with the preview middleware output directory', async () => {
+		const plugin = getRouterPlugin();
+		const config: UserConfig = {
+			build: {
+				ssr: 'src/entry.preview.tsx',
+			},
+		};
+
+		await callConfig(plugin, config, { command: 'build', mode: 'production' });
+
+		expect(config.build?.outDir).toBe('server');
+	});
+
+	test('does not replace a host-owned preview SSR output directory', async () => {
+		const plugin = getRouterPlugin({ preview: { ssrOutDir: 'preview-server' } });
+		const config: UserConfig = {
+			build: {
+				outDir: 'adapter-server',
+				ssr: 'src/entry.preview.tsx',
+			},
+		};
+
+		await callConfig(plugin, config, { command: 'build', mode: 'production' });
+
+		expect(config.build?.outDir).toBe('adapter-server');
+	});
+
 	test('eagerly imports router server function globs in server environments', async () => {
 		const plugin = serverFunctionsPlugin({
 			moduleGlobs: () => ['/src/routes/**/*.ts'],
@@ -306,6 +379,34 @@ export const Badge = component$(() => <strong>MDX badge</strong>);
 		expect(result?.code).toContain('function MDXContent');
 		expect(result?.code).toContain('Hello MDX');
 		expect(result?.code).toContain('export default MDXContent');
+	});
+
+	test('exports MDX headings for route content metadata', async () => {
+		const plugin = getRouterPlugin();
+		callConfigResolved(plugin, {
+			base: '/',
+			build: {},
+			plugins: [],
+			root: '/project',
+		});
+
+		const result = await callTransform(
+			plugin,
+			`# Hello MDX
+
+## Props
+
+## Props
+`,
+			'/project/src/routes/docs/index.mdx',
+		);
+
+		expect(result?.code).toContain('id: "hello-mdx"');
+		expect(result?.code).toContain('id: "props"');
+		expect(result?.code).toContain('id: "props-1"');
+		expect(result?.code).toContain(
+			'export const headings = [{"text":"Hello MDX","id":"hello-mdx","level":1},{"text":"Props","id":"props","level":2},{"text":"Props","id":"props-1","level":2}];',
+		);
 	});
 
 	test('passes provider imports to Satteri for MDX components', async () => {

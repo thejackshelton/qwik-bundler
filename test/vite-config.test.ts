@@ -2,10 +2,13 @@ import type { EnvironmentOptions, Plugin, UserConfig } from 'vite';
 import { describe, expect, test, vi } from 'vitest';
 import { transformQwikRequest } from '../src/vite/environment';
 import { qwik } from '../src/vite/index';
+import type { QwikManifest } from '../src/types';
 import {
 	callConfig,
 	callBuildApp,
 	callConfigEnvironment,
+	callConfigResolved,
+	callGenerateBundle,
 	callOutputOptions,
 	createViteHookContext,
 	getPlugin,
@@ -178,6 +181,36 @@ describe('Vite config integration', () => {
 			),
 		).toEqual({
 			entryFileNames: '[name].js',
+		});
+	});
+
+	test('uses Vite base for stylesheet manifest injections', () => {
+		let manifest: QwikManifest | undefined;
+		const plugin = getQwikPlugin({ onManifest: (next) => (manifest = next) });
+		callConfigResolved(plugin, { base: '/docs/', command: 'build', root: '/workspace/app' });
+
+		callGenerateBundle(
+			plugin,
+			{
+				'assets/root.css': {
+					type: 'asset',
+					fileName: 'assets/root.css',
+					name: 'root.css',
+					names: ['root.css'],
+					source: 'body{}',
+				},
+			},
+			vi.fn(),
+			createViteHookContext('client'),
+		);
+
+		expect(manifest?.injections).toContainEqual({
+			tag: 'link',
+			location: 'head',
+			attributes: {
+				rel: 'stylesheet',
+				href: '/docs/assets/root.css',
+			},
 		});
 	});
 

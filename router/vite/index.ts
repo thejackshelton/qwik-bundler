@@ -124,6 +124,7 @@ function qwikRouterPlugin(
 		config(config, env) {
 			viteCommand = env.command;
 			applyRouterClientInput(config, options, env);
+			applyRouterPreviewOutput(config, options, env);
 
 			return routerViteConfig(options);
 		},
@@ -333,6 +334,18 @@ function applyRouterClientInput(
 	rolldownOptions.input ??= input;
 }
 
+function applyRouterPreviewOutput(
+	config: UserConfig,
+	options: QwikRouterVitePluginOptions,
+	env: ConfigEnv,
+) {
+	if (env.command !== 'build' || options.preview === false || !config.build?.ssr) {
+		return;
+	}
+
+	config.build.outDir ??= options.preview?.ssrOutDir ?? 'server';
+}
+
 function generateRouterConfig(
 	state: RouterState,
 	options: QwikRouterVitePluginOptions,
@@ -488,7 +501,7 @@ function createRouteBundleGraphAdder(state: RouterState): BundleGraphAdder {
 		for (const route of manifestRoutes(state, manifest)) {
 			const bundles = routeBundles(route, manifest);
 			if (bundles.length > 0) {
-				result[route.routeName] = { dynamicImports: bundles };
+				result[preloadRouteName(route.pathname)] = { dynamicImports: bundles };
 			}
 		}
 		return result;
@@ -535,6 +548,14 @@ function routeName(pathname: string) {
 		return 'index';
 	}
 	return pathname.slice(1).replaceAll('/', '_');
+}
+
+function preloadRouteName(pathname: string) {
+	if (pathname === '/') {
+		return '/';
+	}
+	const name = pathname.slice(1);
+	return name.endsWith('/') ? name : `${name}/`;
 }
 
 function isManifestRouteSource(state: RouterState, origin: string) {

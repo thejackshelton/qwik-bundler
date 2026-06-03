@@ -2,6 +2,7 @@ import type { SegmentAnalysis } from '@qwik.dev/optimizer';
 import { relative } from 'pathe';
 import type {
 	BundleGraphAdder,
+	GlobalInjections,
 	QwikBundle,
 	QwikManifest,
 	QwikSymbol,
@@ -56,6 +57,7 @@ const PRELOADER_RE = /[/\\](core|qwik)[/\\]dist[/\\]preloader\.(|c|m)js$/;
 const CORE_RE = /[/\\](core|qwik)[/\\]dist[/\\]core(\.min|\.prod)?\.(|c|m)js$/;
 const QWIK_LOADER_RE = /[/\\](core|qwik)[/\\](dist[/\\])?qwikloader(\.debug)?\.[^/\\]*js$/;
 const QWIK_LIBRARY_MODULE_RE = /\.qwik\.mjs$/;
+const STYLESHEET_ASSET_RE = /\.css$/;
 const LIBRARY_QRL_SYMBOL_RE = /["']([A-Za-z_$][\w$.-]*_[A-Za-z0-9_-]{8,})["']/g;
 const FUNCTION_INTERACTIVITY: Record<string, number> = {
 	component$: 2,
@@ -84,9 +86,11 @@ export function createManifest(
 		bundleGraphAsset?: string;
 		bundleGraphAdders?: Set<BundleGraphAdder>;
 		canonPath?: (fileName: string) => string;
+		publicPath?: (fileName: string) => string;
 	} = {},
 ) {
 	const canonPath = options.canonPath ?? ((fileName: string) => fileName);
+	const publicPath = options.publicPath ?? ((fileName: string) => fileName);
 	const manifest: QwikManifest = {
 		version: '1',
 		manifestHash: '',
@@ -107,6 +111,9 @@ export function createManifest(
 				name: item.names?.[0] ?? item.name,
 				size: item.source.length,
 			};
+			if (STYLESHEET_ASSET_RE.test(item.fileName)) {
+				manifest.injections!.push(stylesheetInjection(publicPath(item.fileName)));
+			}
 			continue;
 		}
 
@@ -321,6 +328,7 @@ function sortManifest(manifest: QwikManifest) {
 	manifest.symbols = sortRecord(manifest.symbols);
 	manifest.bundles = sortRecord(manifest.bundles);
 	manifest.assets = sortRecord(manifest.assets ?? {});
+	manifest.injections?.sort((a, b) => injectionKey(a).localeCompare(injectionKey(b)));
 	for (const bundle of Object.values(manifest.bundles)) {
 		bundle.imports?.sort();
 		bundle.dynamicImports?.sort();
@@ -338,6 +346,21 @@ function sortRecord<T>(record: Record<string, T>) {
 		}
 	}
 	return next;
+}
+
+function stylesheetInjection(href: string): GlobalInjections {
+	return {
+		tag: 'link',
+		location: 'head',
+		attributes: {
+			rel: 'stylesheet',
+			href,
+		},
+	};
+}
+
+function injectionKey(injection: GlobalInjections) {
+	return `${injection.location}:${injection.tag}:${injection.attributes?.href ?? ''}`;
 }
 
 function hash(value: string) {

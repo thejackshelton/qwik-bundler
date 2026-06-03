@@ -9,6 +9,7 @@ import type {
 	ViteDevServer,
 } from 'vite';
 import type { OutputOptions } from 'rolldown';
+import { joinURL } from 'ufo';
 import { createPreloadGraphAdder } from '../build/bundle-graph.ts';
 import { outputDefaults } from '../build/chunking.ts';
 import { plugin as qwikRolldown } from '../rolldown.ts';
@@ -43,12 +44,15 @@ export interface VitePluginOptions extends QwikRolldownOptions {
 }
 
 type QwikOutputOptions = OutputOptions | OutputOptions[] | undefined;
+type InternalQwikRolldownOptions = QwikRolldownOptions & {
+	publicPath?: (fileName: string) => string;
+};
 const QWIK_SKIP_DUPLICATE_CLIENT_BUILD = Symbol('qwik-skip-duplicate-client-build');
 
 export function qwik(options: VitePluginOptions = {}): Plugin[] {
 	let manifest: QwikManifest | null = null;
 	const bundleGraphAdders = new Set<BundleGraphAdder>();
-	const rolldownOptions = { ...options };
+	const rolldownOptions: InternalQwikRolldownOptions = { ...options };
 	rolldownOptions.bundleGraphAdders = bundleGraphAdders;
 	rolldownOptions.onManifest = (nextManifest) => {
 		manifest = nextManifest;
@@ -84,6 +88,7 @@ export function qwik(options: VitePluginOptions = {}): Plugin[] {
 			hmrOptions.enabled = serve && options.hmr !== false;
 			rolldownOptions.dev = serve;
 			rolldownOptions.rootDir = resolvedConfig.root;
+			rolldownOptions.publicPath = (fileName) => joinURL(resolvedConfig.base, fileName);
 		},
 		configEnvironment(name, config) {
 			const externalConfig = external.configEnvironment?.call(this, name, config) ?? {};

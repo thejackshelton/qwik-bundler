@@ -51,6 +51,9 @@ export type {
 
 type TransformContext = Pick<TransformPluginContext, 'emitFile' | 'error' | 'parse' | 'warn'>;
 type Environment = QwikEnvironment | ((context: unknown) => QwikEnvironment);
+type InternalQwikRolldownOptions = QwikRolldownOptions & {
+	publicPath?: (fileName: string) => string;
+};
 
 const QWIK_HANDLERS = '@qwik.dev/core/handlers.mjs';
 const QWIK_PRELOADER = '@qwik.dev/core/preloader';
@@ -75,6 +78,7 @@ export const qwikServer = (options: QwikRolldownOptions = {}) => plugin('server'
 export const qwikLib = (options: QwikRolldownOptions = {}) => plugin('lib', options);
 
 export function plugin(environment: Environment, options: QwikRolldownOptions = {}): Plugin {
+	const internalOptions = options as InternalQwikRolldownOptions;
 	const segments = new Map<string, TransformModule>();
 	const symbols = new Map<string, SegmentAnalysis>();
 	const optimizerStripNames: QwikOptimizerStripNames = {};
@@ -295,6 +299,7 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 					bundleGraphAsset: Q_BUNDLE_GRAPH,
 					bundleGraphAdders: options.bundleGraphAdders,
 					canonPath: stripBuildPrefix,
+					publicPath: internalOptions.publicPath,
 				});
 				manifest = clientManifest;
 				const currentRoot = getRoot();
