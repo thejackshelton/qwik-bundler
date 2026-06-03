@@ -1,5 +1,5 @@
 import { basename, dirname, extname, join, relative, resolve } from 'pathe';
-import { withLeadingSlash, withTrailingSlash } from 'ufo';
+import { decodePath, parseURL, withLeadingSlash, withTrailingSlash } from 'ufo';
 import type { ConfigEnv, EnvironmentOptions, PluginOption, UserConfig, ViteDevServer } from 'vite';
 import type { BundleGraphAdder, QwikManifest, QwikOptimizerStripNames } from '../../src/types.ts';
 import { createRouterDevEnvironment } from './dev/environment.ts';
@@ -12,6 +12,7 @@ import {
 	serverFunctionsPlugin,
 	type ServerFunctionsPluginOptions,
 } from './server-functions.ts';
+import { layoutName, routeBasename, routeLayouts } from './routes.ts';
 import type {
 	BuiltRouterLayout,
 	BuiltRouterRoute,
@@ -44,6 +45,7 @@ export const QWIK_ROUTER_CONFIG_ID = '@qwik-router-config';
 export const QWIK_ROUTER_ENTRIES_ID = '@qwik-router-entries';
 export const QWIK_ROUTER_SW_REGISTER_ID = '@qwik-router-sw-register';
 
+const QWIK_ROUTER_RUNTIME_ID = '@qwik-router-runtime';
 const QWIK_ROUTER = '@qwik.dev/router';
 const ROUTER_NO_EXTERNAL = [
 	QWIK_ROUTER,
@@ -71,7 +73,7 @@ const ROUTER_OPTIMIZER_STRIP_NAMES = {
 		],
 	},
 } satisfies QwikOptimizerStripNames;
-const ROUTE_EXTENSIONS = new Set(['.js', '.jsx', '.ts', '.tsx', '.mdx']);
+const ROUTE_EXTENSIONS = new Set(['.js', '.jsx', '.ts', '.tsx', '.md', '.mdx', '.markdown']);
 const ROUTE_BASENAMES = new Set(['index', 'layout', '404', 'error']);
 const SERVER_MODULE_EXTENSIONS = ['.js', '.jsx', '.ts', '.tsx'];
 
@@ -207,6 +209,9 @@ function qwikRouterPlugin(
 		resolveId(id) {
 			if (id === QWIK_ROUTER_CONFIG_ID || id === QWIK_ROUTER_ENTRIES_ID) {
 				return { id, moduleSideEffects: 'no-treeshake' };
+			}
+			if (id === QWIK_ROUTER_RUNTIME_ID) {
+				return runtimeModulePath();
 			}
 			if (id === QWIK_ROUTER_SW_REGISTER_ID) {
 				return id;
@@ -351,7 +356,10 @@ function generateRouterConfig(
 	options: QwikRouterVitePluginOptions,
 	isServer: boolean,
 ) {
-	const imports: string[] = [`import { isDev } from '@qwik.dev/core/build';`];
+	const imports: string[] = [
+		`import { isDev } from '@qwik.dev/core/build';`,
+		`import { createRoutes } from ${JSON.stringify(QWIK_ROUTER_RUNTIME_ID)};`,
+	];
 	if (isServer) {
 		imports.push(`import ${JSON.stringify(QWIK_ROUTER_SERVER_FUNCTIONS_ID)};`);
 	}
@@ -361,7 +369,6 @@ function generateRouterConfig(
 		...imports,
 		`const routeModules = import.meta.glob(${JSON.stringify(routeModuleGlobs(state))}${state.dynamicImports ? '' : ', { eager: true }'});`,
 		`const serverPluginModules = import.meta.glob(${JSON.stringify(serverPluginGlob(state))}, { eager: true });`,
-		routerConfigRuntimeCode(),
 		`export const routes = createRoutes(routeModules, ${JSON.stringify(!state.dynamicImports)}, ${JSON.stringify(routeImportBase(state))});`,
 		`export const serverPlugins = Object.values(serverPluginModules);`,
 		`export const trailingSlash = ${JSON.stringify(options.trailingSlash !== false)};`,
@@ -369,6 +376,11 @@ function generateRouterConfig(
 		`export const cacheModules = !isDev;`,
 		`export default { routes, serverPlugins, trailingSlash, basePathname, cacheModules };`,
 	].join('\n');
+}
+
+function runtimeModulePath() {
+	const current = decodePath(parseURL(import.meta.url).pathname);
+	return resolve(dirname(current), extname(current) === '.ts' ? 'runtime.ts' : 'runtime.mjs');
 }
 
 function routeImportBase(state: RouterState) {
@@ -401,80 +413,6 @@ function serverFunctionModuleGlobs(state: RouterState) {
 
 function serverPluginGlob(state: RouterState) {
 	return `${serverPluginImportBase(state)}/**/plugin@*.{js,jsx,ts,tsx}`;
-}
-
-function routerConfigRuntimeCode() {
-	return String.raw`
-function createRoutes(modules, eager, routesBase) {
-	const root = {};
-	const paths = Object.keys(modules).sort();
-	for (const path of paths) {
-		if (routeBasename(path) !== 'layout') continue;
-		routeNode(root, routeSegments(routePathname(path, routesBase)))._L = routeLoader(modules, path, eager);
-	}
-	for (const path of paths) {
-		const name = routeBasename(path);
-		if (name !== 'index' && name !== '404' && name !== 'error') continue;
-		const record = routeNode(root, routeSegments(routePathname(path, routesBase)));
-		const loader = routeLoader(modules, path, eager);
-		if (name === '404') record._4 = loader;
-		else if (name === 'error') record._E = loader;
-		else record._I = loader;
-	}
-	return root;
-}
-function routeLoader(modules, path, eager) {
-	return eager ? () => modules[path] : modules[path];
-}
-function routeNode(root, segments) {
-	let current = root;
-	for (const segment of segments) {
-		const next = current[segment.key] || (current[segment.key] = {});
-		if (segment.param) next._P = segment.param;
-		current = next;
-	}
-	return current;
-}
-function routeSegments(pathname) {
-	return pathname.split('/').filter(Boolean).flatMap((segment) => {
-		if (segment.startsWith('(') && segment.endsWith(')')) return [];
-		const rest = /^\[\.\.\.(.+)\]$/.exec(segment);
-		if (rest?.[1]) return [{ key: '_A', param: rest[1] }];
-		const dynamic = /^\[(.+)\]$/.exec(segment);
-		if (dynamic?.[1]) return [{ key: '_W', param: dynamic[1] }];
-		return [{ key: segment.toLowerCase() }];
-	});
-}
-function routePathname(path, routesBase) {
-	const clean = path.split('?')[0];
-	const dir = clean.slice(0, clean.lastIndexOf('/'));
-	const rel = (dir.startsWith(routesBase) ? dir.slice(routesBase.length) : dir).replace(/^\/+|\/+$/g, '');
-	return rel ? '/' + rel : '/';
-}
-function routeBasename(path) {
-	const file = path.slice(path.lastIndexOf('/') + 1).replace(/\.[^.]+$/, '');
-	const marker = file.search(/[.@-]/);
-	return marker === -1 ? file : file.slice(0, marker);
-}
-`;
-}
-
-function routeBasename(filePath: string) {
-	const ext = extname(filePath);
-	const name = basename(filePath, ext);
-	const marker = name.search(/[.@-]/);
-	if (marker === -1) {
-		return name;
-	}
-	return name.slice(0, marker);
-}
-
-function routeUsesLayout(routePathname: string, layoutPathname: string) {
-	return (
-		layoutPathname === '/' ||
-		routePathname === layoutPathname ||
-		routePathname.startsWith(`${layoutPathname}/`)
-	);
 }
 
 function importPath(filePath: string) {
@@ -528,6 +466,7 @@ function manifestRoutes(state: RouterState, manifest: QwikManifest) {
 	const layouts = [...layoutFiles].sort().map((filePath, index) => ({
 		id: `layout${index}`,
 		filePath,
+		name: layoutName(filePath),
 		pathname: manifestRoutePathname(state, filePath),
 	}));
 
@@ -538,7 +477,7 @@ function manifestRoutes(state: RouterState, manifest: QwikManifest) {
 			filePath,
 			pathname,
 			routeName: routeName(pathname),
-			layouts: layouts.filter((layout) => routeUsesLayout(pathname, layout.pathname)),
+			layouts: routeLayouts(layouts, pathname, filePath),
 		};
 	});
 }

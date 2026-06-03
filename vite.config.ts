@@ -12,6 +12,7 @@ export default defineConfig({
 			rolldown: './src/rolldown.ts',
 			'adapters/static/vite': './adapters/static/vite.ts',
 			'router/vite/index': './router/vite/index.ts',
+			'router/vite/runtime': './router/vite/runtime.ts',
 			'vite/index': './src/vite/index.ts',
 		},
 		format: ['esm'],

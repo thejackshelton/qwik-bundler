@@ -126,21 +126,41 @@ describe('Qwik Router Vite integration', () => {
 				'build/q-components-layout.js': {
 					origins: ['src/routes/components/layout.tsx'],
 				},
+				'build/q-components-narrow-layout.js': {
+					origins: ['src/routes/components/layout-narrow.tsx'],
+				},
+				'build/q-layout.js': {
+					origins: ['src/routes/layout.tsx'],
+				},
 				'build/q-root.js': {
 					origins: ['src/routes/index.tsx'],
 				},
 				'build/q-textbox.js': {
 					origins: ['src/routes/components/textbox/index.mdx'],
 				},
+				'build/q-visualizer.js': {
+					origins: ['src/routes/components/visualizer/index@narrow.tsx'],
+				},
 			},
 		});
 
 		expect(graph).toEqual({
 			'/': {
-				dynamicImports: ['build/q-root.js'],
+				dynamicImports: ['build/q-layout.js', 'build/q-root.js'],
 			},
 			'components/textbox/': {
-				dynamicImports: ['build/q-components-layout.js', 'build/q-textbox.js'],
+				dynamicImports: [
+					'build/q-components-layout.js',
+					'build/q-layout.js',
+					'build/q-textbox.js',
+				],
+			},
+			'components/visualizer/': {
+				dynamicImports: [
+					'build/q-components-narrow-layout.js',
+					'build/q-layout.js',
+					'build/q-visualizer.js',
+				],
 			},
 		});
 		expect(graph).not.toHaveProperty('components_textbox');
@@ -168,10 +188,12 @@ describe('Qwik Router Vite integration', () => {
 		const root = await tempProject();
 		await mkdir(resolve(root, 'src/routes/about'), { recursive: true });
 		await writeFile(resolve(root, 'src/routes/index.tsx'), 'export default {};');
+		await writeFile(resolve(root, 'src/routes/index.md'), '# Home');
 		await writeFile(resolve(root, 'src/routes/layout.tsx'), 'export default {};');
 		await writeFile(resolve(root, 'src/routes/layout.docs.mdx'), 'export default {};');
 		await writeFile(resolve(root, 'src/routes/about/index.tsx'), 'export default {};');
 		await writeFile(resolve(root, 'src/routes/about/index.mdx'), 'export default {};');
+		await writeFile(resolve(root, 'src/routes/about/index.markdown'), '# About');
 
 		const plugin = getRouterPlugin();
 		callConfigResolved(plugin, {
@@ -184,14 +206,18 @@ describe('Qwik Router Vite integration', () => {
 		const code = await callLoad(plugin, QWIK_ROUTER_CONFIG_ID, createViteHookContext('server'));
 
 		expect(code).toContain('import "virtual:qwik-router-server-fns";');
+		expect(code).toContain('import { createRoutes } from "@qwik-router-runtime";');
 		expect(code).toContain('const routeModules = import.meta.glob(');
 		expect(code).toContain('"/src/routes/**/index*.tsx"');
+		expect(code).toContain('"/src/routes/**/index*.md"');
 		expect(code).toContain('"/src/routes/**/index*.mdx"');
+		expect(code).toContain('"/src/routes/**/index*.markdown"');
 		expect(code).toContain('"/src/routes/**/layout*.tsx"');
 		expect(code).toContain('"/src/routes/**/layout*.mdx"');
 		expect(code).toContain(
 			'export const routes = createRoutes(routeModules, false, "/src/routes");',
 		);
+		expect(code).not.toContain('function createRoutes(');
 		expect(code).toContain(
 			'export default { routes, serverPlugins, trailingSlash, basePathname, cacheModules };',
 		);
@@ -378,6 +404,28 @@ export const Badge = component$(() => <strong>MDX badge</strong>);
 		expect(result?.code).toContain('@qwik.dev/core/jsx-runtime');
 		expect(result?.code).toContain('function MDXContent');
 		expect(result?.code).toContain('Hello MDX');
+		expect(result?.code).toContain('export default MDXContent');
+	});
+
+	test('compiles markdown route modules through Satteri for Qwik JSX', async () => {
+		const plugin = getRouterPlugin();
+		callConfigResolved(plugin, {
+			base: '/',
+			build: {},
+			plugins: [],
+			root: '/project',
+		});
+
+		const result = await callTransform(
+			plugin,
+			`# Hello Markdown
+`,
+			'/project/src/routes/docs/index.md',
+		);
+
+		expect(result?.code).toContain('@qwik.dev/core/jsx-runtime');
+		expect(result?.code).toContain('function MDXContent');
+		expect(result?.code).toContain('Hello Markdown');
 		expect(result?.code).toContain('export default MDXContent');
 	});
 

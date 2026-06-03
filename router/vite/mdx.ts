@@ -32,7 +32,8 @@ export async function transformMdxRoute(
 }
 
 export function isMdxRoute(id: string) {
-	return extname(decodePath(parseURL(id).pathname)).toLowerCase() === '.mdx';
+	const ext = extname(decodePath(parseURL(id).pathname)).toLowerCase();
+	return ext === '.md' || ext === '.mdx' || ext === '.markdown';
 }
 
 function createHeadingsPlugin(headings: ContentHeading[]): HastPluginDefinition {
