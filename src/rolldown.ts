@@ -2,7 +2,6 @@ import {
 	createOptimizer as createSwcOptimizer,
 	type Diagnostic,
 	type EntryStrategy,
-	type OptimizerOptions,
 	type SegmentAnalysis,
 	type TransformModule,
 	type TransformModuleInput,
@@ -95,34 +94,25 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 		name = `qwik:rolldown:${environment}`;
 	}
 
-	// Pick the optimizer factory up front based on the experimental flag.
+	// Instantiate the optimizer eagerly based on the experimental flag.
 	// Both backends produce a structurally-identical `Optimizer` (SWC's
-	// interface is the shared contract — qwik-optimizer-ts mirrors it),
-	// so the cached instance below can be typed against that single shape.
-	// The cast inside the TS factory bridges the cross-package nominal
-	// divergence at one localised spot.
+	// interface is the shared contract — qwik-optimizer-ts mirrors it).
+	// The single cast inside the TS branch bridges the cross-package
+	// nominal-type divergence at one localised spot.
 	type OptimizerInstance = Awaited<ReturnType<typeof createSwcOptimizer>>;
-	const createOptimizer: (opts?: OptimizerOptions) => Promise<OptimizerInstance> =
-		options.experimental?.includes('tsOptimizer')
-			? (opts) =>
-					import('qwik-optimizer-ts').then(
-						(mod) => mod.createOptimizer(opts) as Promise<OptimizerInstance>,
-						(err) => {
-							throw new Error(
-								`qwik({ experimental: ['tsOptimizer'] }) requires \`qwik-optimizer-ts\` to be installed. ` +
-									`Install it as a peer alongside qwik-bundler, then re-run the build.\n` +
-									`Underlying error: ${err instanceof Error ? err.message : String(err)}`,
-							);
-						},
-					)
-			: createSwcOptimizer;
-
-	let optimizer: Promise<OptimizerInstance> | undefined;
-
-	function getOptimizer() {
-		optimizer ??= createOptimizer(options.optimizerOptions);
-		return optimizer;
-	}
+	const optimizer: Promise<OptimizerInstance> = options.experimental?.includes('tsOptimizer')
+		? import('qwik-optimizer-ts').then(
+				(mod) =>
+					mod.createOptimizer(options.optimizerOptions) as Promise<OptimizerInstance>,
+				(err) => {
+					throw new Error(
+						`qwik({ experimental: ['tsOptimizer'] }) requires \`qwik-optimizer-ts\` to be installed. ` +
+							`Install it as a peer alongside qwik-bundler, then re-run the build.\n` +
+							`Underlying error: ${err instanceof Error ? err.message : String(err)}`,
+					);
+				},
+			)
+		: createSwcOptimizer(options.optimizerOptions);
 
 	function getEnvironment(context: unknown) {
 		if (typeof environment === 'function') {
@@ -392,7 +382,7 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 
 		applyOptimizerStripNames(transformOptions, currentEnvironment, optimizerStripNames);
 
-		const result = await (await getOptimizer()).transformModules(transformOptions);
+		const result = await (await optimizer).transformModules(transformOptions);
 		reportDiagnostics(result.diagnostics, id, context);
 
 		for (const module of result.modules) {
