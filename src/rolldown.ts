@@ -358,9 +358,9 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 	) {
 		// `ast` is the host's pre-parsed Program (`meta.ast` from Rolldown's
 		// transform hook). Forwarded into `TransformModuleInput.program`; the
-		// TS optimizer accepts it and skips its internal parse (OSS-453). SWC
-		// ignores the field and re-parses internally, so the hand-off is a
-		// no-op for the default backend.
+		// TS optimizer accepts it and skips its internal parse. SWC ignores
+		// the field and re-parses internally, so the hand-off is a no-op for
+		// the default backend.
 		// `program` is an extension over SWC's `TransformModuleInput`; the cast
 		// admits the optional field. SWC ignores it; the TS optimizer reads it.
 		const input = (

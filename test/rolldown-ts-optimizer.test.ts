@@ -1,5 +1,5 @@
-// Tests for OSS-454 — the opt-in `optimizer: 'ts'` flag that swaps the SWC
-// napi optimizer for `qwik-optimizer-ts` and threads Rolldown's `meta.ast`
+// Tests for the opt-in `optimizer: 'ts'` flag that swaps the SWC napi
+// optimizer for `qwik-optimizer-ts` and threads Rolldown's `meta.ast`
 // into the optimizer call.
 
 import { beforeEach, describe, expect, test, vi } from 'vitest';
@@ -55,7 +55,7 @@ beforeEach(() => {
 
 const FIXTURE = "import { component$ } from '@qwik.dev/core'; export const x = 1;";
 
-describe('OSS-454 — optimizer: "ts" opt-in flag', () => {
+describe('optimizer: "ts" opt-in flag', () => {
 	test('defaults to the SWC optimizer when the flag is omitted', async () => {
 		const plugin = qwik();
 		callBuildStart(plugin, { cwd: '/workspace/app' });
