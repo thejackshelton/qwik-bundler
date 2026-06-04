@@ -34,6 +34,10 @@ describe('Vite config integration', () => {
 		expect(config.build!.modulePreload).toBe(false);
 	});
 
+	test('shares Qwik plugin state across app build environments', () => {
+		expect(getQwikPlugin().sharedDuringBuild).toBe(true);
+	});
+
 	test('sets output defaults on the Vite client environment only', async () => {
 		const plugin = getQwikPlugin();
 		const clientConfig: EnvironmentOptions = {

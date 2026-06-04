@@ -121,11 +121,13 @@ function qwikRouterPlugin(
 	return {
 		name: 'vite-plugin-qwik-router',
 		enforce: 'pre',
+		sharedDuringBuild: true,
 		api,
 
 		config(config, env) {
 			viteCommand = env.command;
 			applyRouterClientInput(config, options, env);
+			applyRouterPreviewEnvironment(config, options, env);
 			applyRouterPreviewOutput(config, options, env);
 
 			return routerViteConfig(options);
@@ -156,6 +158,16 @@ function qwikRouterPlugin(
 				};
 			}
 			return environment;
+		},
+
+		buildApp: {
+			order: 'post',
+			async handler(builder) {
+				const preview = builder.environments.preview;
+				if (options.preview !== false && preview && !preview.isBuilt) {
+					await builder.build(preview);
+				}
+			},
 		},
 
 		configResolved(config) {
@@ -349,6 +361,32 @@ function applyRouterPreviewOutput(
 	}
 
 	config.build.outDir ??= options.preview?.ssrOutDir ?? 'server';
+}
+
+function applyRouterPreviewEnvironment(
+	config: UserConfig,
+	options: QwikRouterVitePluginOptions,
+	env: ConfigEnv,
+) {
+	if (
+		env.command !== 'build' ||
+		options.preview === false ||
+		config.build?.lib ||
+		config.build?.ssr
+	) {
+		return;
+	}
+
+	const environment = ((config.environments ??= {}).preview ??= {});
+	environment.consumer ??= 'server';
+	const resolve = (environment.resolve ??= {});
+	resolve.noExternal ??= ROUTER_NO_EXTERNAL;
+	const build = (environment.build ??= {});
+	build.outDir ??= options.preview?.ssrOutDir ?? 'server';
+	const rolldownOptions = ((build as RouterBuildOptions).rolldownOptions ??= {});
+	const entry =
+		options.preview && typeof options.preview === 'object' ? options.preview.entry : null;
+	rolldownOptions.input ??= `src/${entry ?? 'entry.preview'}.tsx`;
 }
 
 function generateRouterConfig(

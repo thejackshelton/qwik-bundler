@@ -233,7 +233,8 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 				if (dev.isEnabled()) {
 					return 'export const manifest = undefined;';
 				}
-				return `export const manifest = ${QWIK_MANIFEST};`;
+				const currentManifest = getEnvironment(this) === 'server' ? manifest : null;
+				return injectManifest(`export const manifest = ${QWIK_MANIFEST};`, currentManifest);
 			}
 			if (id === QWIK_HANDLERS_ENTRY) {
 				return `export { _chk, _rsc, _res, _run, _task, _val, _eaC, _eaT, _suC, _suT } from '${QWIK_HANDLERS}';`;
@@ -259,25 +260,21 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 				return null;
 			}
 
-			if (QWIK_CORE_PROD_MODULE.test(path)) {
-				const fixed = fixPureAnnotations(code);
-				if (fixed !== code) {
-					return { code: fixed, map: null };
-				}
-			}
-
-			const replaced = replaceExperimental(code, currentEnvironment, options.experimental);
-			const optimize = shouldOptimize(replaced ?? code, path);
+			const fixed = QWIK_CORE_PROD_MODULE.test(path) ? fixPureAnnotations(code) : code;
+			const replaced = replaceExperimental(fixed, currentEnvironment, options.experimental);
+			const nextCode = replaced ?? fixed;
+			const optimize = shouldOptimize(nextCode, path);
 			const transformed = optimize
-				? await transform(replaced ?? code, path, this, currentEnvironment)
+				? await transform(nextCode, path, this, currentEnvironment)
 				: null;
-			const fallback = transformed ?? (replaced ? { code: replaced, map: null } : null);
+			const fallback =
+				transformed ?? (replaced || fixed !== code ? { code: nextCode, map: null } : null);
 
 			if (currentEnvironment !== 'server') {
 				return fallback;
 			}
 
-			let next = replaced ?? code;
+			let next = nextCode;
 			let map = null;
 			if (transformed) {
 				next = transformed.code;

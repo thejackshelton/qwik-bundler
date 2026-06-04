@@ -307,6 +307,39 @@ describe('Qwik Router Vite integration', () => {
 		expect(config.build?.outDir).toBe('adapter-server');
 	});
 
+	test('adds a router-owned preview environment for app builds', async () => {
+		const plugin = getRouterPlugin();
+		const config: UserConfig = {};
+
+		await callConfig(plugin, config, { command: 'build', mode: 'production' });
+
+		expect(config.environments?.preview).toMatchObject({
+			consumer: 'server',
+			resolve: {
+				noExternal: expect.arrayContaining(['@qwik.dev/router', QWIK_ROUTER_CONFIG_ID]),
+			},
+			build: {
+				outDir: 'server',
+				rolldownOptions: {
+					input: 'src/entry.preview.tsx',
+				},
+			},
+		});
+	});
+
+	test('builds the router preview environment during app builds', async () => {
+		const plugin = getRouterPlugin();
+		const preview = { isBuilt: false, name: 'preview' };
+		const build = vi.fn(async () => []);
+
+		await callBuildApp(plugin, {
+			environments: { preview },
+			build,
+		});
+
+		expect(build).toHaveBeenCalledWith(preview);
+	});
+
 	test('eagerly imports router server function globs in server environments', async () => {
 		const plugin = serverFunctionsPlugin({
 			moduleGlobs: () => ['/src/routes/**/*.ts'],

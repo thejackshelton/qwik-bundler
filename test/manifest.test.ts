@@ -4,7 +4,7 @@ import { createManifest, QWIK_MANIFEST } from '../src/build/manifest';
 import { qwikClient, qwikServer } from '../src/rolldown';
 import type { QwikManifestBundle } from '../src/build/manifest';
 import type { QwikBundleGraph, QwikManifest } from '../src/types';
-import { callBuildStart, callGenerateBundle, callTransform } from './helpers';
+import { callBuildStart, callGenerateBundle, callLoad, callTransform } from './helpers';
 
 const optimizerMock = vi.hoisted(() => ({
 	createOptimizer: vi.fn(),
@@ -835,6 +835,59 @@ describe('Qwik manifest output', () => {
 		expect(code).not.toContain('"bundles"');
 		expect(code).not.toContain('"assets"');
 		expect(optimizerMock.transformModules).not.toHaveBeenCalled();
+	});
+
+	test('injects the server manifest after fixing Qwik core prod annotations', async () => {
+		const manifest = {
+			manifestHash: 'core-prod',
+			mapping: {},
+			injections: [],
+			bundleGraph: [],
+			version: '1',
+		} as unknown as QwikManifest;
+		const plugin = qwikServer({ manifestInput: manifest });
+
+		callBuildStart(plugin, { cwd: '/workspace/app' });
+		const result = await callTransform(
+			plugin,
+			`const getManifest = () => { /*#__PURE__*/return ${QWIK_MANIFEST}; };`,
+			'/workspace/app/node_modules/@qwik.dev/core/dist/core.prod.mjs',
+		);
+		if (!result || typeof result === 'string' || !('code' in result)) {
+			throw new Error('Expected transformed code');
+		}
+
+		expect(result.code).toContain('return /* @__PURE__ */ ');
+		expect(result.code).toContain('"manifestHash":"core-prod"');
+		expect(result.code).not.toContain(QWIK_MANIFEST);
+	});
+
+	test('serves the in-memory client manifest from the virtual manifest module', async () => {
+		const root = '/workspace/app-virtual-manifest';
+		const client = qwikClient();
+
+		callBuildStart(client, { cwd: root });
+		await callGenerateBundle(client, {
+			'build/q-core.js': {
+				type: 'chunk',
+				fileName: 'build/q-core.js',
+				name: 'qwik-core',
+				code: 'export const _run = 1;',
+				exports: ['_run'],
+				imports: [],
+				dynamicImports: [],
+				moduleIds: [`${root}/node_modules/@qwik.dev/core/handlers.mjs`],
+				facadeModuleId: `${root}/node_modules/@qwik.dev/core/handlers.mjs`,
+			},
+		});
+
+		const server = qwikServer();
+		callBuildStart(server, { cwd: root });
+		const code = (await callLoad(server, '@qwik-client-manifest')) as string;
+
+		expect(code).toContain('export const manifest = {');
+		expect(code).toContain('"manifestHash"');
+		expect(code).not.toContain(QWIK_MANIFEST);
 	});
 });
 

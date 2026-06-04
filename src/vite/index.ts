@@ -74,6 +74,7 @@ export function qwik(options: VitePluginOptions = {}): Plugin[] {
 		...basePlugin,
 		name: 'vite-plugin-qwik',
 		enforce: 'post',
+		sharedDuringBuild: true,
 		api: {
 			...(basePlugin.api as QwikPluginApi),
 			getManifest: () => manifest,
