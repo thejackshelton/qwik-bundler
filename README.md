@@ -49,6 +49,30 @@ pnpm --dir fixtures/rolldown-h3 start
 
 Open the printed local URL and check that Qwik interactivity still works.
 
+## TypeScript Optimizer (Opt-In)
+
+The plugin can run against either the SWC napi optimizer (`@qwik.dev/optimizer`, default) or the TypeScript optimizer rewrite (`qwik-optimizer-ts`). Set the `optimizer` flag to switch:
+
+```ts
+import { qwik } from 'qwik-bundler/rolldown';
+
+export default {
+	plugins: [
+		qwik({ optimizer: 'ts' }), // 'swc' (default) | 'ts'
+	],
+};
+```
+
+Install `qwik-optimizer-ts` separately when opting in — it isn't published yet, so for local development link the in-progress repo:
+
+```sh
+pnpm add -D qwik-optimizer-ts@file:../TS-Optimizer
+```
+
+When the flag is set, Rolldown's `meta.ast` (the host's pre-parsed OXC `Program`) is forwarded into the optimizer's `TransformModuleInput.program` field. The TS optimizer detects it and skips its internal parse — one parse per module instead of two. SWC ignores the field and re-parses internally, so the threading is a no-op for the default backend.
+
+Behaviour is bit-identical to current `main` when the flag is omitted or set to `'swc'`.
+
 ## Useful Files
 
 - `src/rolldown.ts`: optimizer adapter, segment modules, output defaults, manifest emission

@@ -1,9 +1,10 @@
 import {
-	createOptimizer,
+	createOptimizer as createSwcOptimizer,
 	type Diagnostic,
 	type EntryStrategy,
 	type SegmentAnalysis,
 	type TransformModule,
+	type TransformModuleInput,
 	type TransformModulesOptions,
 } from '@qwik.dev/optimizer';
 import { dirname, join } from 'pathe';
@@ -86,7 +87,7 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 	// TODO: Remove this Qwik library noExternal workaround after https://github.com/QwikDev/qwik-evolution/discussions/318.
 	const external = qwikExternal();
 	let manifest: QwikManifest | ServerQwikManifest | null = null;
-	let optimizer: ReturnType<typeof createOptimizer> | undefined;
+	let optimizer: ReturnType<typeof createSwcOptimizer> | undefined;
 	let root = options.rootDir;
 	let name = 'qwik:rolldown';
 
@@ -96,7 +97,26 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 
 	function getOptimizer() {
 		if (!optimizer) {
-			optimizer = createOptimizer(options.optimizerOptions);
+			if (options.optimizer === 'ts') {
+				// Dynamic import — qwik-optimizer-ts isn't published yet, so it's
+				// installed separately by consumers who opt in. The error message
+				// surfaces the install instruction if the package is missing.
+				// The TS optimizer's `createOptimizer` is structurally identical
+				// to SWC's (same async signature, same `transformModules` shape);
+				// the type assertion bridges the cross-package nominal divergence.
+				optimizer = import('qwik-optimizer-ts').then(
+					(mod) => mod.createOptimizer(options.optimizerOptions),
+					(err) => {
+						throw new Error(
+							`createQwikPlugin({ optimizer: 'ts' }) requires \`qwik-optimizer-ts\` to be installed. ` +
+								`Install it as a peer alongside qwik-bundler, then re-run the build.\n` +
+								`Underlying error: ${err instanceof Error ? err.message : String(err)}`,
+						);
+					},
+				) as ReturnType<typeof createSwcOptimizer>;
+			} else {
+				optimizer = createSwcOptimizer(options.optimizerOptions);
+			}
 		}
 
 		return optimizer;
@@ -253,7 +273,7 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 
 			return segment.code;
 		},
-		async transform(code, id) {
+		async transform(code, id, meta) {
 			const currentEnvironment = getEnvironment(this);
 			const path = pathname(id);
 			if (id.startsWith(SEGMENT) || segments.has(path)) {
@@ -264,8 +284,16 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 			const replaced = replaceExperimental(fixed, currentEnvironment, options.experimental);
 			const nextCode = replaced ?? fixed;
 			const optimize = shouldOptimize(nextCode, path);
+			// `meta.ast` is the host's pre-parsed AST. Threading it into the
+			// optimizer eliminates a redundant parse when the TS optimizer is
+			// selected. SWC ignores the field (it re-parses internally), so
+			// passing it through is safe for both backends. Only forward when
+			// the source wasn't rewritten upstream (replaceExperimental /
+			// fixPureAnnotations would invalidate the AST positions).
+			const astStable = replaced == null && fixed === code;
+			const ast = astStable ? meta?.ast : undefined;
 			const transformed = optimize
-				? await transform(nextCode, path, this, currentEnvironment)
+				? await transform(nextCode, path, this, currentEnvironment, ast)
 				: null;
 			const fallback =
 				transformed ?? (replaced || fixed !== code ? { code: nextCode, map: null } : null);
@@ -326,9 +354,20 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 		id: string,
 		context: TransformContext,
 		currentEnvironment: QwikEnvironment,
+		ast?: unknown,
 	) {
+		// `ast` is the host's pre-parsed Program (`meta.ast` from Rolldown's
+		// transform hook). Forwarded into `TransformModuleInput.program`; the
+		// TS optimizer accepts it and skips its internal parse (OSS-453). SWC
+		// ignores the field and re-parses internally, so the hand-off is a
+		// no-op for the default backend.
+		// `program` is an extension over SWC's `TransformModuleInput`; the cast
+		// admits the optional field. SWC ignores it; the TS optimizer reads it.
+		const input = (
+			ast ? { ...dev.optimizerInput(code, id), program: ast } : dev.optimizerInput(code, id)
+		) as TransformModuleInput;
 		const transformOptions = {
-			input: [dev.optimizerInput(code, id)],
+			input: [input],
 			entryStrategy: entryStrategy(currentEnvironment, options.entryStrategy),
 			minify: 'simplify',
 			sourceMaps: dev.isEnabled(),

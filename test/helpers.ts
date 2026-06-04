@@ -77,6 +77,7 @@ export function callTransform(
 	code: string,
 	id: string,
 	context: HookContext = {},
+	meta?: unknown,
 ) {
 	return getHook(plugin.transform, 'transform').call(
 		{
@@ -88,7 +89,7 @@ export function callTransform(
 		},
 		code,
 		id,
-		undefined,
+		meta,
 	);
 }
 

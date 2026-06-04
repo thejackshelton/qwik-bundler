@@ -6,7 +6,12 @@ export default defineConfig({
 	},
 	pack: {
 		deps: {
-			neverBundle: ['satteri'],
+			// `qwik-optimizer-ts` is opt-in via the `optimizer: 'ts'` flag.
+			// Mark it external so it stays as a runtime dynamic import that
+			// consumers must install separately, rather than being inlined
+			// into qwik-bundler's published bundle (which would also drag in
+			// every transitive optimizer dep — oxc-walker, oxc-parser, etc.).
+			neverBundle: ['satteri', 'qwik-optimizer-ts'],
 		},
 		entry: {
 			rolldown: './src/rolldown.ts',
