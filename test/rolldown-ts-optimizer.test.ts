@@ -1,6 +1,6 @@
-// Tests for the opt-in `optimizer: 'ts'` flag that swaps the SWC napi
-// optimizer for `qwik-optimizer-ts` and threads Rolldown's `meta.ast`
-// into the optimizer call.
+// Tests for the `tsOptimizer` experimental feature flag that swaps the
+// SWC napi optimizer for `qwik-optimizer-ts` and threads Rolldown's
+// `meta.ast` into the optimizer call.
 
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { qwik } from '../src/rolldown';
@@ -55,8 +55,8 @@ beforeEach(() => {
 
 const FIXTURE = "import { component$ } from '@qwik.dev/core'; export const x = 1;";
 
-describe('optimizer: "ts" opt-in flag', () => {
-	test('defaults to the SWC optimizer when the flag is omitted', async () => {
+describe('tsOptimizer experimental feature', () => {
+	test('defaults to the SWC optimizer when the experimental flag is absent', async () => {
 		const plugin = qwik();
 		callBuildStart(plugin, { cwd: '/workspace/app' });
 		await callTransform(plugin, FIXTURE, '/workspace/app/src/root.tsx');
@@ -65,8 +65,8 @@ describe('optimizer: "ts" opt-in flag', () => {
 		expect(tsMock.createOptimizer).not.toHaveBeenCalled();
 	});
 
-	test("uses the SWC optimizer explicitly when optimizer: 'swc' is set", async () => {
-		const plugin = qwik({ optimizer: 'swc' });
+	test('uses the SWC optimizer when experimental excludes tsOptimizer', async () => {
+		const plugin = qwik({ experimental: ['suspense'] });
 		callBuildStart(plugin, { cwd: '/workspace/app' });
 		await callTransform(plugin, FIXTURE, '/workspace/app/src/root.tsx');
 
@@ -74,8 +74,17 @@ describe('optimizer: "ts" opt-in flag', () => {
 		expect(tsMock.createOptimizer).not.toHaveBeenCalled();
 	});
 
-	test("swaps to qwik-optimizer-ts when optimizer: 'ts' is set", async () => {
-		const plugin = qwik({ optimizer: 'ts' });
+	test('swaps to qwik-optimizer-ts when experimental includes tsOptimizer', async () => {
+		const plugin = qwik({ experimental: ['tsOptimizer'] });
+		callBuildStart(plugin, { cwd: '/workspace/app' });
+		await callTransform(plugin, FIXTURE, '/workspace/app/src/root.tsx');
+
+		expect(tsMock.createOptimizer).toHaveBeenCalledTimes(1);
+		expect(swcMock.createOptimizer).not.toHaveBeenCalled();
+	});
+
+	test('coexists with other experimental flags', async () => {
+		const plugin = qwik({ experimental: ['suspense', 'tsOptimizer', 'webWorker'] });
 		callBuildStart(plugin, { cwd: '/workspace/app' });
 		await callTransform(plugin, FIXTURE, '/workspace/app/src/root.tsx');
 
@@ -85,7 +94,7 @@ describe('optimizer: "ts" opt-in flag', () => {
 
 	test('forwards meta.ast into transformOptions.input[0].program for TS mode', async () => {
 		const fakeAst = { type: 'Program', body: [], sourceType: 'module' };
-		const plugin = qwik({ optimizer: 'ts' });
+		const plugin = qwik({ experimental: ['tsOptimizer'] });
 		callBuildStart(plugin, { cwd: '/workspace/app' });
 		await callTransform(plugin, FIXTURE, '/workspace/app/src/root.tsx', {}, { ast: fakeAst });
 
@@ -95,7 +104,7 @@ describe('optimizer: "ts" opt-in flag', () => {
 	});
 
 	test('omits program when meta.ast is undefined (no host parse available)', async () => {
-		const plugin = qwik({ optimizer: 'ts' });
+		const plugin = qwik({ experimental: ['tsOptimizer'] });
 		callBuildStart(plugin, { cwd: '/workspace/app' });
 		await callTransform(plugin, FIXTURE, '/workspace/app/src/root.tsx', {}, undefined);
 
@@ -108,7 +117,7 @@ describe('optimizer: "ts" opt-in flag', () => {
 		// SWC re-parses internally so the field is a harmless no-op there.
 		// Threading it from the same call site keeps the dispatch uniform.
 		const fakeAst = { type: 'Program', body: [], sourceType: 'module' };
-		const plugin = qwik({ optimizer: 'swc' });
+		const plugin = qwik();
 		callBuildStart(plugin, { cwd: '/workspace/app' });
 		await callTransform(plugin, FIXTURE, '/workspace/app/src/root.tsx', {}, { ast: fakeAst });
 
@@ -118,7 +127,7 @@ describe('optimizer: "ts" opt-in flag', () => {
 	});
 
 	test('memoises the optimizer instance across multiple transform calls', async () => {
-		const plugin = qwik({ optimizer: 'ts' });
+		const plugin = qwik({ experimental: ['tsOptimizer'] });
 		callBuildStart(plugin, { cwd: '/workspace/app' });
 		await callTransform(plugin, FIXTURE, '/workspace/app/src/a.tsx');
 		await callTransform(plugin, FIXTURE, '/workspace/app/src/b.tsx');

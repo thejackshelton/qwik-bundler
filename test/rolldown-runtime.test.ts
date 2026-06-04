@@ -57,6 +57,7 @@ describe('Rolldown runtime integration', () => {
 			'__EXPERIMENTAL__.noSPA': 'false',
 			'__EXPERIMENTAL__.preventNavigate': 'false',
 			'__EXPERIMENTAL__.suspense': 'true',
+			'__EXPERIMENTAL__.tsOptimizer': 'false',
 			'__EXPERIMENTAL__.valibot': 'false',
 			'__EXPERIMENTAL__.webWorker': 'false',
 			'globalThis.qDev': 'true',

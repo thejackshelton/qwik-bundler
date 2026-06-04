@@ -97,7 +97,7 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 
 	function getOptimizer() {
 		if (!optimizer) {
-			if (options.optimizer === 'ts') {
+			if (options.experimental?.includes('tsOptimizer')) {
 				// Dynamic import — qwik-optimizer-ts isn't published yet, so it's
 				// installed separately by consumers who opt in. The error message
 				// surfaces the install instruction if the package is missing.
@@ -108,7 +108,7 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 					(mod) => mod.createOptimizer(options.optimizerOptions),
 					(err) => {
 						throw new Error(
-							`createQwikPlugin({ optimizer: 'ts' }) requires \`qwik-optimizer-ts\` to be installed. ` +
+							`qwik({ experimental: ['tsOptimizer'] }) requires \`qwik-optimizer-ts\` to be installed. ` +
 								`Install it as a peer alongside qwik-bundler, then re-run the build.\n` +
 								`Underlying error: ${err instanceof Error ? err.message : String(err)}`,
 						);

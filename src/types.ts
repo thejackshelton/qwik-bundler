@@ -27,19 +27,6 @@ export interface QwikRolldownOptions {
 	manifestInput?: QwikManifest | ServerQwikManifest;
 	/** Called after the client manifest is created. */
 	onManifest?: (manifest: QwikManifest) => void;
-	/**
-	 * Which optimizer implementation to drive the transform pipeline.
-	 *
-	 * - `'swc'` (default) — the native SWC napi optimizer from `@qwik.dev/optimizer`.
-	 *   No setup beyond installing `@qwik.dev/optimizer`.
-	 * - `'ts'` — the TypeScript optimizer rewrite (`qwik-optimizer-ts`). Opt-in
-	 *   alternative; install the package separately. Threads Rolldown's
-	 *   `meta.ast` into the optimizer so the module is parsed only once per
-	 *   build.
-	 *
-	 * Behaviour is bit-identical to `'swc'` when omitted.
-	 */
-	optimizer?: 'swc' | 'ts';
 	/** Options forwarded directly to the Qwik optimizer. */
 	optimizerOptions?: OptimizerOptions;
 	/** Additive optimizer strip names for framework-owned APIs. */
