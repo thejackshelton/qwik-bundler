@@ -41,6 +41,8 @@ describe('Vite Qwik HMR bridge module', () => {
 		expect(code).toContain("CustomEvent('qHmr'");
 		expect(code).toContain('globalThis.qInspector ??= true');
 		expect(code).toContain("document.querySelectorAll('[q-d\\\\:q-hmr]')");
+		expect(code).toContain("element._qDispatch?.['d:q-hmr']");
+		expect(code).toContain("element._qDispatch = { 'd:q-hmr': hmrDispatch }");
 		expect(code).toContain('data.t === document.__hmrT');
 		expect(code).toContain('document.__hmrDone !== document.__hmrT');
 		expect(code).toContain('location.reload()');

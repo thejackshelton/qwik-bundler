@@ -16,7 +16,12 @@ if (import.meta.hot) {
 		for (const host of document.querySelectorAll('[q-d\\\\:q-hmr]')) {
 			host.dataset.qwikInspector ??= data.files?.[0] || '';
 			for (const element of host.querySelectorAll('*')) {
-				delete element._qDispatch;
+				const hmrDispatch = element._qDispatch?.['d:q-hmr'];
+				if (hmrDispatch) {
+					element._qDispatch = { 'd:q-hmr': hmrDispatch };
+				} else {
+					delete element._qDispatch;
+				}
 				for (const attribute of [...element.attributes]) {
 					if (attribute.name.startsWith('q-e:')) {
 						element.removeAttribute(attribute.name);
