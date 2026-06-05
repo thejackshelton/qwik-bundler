@@ -105,10 +105,20 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 		optimizer = import('qwik-optimizer-ts').then(
 			(mod) => mod.createOptimizer(options.optimizerOptions) as Promise<OptimizerInstance>,
 			(err) => {
+				const msg = err instanceof Error ? err.message : String(err);
+				const looksLikeMissingDist =
+					msg.includes('/qwik-optimizer-ts/index.js') ||
+					msg.includes("Cannot find package 'qwik-optimizer-ts'");
+				const hint = looksLikeMissingDist
+					? `\nLikely cause: qwik-optimizer-ts is installed but its dist/ wasn't built. ` +
+						`Run \`pnpm build\` inside the linked TS-Optimizer checkout and re-install.`
+					: '';
 				throw new Error(
 					`qwik({ experimental: ['tsOptimizer'] }) requires \`qwik-optimizer-ts\` to be installed. ` +
-						`Install it as a peer alongside qwik-bundler, then re-run the build.\n` +
-						`Underlying error: ${err instanceof Error ? err.message : String(err)}`,
+						`See the "TypeScript Optimizer (Experimental)" section of qwik-bundler's README ` +
+						`for the setup steps (the package isn't on npm yet — install points at a local ` +
+						`TS-Optimizer checkout).${hint}\n` +
+						`Underlying error: ${msg}`,
 				);
 			},
 		);

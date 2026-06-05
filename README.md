@@ -61,11 +61,25 @@ export default {
 };
 ```
 
-Install `qwik-optimizer-ts` separately when opting in — it isn't published yet, so for local development link the in-progress repo:
+`qwik-optimizer-ts` is **not** declared in `qwik-bundler`'s `package.json` and is **not** installed by default. The bundler loads it lazily via `import('qwik-optimizer-ts')` at runtime — only when the `tsOptimizer` flag fires — so consumers who stick with the SWC default never need it.
+
+Install it explicitly when opting in. Since the package isn't published to npm yet, the install points at a local checkout of [`TS-Optimizer`](https://github.com/thejackshelton/TS-Optimizer):
 
 ```sh
-pnpm add -D qwik-optimizer-ts@file:../TS-Optimizer
+# 1. Check out and build TS-Optimizer somewhere
+git clone https://github.com/thejackshelton/TS-Optimizer.git
+cd TS-Optimizer
+pnpm install
+pnpm build         # produces dist/ — required, the file: install reads through to dist/index.js
+
+# 2. From your qwik-bundler-consuming project, link the local build
+cd /path/to/your/app
+pnpm add -D qwik-optimizer-ts@file:/absolute/path/to/TS-Optimizer
 ```
+
+Once `qwik-optimizer-ts` is published to npm the second step collapses to `pnpm add -D qwik-optimizer-ts`.
+
+**If you see `Cannot find package '.../qwik-optimizer-ts/index.js'`** — that means the linked `TS-Optimizer` checkout isn't built. `pnpm build` in the `TS-Optimizer` directory produces the `dist/` that the package's `main`/`exports` map points at; without it Node defaults to `index.js` (which doesn't exist).
 
 When `tsOptimizer` is in `experimental`, Rolldown's `meta.ast` (the host's pre-parsed OXC `Program`) is forwarded into the optimizer's `TransformModuleInput.program` field. The TS optimizer detects it and skips its internal parse — one parse per module instead of two. SWC ignores the field and re-parses internally, so the threading is a no-op for the default backend.
 
