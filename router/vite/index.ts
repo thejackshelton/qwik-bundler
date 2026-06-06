@@ -5,7 +5,7 @@ import type { BundleGraphAdder, QwikManifest, QwikOptimizerStripNames } from '..
 import { createRouterDevEnvironment } from './dev/environment.ts';
 import { createRouterDevRequestHandler } from './dev/request.ts';
 import { getRouterIndexTags } from './dev/styles.ts';
-import { isMdxRoute, transformMdxRoute } from './mdx.ts';
+import { isMdxRoute, transformMdxRoute } from './mdx/index.ts';
 import { configureRouterPreviewServer, type RouterPreviewOptions } from './preview.ts';
 import {
 	QWIK_ROUTER_SERVER_FUNCTIONS_ID,
@@ -111,6 +111,7 @@ function qwikRouterPlugin(
 ): QwikRouterPlugin {
 	let viteCommand: ConfigEnv['command'] = 'serve';
 	let devServer: ViteDevServer | null = null;
+	let deprecatedUnifiedMdxWarned = false;
 
 	const api: QwikRouterPluginApi = {
 		getBasePathname: () => state.base,
@@ -252,8 +253,19 @@ function qwikRouterPlugin(
 			if (!isMdxRoute(id)) {
 				return null;
 			}
+			const warnDeprecatedUnifiedMdx = () => {
+				if (deprecatedUnifiedMdxWarned) {
+					return;
+				}
+				deprecatedUnifiedMdxWarned = true;
+				this.warn(
+					'qwik-router mdx.remarkPlugins and mdx.rehypePlugins are deprecated for the Satteri MDX pipeline. Use mdx.mdastPlugins/mdx.hastPlugins for Satteri-native plugins, or keep this as a temporary unified compatibility path.',
+				);
+			};
 			return {
-				code: await transformMdxRoute(code, id, options.mdx),
+				code: await transformMdxRoute(code, id, options.mdx, options.mdxPlugins, {
+					warnDeprecatedUnifiedMdx,
+				}),
 				map: null,
 			};
 		},

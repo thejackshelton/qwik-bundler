@@ -32,9 +32,11 @@
 		"prepare": "vp config"
 	},
 	"dependencies": {
+		"@mdx-js/mdx": "3.1.1",
 		"@qwik.dev/optimizer": "2.1.0-beta.5",
 		"@thi.ng/dgraph": "2.1.205",
 		"pathe": "2.0.3",
+		"remark-gfm": "4.0.1",
 		"satteri": "0.6.3",
 		"ufo": "1.6.4"
 	},

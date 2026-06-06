@@ -1,4 +1,5 @@
 import type { EnvironmentModuleNode, Plugin } from 'vite';
+import type { MdxCompileOptions } from 'satteri';
 import type { BundleGraphAdder, QwikOptimizerStripNames } from '../../src/types.ts';
 import type { RouterPreviewOptions } from './preview.ts';
 
@@ -11,6 +12,10 @@ export interface QwikRouterVitePluginOptions {
 	clientEnvironment?: string;
 	/** Directory containing Qwik Router routes. Defaults to `src/routes`. */
 	routesDir?: string;
+	/**
+	 * @deprecated Use `mdx.gfm` and `mdx.autolinkHeadings` instead.
+	 */
+	mdxPlugins?: RouterMdxPlugins;
 	/** Directory containing Qwik Router server plugins. Defaults to `routesDir`. */
 	serverPluginsDir?: string;
 	/** Use static route imports in generated router config. Defaults to dynamic imports. */
@@ -33,10 +38,42 @@ export interface QwikRouterVitePluginOptions {
 
 export type QwikCityVitePluginOptions = QwikRouterVitePluginOptions;
 
-export interface RouterMdxOptions {
-	/** Import source providing `useMDXComponents` for unimported MDX components. */
-	providerImportSource?: string;
+/** @deprecated Use `mdx.gfm` and `mdx.autolinkHeadings` instead. */
+export interface RouterMdxPlugins {
+	/** Enable Satteri GFM parsing. Defaults to `true`. */
+	remarkGfm?: boolean;
+	/** Accepted for upstream option compatibility; syntax highlighting should be user-provided. */
+	rehypeSyntaxHighlight?: boolean;
+	/** Add heading anchor links. Defaults to `true`. */
+	rehypeAutolinkHeadings?: boolean;
 }
+
+/** @deprecated Use Satteri-native MDX behavior instead of unified remark/rehype plugins. */
+export type RouterLegacyMdxPlugin =
+	| ((...options: any[]) => unknown)
+	| string
+	| readonly [(...options: any[]) => unknown, ...unknown[]]
+	| readonly [string, ...unknown[]];
+
+export type RouterMdxOptions = Omit<
+	MdxCompileOptions,
+	'elementAttributeNameCase' | 'filename' | 'jsxImportSource'
+> & {
+	/** Enable GFM parsing. Defaults to `true`. */
+	gfm?: boolean;
+	/** Add heading anchor links. Defaults to `true`. */
+	autolinkHeadings?: boolean;
+	/**
+	 * @deprecated Unified rehype plugin compatibility. This uses the legacy JavaScript
+	 * MDX pipeline instead of Satteri. Prefer built-in MDX options for new code.
+	 */
+	rehypePlugins?: readonly RouterLegacyMdxPlugin[];
+	/**
+	 * @deprecated Unified remark plugin compatibility. This uses the legacy JavaScript
+	 * MDX pipeline instead of Satteri. Prefer built-in MDX options for new code.
+	 */
+	remarkPlugins?: readonly RouterLegacyMdxPlugin[];
+};
 
 export type RouterServerFunctionsOptions = {
 	/** Public virtual module id that SSR code can import for registration side effects. */

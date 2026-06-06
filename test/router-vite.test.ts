@@ -511,6 +511,201 @@ export const Badge = component$(() => <strong>MDX badge</strong>);
 		expect(result?.code).toContain('_provideComponents()');
 	});
 
+	test('runs deprecated unified rehype plugin tuples through the MDX fallback', async () => {
+		const warn = vi.fn();
+		const plugin = getRouterPlugin({
+			mdx: {
+				rehypePlugins: [
+					[
+						(options: { className: string }) => {
+							return (tree: {
+								children: { properties?: Record<string, unknown> }[];
+							}) => {
+								const child = tree.children[0];
+								child.properties ??= {};
+								child.properties.class = options.className;
+							};
+						},
+						{ className: 'from-rehype' },
+					],
+				],
+			},
+		});
+		callConfigResolved(plugin, {
+			base: '/',
+			build: {},
+			plugins: [],
+			root: '/project',
+		});
+
+		const result = await callTransform(
+			plugin,
+			'# Hello Rehype',
+			'/project/src/routes/docs/index.mdx',
+			{ warn },
+		);
+
+		expect(result?.code).toContain('class: "from-rehype"');
+		expect(warn).toHaveBeenCalledOnce();
+		expect(warn.mock.calls[0]?.[0]).toContain('deprecated');
+	});
+
+	test('runs deprecated unified code-block replacements for docs Shiki compatibility', async () => {
+		const plugin = getRouterPlugin({
+			mdx: {
+				rehypePlugins: [
+					() => {
+						return (tree: { children: unknown[] }) => {
+							tree.children[0] = {
+								type: 'root',
+								children: [
+									{
+										type: 'element',
+										tagName: 'pre',
+										properties: { className: ['shiki', 'github-light'] },
+										children: [
+											{
+												type: 'element',
+												tagName: 'code',
+												properties: { className: ['language-ts'] },
+												children: [{ type: 'text', value: 'highlighted' }],
+											},
+										],
+									},
+								],
+							};
+						};
+					},
+				],
+			},
+		});
+		callConfigResolved(plugin, {
+			base: '/',
+			build: {},
+			plugins: [],
+			root: '/project',
+		});
+
+		const result = await callTransform(
+			plugin,
+			'```ts\nconst value = 1;\n```',
+			'/project/src/routes/docs/index.mdx',
+		);
+
+		expect(result?.code).toContain('class: "shiki github-light"');
+		expect(result?.code).toContain('class: "language-ts"');
+		expect(result?.code).toContain('highlighted');
+		expect(result?.code).not.toContain('className');
+	});
+
+	test('maps router MDX options to Satteri behavior', async () => {
+		const enabled = getRouterPlugin();
+		callConfigResolved(enabled, {
+			base: '/',
+			build: {},
+			plugins: [],
+			root: '/project',
+		});
+
+		const disabled = getRouterPlugin({
+			mdx: {
+				gfm: false,
+				autolinkHeadings: false,
+			},
+		});
+		callConfigResolved(disabled, {
+			base: '/',
+			build: {},
+			plugins: [],
+			root: '/project',
+		});
+
+		const table = `# Hello Flags
+
+| Name |
+| ---- |
+| Qwik |
+`;
+
+		const enabledResult = await callTransform(
+			enabled,
+			table,
+			'/project/src/routes/docs/index.mdx',
+		);
+		const disabledResult = await callTransform(
+			disabled,
+			table,
+			'/project/src/routes/docs/index.mdx',
+		);
+
+		expect(enabledResult?.code).toContain('table');
+		expect(enabledResult?.code).toContain('href: "#hello-flags"');
+		expect(disabledResult?.code).not.toContain('"table"');
+		expect(disabledResult?.code).not.toContain('href: "#hello-flags"');
+	});
+
+	test('keeps deprecated router MDX plugin flags as fallback', async () => {
+		const plugin = getRouterPlugin({
+			mdxPlugins: {
+				remarkGfm: false,
+				rehypeAutolinkHeadings: false,
+			},
+		});
+		callConfigResolved(plugin, {
+			base: '/',
+			build: {},
+			plugins: [],
+			root: '/project',
+		});
+
+		const result = await callTransform(
+			plugin,
+			`# Hello Fallback
+
+| Name |
+| ---- |
+| Qwik |
+`,
+			'/project/src/routes/docs/index.mdx',
+		);
+
+		expect(result?.code).not.toContain('"table"');
+		expect(result?.code).not.toContain('href: "#hello-fallback"');
+	});
+
+	test('prefers router MDX options over deprecated plugin flags', async () => {
+		const plugin = getRouterPlugin({
+			mdx: {
+				gfm: true,
+				autolinkHeadings: true,
+			},
+			mdxPlugins: {
+				remarkGfm: false,
+				rehypeAutolinkHeadings: false,
+			},
+		});
+		callConfigResolved(plugin, {
+			base: '/',
+			build: {},
+			plugins: [],
+			root: '/project',
+		});
+
+		const result = await callTransform(
+			plugin,
+			`# Hello Override
+
+| Name |
+| ---- |
+| Qwik |
+`,
+			'/project/src/routes/docs/index.mdx',
+		);
+
+		expect(result?.code).toContain('table');
+		expect(result?.code).toContain('href: "#hello-override"');
+	});
+
 	test('configures a fetchable dev SSR environment', () => {
 		const plugin = getRouterPlugin();
 		const result = callConfigEnvironment(plugin, 'ssr', {});

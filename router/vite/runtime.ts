@@ -4,6 +4,7 @@ import { layoutName, routeBasename, routeLayoutName, routeLayouts } from './rout
 
 type ModuleLoader = () => unknown;
 type RuntimeLayout = { name: string; pathname: string; loader: ModuleLoader };
+type RouteSegment = { key: string; param?: string };
 interface RouteNode {
 	[key: string]: RouteNode | ModuleLoader | ModuleLoader[] | string | undefined;
 }
@@ -54,18 +55,23 @@ function routeNode(root: RouteNode, pathname: string) {
 	return current;
 }
 
-function routeSegments(pathname: string) {
-	return withoutLeadingSlash(pathname)
-		.split('/')
-		.filter(Boolean)
-		.flatMap((segment) => {
-			if (segment.startsWith('(') && segment.endsWith(')')) return [];
-			const rest = /^\[\.\.\.(.+)\]$/.exec(segment);
-			if (rest?.[1]) return [{ key: '_A', param: rest[1] }];
-			const dynamic = /^\[(.+)\]$/.exec(segment);
-			if (dynamic?.[1]) return [{ key: '_W', param: dynamic[1] }];
-			return [{ key: segment.toLowerCase(), param: undefined }];
-		});
+function routeSegments(pathname: string): RouteSegment[] {
+	const result: RouteSegment[] = [];
+	for (const segment of withoutLeadingSlash(pathname).split('/').filter(Boolean)) {
+		if (segment.startsWith('(') && segment.endsWith(')')) continue;
+		const rest = /^\[\.\.\.(.+)\]$/.exec(segment);
+		if (rest?.[1]) {
+			result.push({ key: '_A', param: rest[1] });
+			continue;
+		}
+		const dynamic = /^\[(.+)\]$/.exec(segment);
+		if (dynamic?.[1]) {
+			result.push({ key: '_W', param: dynamic[1] });
+			continue;
+		}
+		result.push({ key: segment.toLowerCase() });
+	}
+	return result;
 }
 
 function routePathname(path: string, routesBase: string) {
