@@ -24,6 +24,11 @@ export function createRoutes(modules: Record<string, unknown>, eager: boolean, r
 		}
 	}
 	for (const path of paths) {
+		if (routeBasename(path) !== 'menu') continue;
+		const pathname = routePathname(path, routesBase);
+		routeNode(root, pathname)._N = routeLoader(modules, path, eager);
+	}
+	for (const path of paths) {
 		const name = routeBasename(path);
 		if (name !== 'index' && name !== '404' && name !== 'error') continue;
 		const pathname = routePathname(path, routesBase);

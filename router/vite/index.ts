@@ -6,6 +6,7 @@ import { createRouterDevEnvironment } from './dev/environment.ts';
 import { createRouterDevRequestHandler } from './dev/request.ts';
 import { getRouterIndexTags } from './dev/styles.ts';
 import { imagePlugin } from './image.ts';
+import { isMenuRoute, transformMenuRoute } from './menu.ts';
 import { isMdxRoute, transformMdxRoute } from './mdx/index.ts';
 import { configureRouterPreviewServer, type RouterPreviewOptions } from './preview.ts';
 import {
@@ -193,10 +194,17 @@ function qwikRouterPlugin(
 
 		configureServer(server) {
 			devServer = server;
-			const routeGlob = join(state.routesDir, '**/{index,layout,404,error,plugin@*}{.,@,-}*');
+			const routeGlob = join(
+				state.routesDir,
+				'**/{index,layout,404,error,menu,plugin@*}{.,@,-}*',
+			);
 			server.watcher.add(routeGlob);
 			server.watcher.on('change', (path) => {
-				if (!isRouteSource(path) && !basename(path).startsWith('plugin@')) {
+				if (
+					!isRouteSource(path) &&
+					!isMenuRoute(path) &&
+					!basename(path).startsWith('plugin@')
+				) {
 					return;
 				}
 				state.dirty = true;
@@ -254,6 +262,12 @@ function qwikRouterPlugin(
 		},
 
 		async transform(code, id) {
+			if (isMenuRoute(id)) {
+				return {
+					code: transformMenuRoute(code, id, state),
+					map: null,
+				};
+			}
 			if (!isMdxRoute(id)) {
 				return null;
 			}
@@ -458,7 +472,8 @@ function routeModuleGlobs(state: RouterState) {
 	const sourceGlobs = [...ROUTE_BASENAMES].flatMap((name) =>
 		[...ROUTE_EXTENSIONS].map((ext) => `${base}/**/${name}*${ext}`),
 	);
-	return [...sourceGlobs, `!${base}/${ROUTE_TEST_MODULES}`];
+	const menuGlobs = ['.md', '.mdx', '.markdown'].map((ext) => `${base}/**/menu${ext}`);
+	return [...sourceGlobs, ...menuGlobs, `!${base}/${ROUTE_TEST_MODULES}`];
 }
 
 function serverFunctionModuleGlobs(state: RouterState) {

@@ -13,6 +13,7 @@ import {
 	isHeadingTag,
 	type ContentHeading,
 } from './headings.ts';
+import { frontmatterExports, splitFrontmatter } from './frontmatter.ts';
 import { resolveRouterMdxOptions } from './options.ts';
 import type { RouterLegacyMdxPlugin, RouterMdxOptions, RouterMdxPlugins } from '../types.ts';
 
@@ -47,6 +48,7 @@ export async function transformLegacyMdxRoute(
 ) {
 	const { compile } = await import('@mdx-js/mdx');
 	const { default: remarkGfm } = await import('remark-gfm');
+	const frontmatter = splitFrontmatter(source);
 	const headings: ContentHeading[] = [];
 	const resolvedOptions = resolveRouterMdxOptions(options, mdxPlugins);
 	const {
@@ -64,7 +66,7 @@ export async function transformLegacyMdxRoute(
 	if (resolvedOptions.gfm !== false) {
 		legacyRemarkPlugins.push(remarkGfm);
 	}
-	const result = await compile({ value: source, path: id }, {
+	const result = await compile({ value: frontmatter.source, path: id }, {
 		...compileOptions,
 		jsxImportSource: '@qwik.dev/core',
 		elementAttributeNameCase: 'html',
@@ -75,7 +77,7 @@ export async function transformLegacyMdxRoute(
 			[rehypeHeadings, headings, resolvedOptions.autolinkHeadings],
 		],
 	} satisfies CompileOptions);
-	return `${String(result.value)}\nexport const headings = ${JSON.stringify(headings)};\n`;
+	return `${String(result.value)}\n${frontmatterExports(frontmatter.frontmatter)}\nexport const headings = ${JSON.stringify(headings)};\n`;
 }
 
 function rehypeHeadingIds() {

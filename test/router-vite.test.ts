@@ -231,6 +231,9 @@ describe('Qwik Router Vite integration', () => {
 		expect(code).toContain('"/src/routes/**/index*.markdown"');
 		expect(code).toContain('"/src/routes/**/layout*.tsx"');
 		expect(code).toContain('"/src/routes/**/layout*.mdx"');
+		expect(code).toContain('"/src/routes/**/menu.md"');
+		expect(code).toContain('"/src/routes/**/menu.mdx"');
+		expect(code).toContain('"/src/routes/**/menu.markdown"');
 		expect(code).toContain(
 			'"!/src/routes/**/*.{test,unit,spec}.{js,jsx,ts,tsx,md,mdx,markdown}"',
 		);
@@ -511,6 +514,97 @@ export const Badge = component$(() => <strong>MDX badge</strong>);
 		expect(result?.code).toContain(
 			'export const headings = [{"text":"Hello MDX","id":"hello-mdx","level":1},{"text":"Props","id":"props","level":2},{"text":"Props","id":"props-1","level":2}];',
 		);
+	});
+
+	test('exports MDX frontmatter as Qwik Router content metadata', async () => {
+		const plugin = getRouterPlugin();
+		callConfigResolved(plugin, {
+			base: '/',
+			build: {},
+			plugins: [],
+			root: '/project',
+		});
+
+		const result = await callTransform(
+			plugin,
+			`---
+title: State | Components
+keywords: 'state, reactivity'
+contributors:
+  - qwikdev
+updated_at: '2026-02-10T12:00:00Z'
+---
+
+# State
+`,
+			'/project/src/routes/docs/state/index.mdx',
+		);
+
+		expect(result?.code).not.toContain('title: State | Components');
+		expect(result?.code).toContain(
+			'export const frontmatter = {"title":"State | Components","keywords":"state, reactivity","contributors":["qwikdev"],"updated_at":"2026-02-10T12:00:00Z"};',
+		);
+		expect(result?.code).toContain(
+			'export const head = {"title":"State | Components","meta":[{"name":"keywords","content":"state, reactivity"}]',
+		);
+	});
+
+	test('keeps legacy MDX frontmatter extraction tolerant of unified-only syntax', async () => {
+		const plugin = getRouterPlugin({
+			mdx: {
+				remarkPlugins: [() => () => {}],
+			},
+		});
+		callConfigResolved(plugin, {
+			base: '/',
+			build: {},
+			plugins: [],
+			root: '/project',
+		});
+
+		const result = await callTransform(
+			plugin,
+			`---
+title: Legacy Details
+---
+
+<details>
+  <summary style={{color: "#17ADF5"}}>Remember $?</summary>
+  <p>Attention ⚠️: JSX <a href="https://qwik.dev/docs/core/events/#inline-handler">handlers</a> such as onClick$ and onInput$ are only executed on the client.</p>
+</details>
+`,
+			'/project/src/routes/docs/legacy/index.mdx',
+		);
+
+		expect(result?.code).toContain('export const frontmatter = {"title":"Legacy Details"};');
+		expect(result?.code).toContain('Remember $?');
+	});
+
+	test('transforms menu markdown into a Qwik Router menu module', async () => {
+		const plugin = getRouterPlugin();
+		callConfigResolved(plugin, {
+			base: '/',
+			build: {},
+			plugins: [],
+			root: '/project',
+		});
+
+		const result = await callTransform(
+			plugin,
+			`# Qwik Guide
+
+## Introduction
+
+- [Overview](</docs/(qwik)/index.mdx>)
+- [State](</docs/(qwik)/core/state/index.mdx>)
+`,
+			'/project/src/routes/docs/menu.md',
+		);
+
+		expect(result?.code).toContain('"text":"Qwik Guide"');
+		expect(result?.code).toContain('"href":"/docs/"');
+		expect(result?.code).toContain('"href":"/docs/core/state/"');
+		expect(result?.code).toContain('export default');
 	});
 
 	test('passes provider imports to Satteri for MDX components', async () => {
@@ -882,7 +976,9 @@ export const Badge = component$(() => <strong>MDX badge</strong>);
 		});
 		expect(loaded).toBeNull();
 		expect(parse).toHaveBeenCalledWith(`export default ${JSON.stringify(svg)}`);
-		expect(transformed?.code).toContain('export default p => <svg');
+		expect(transformed?.code).toContain("import { _jsxSplit } from '@qwik.dev/core';");
+		expect(transformed?.code).toContain("export default p => _jsxSplit('svg'");
+		expect(transformed?.code).not.toContain('=> <svg');
 		expect(transformed?.code).toContain('"viewBox":"0 0 10 10"');
 		expect(transformed?.code).toContain('dangerouslySetInnerHTML');
 		expect(transformed?.code).toContain('<path');

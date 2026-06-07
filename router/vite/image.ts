@@ -393,5 +393,9 @@ export default toImg(srcSet, width, height);
 }
 
 function createSvgJsxModule(attrs: Record<string, string>) {
-	return `export default p => <svg {...p} {...${JSON.stringify(attrs)}} />`;
+	return `
+import { _jsxSplit } from '@qwik.dev/core';
+const attrs = ${JSON.stringify(attrs)};
+export default p => _jsxSplit('svg', p ? { ...p, ...attrs } : null, p ? null : attrs, null, 0);
+`;
 }

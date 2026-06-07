@@ -149,6 +149,34 @@ describe('Vite config integration', () => {
 		});
 	});
 
+	test('aliases Builder Qwik package ids to Qwik core', async () => {
+		const plugin = getQwikPlugin();
+		const config: UserConfig = {
+			resolve: {
+				alias: {
+					existing: '/workspace/existing',
+				},
+			},
+		};
+
+		await callConfig(plugin, config, { command: 'serve', mode: 'development' });
+
+		const aliases = config.resolve?.alias as Array<{
+			find: string | RegExp;
+			replacement: string;
+		}>;
+		const legacyAlias = aliases.find((alias) => alias.replacement === '@qwik.dev/core');
+
+		expect(aliases).toContainEqual({
+			find: 'existing',
+			replacement: '/workspace/existing',
+		});
+		expect(legacyAlias?.find).toBeInstanceOf(RegExp);
+		expect(
+			'@builder.io/qwik/jsx-runtime'.replace(legacyAlias?.find as RegExp, '@qwik.dev/core'),
+		).toBe('@qwik.dev/core/jsx-runtime');
+	});
+
 	test('dispatches output defaults by Vite environment context', () => {
 		const plugin = getQwikPlugin();
 		const clientOutput = callOutputOptions(

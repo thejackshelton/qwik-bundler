@@ -9,6 +9,7 @@ import {
 	HEADING_TAGS,
 	type ContentHeading,
 } from './headings.ts';
+import { frontmatterExports, withFrontmatterFeature } from './frontmatter.ts';
 import { transformLegacyMdxRoute, usesLegacyMdxCompat } from './legacy.ts';
 import { resolveRouterMdxOptions } from './options.ts';
 import type { RouterMdxOptions, RouterMdxPlugins } from '../types.ts';
@@ -43,7 +44,7 @@ export async function transformMdxRoute(
 			filename: id,
 			jsxImportSource: '@qwik.dev/core',
 			elementAttributeNameCase: 'html',
-			features: resolvedOptions.features,
+			features: withFrontmatterFeature(resolvedOptions.features),
 			mdastPlugins,
 			hastPlugins: [
 				createHeadingIdsPlugin(),
@@ -52,7 +53,7 @@ export async function transformMdxRoute(
 			],
 		}),
 	);
-	return `${result.code}\nexport const headings = ${JSON.stringify(headings)};\n`;
+	return `${result.code}\n${frontmatterExports(result.frontmatter)}\nexport const headings = ${JSON.stringify(headings)};\n`;
 }
 
 export function isMdxRoute(id: string) {

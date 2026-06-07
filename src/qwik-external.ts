@@ -6,7 +6,14 @@ import type {
 	PluginContext,
 	ResolveIdResult,
 } from 'rolldown';
-import type { ConfigEnv, Environment, Plugin, UserConfig } from 'vite';
+import {
+	mergeAlias,
+	type AliasOptions,
+	type ConfigEnv,
+	type Environment,
+	type Plugin,
+	type UserConfig,
+} from 'vite';
 import type { QwikEnvironment } from './types.ts';
 import { isServerViteEnvironment } from './vite/environment.ts';
 
@@ -23,6 +30,9 @@ const QWIK_OPTIMIZE_DEPS_EXCLUDE = [
 	'@qwik-client-manifest',
 	'@builder.io/qwik',
 ];
+const QWIK_ALIASES = [
+	{ find: /^@builder\.io\/qwik(?=\/|$)/, replacement: '@qwik.dev/core' },
+] satisfies AliasOptions;
 
 type ExternalContext = { environment?: unknown };
 type ViteHookContext = { environment?: Pick<Environment, 'config' | 'name'> };
@@ -75,6 +85,7 @@ export function qwikViteExternal(configDefaults: (config: UserConfig, env: Confi
 		config: {
 			order: 'post',
 			handler(config, env) {
+				applyAliases(config);
 				configDefaults(config, env);
 				if (env.command === 'serve') {
 					applyQwikOptimizeDeps(config);
@@ -217,6 +228,15 @@ function applyQwikOptimizeDeps(config: UserConfig) {
 		transform.jsx.runtime ??= 'automatic';
 		transform.jsx.importSource ??= '@qwik.dev/core';
 	}
+}
+
+function applyAliases(config: UserConfig) {
+	const resolve = (config.resolve ??= {});
+	resolve.alias = mapAliases(resolve.alias);
+}
+
+function mapAliases(existing: AliasOptions | undefined) {
+	return mergeAlias(QWIK_ALIASES, existing);
 }
 
 function withQwikOptimizeDeps(existing: string[] | undefined) {
