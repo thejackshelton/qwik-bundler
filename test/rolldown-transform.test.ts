@@ -292,6 +292,26 @@ describe('Rolldown optimizer transforms', () => {
 		);
 	});
 
+	test('skips Vite import queries before optimizer source matching', async () => {
+		const plugin = qwikClient();
+
+		callBuildStart(plugin, { cwd: '/workspace/app' });
+		const rawTsx = await callTransform(
+			plugin,
+			"export default 'raw';",
+			'/workspace/app/src/routes/docs/index.tsx?raw',
+		);
+		const importedTs = await callTransform(
+			plugin,
+			"export default 'imported';",
+			'/workspace/app/src/routes/docs/index.ts?import',
+		);
+
+		expect(rawTsx).toBeNull();
+		expect(importedTs).toBeNull();
+		expect(optimizerMock.transformModules).not.toHaveBeenCalled();
+	});
+
 	test('optimizes compiled MDX route modules', async () => {
 		const plugin = qwikServer();
 

@@ -70,6 +70,7 @@ const QWIK_CORE_PROD_MODULE = /[/\\]@qwik\.dev[/\\]core[/\\].*[/\\]core\.prod\.m
 const QWIK_PUBLIC_IMPORTS = ['@qwik.dev/core', '@builder.io/qwik'];
 const QWIK_IMPORTS =
 	/\b(?:import|export)\s+(?:[^'";]*?\s+from\s*)?['"](@qwik\.dev\/core(?:\/[^'"]*)?|@builder\.io\/qwik(?:\/[^'"]*)?)['"]/;
+const VITE_IMPORT_QUERY_PARAM = /[?&](?:raw|url|inline|worker|sharedworker|import)(?:[=&#]|$)/;
 const manifests = new Map<string, QwikManifest>();
 
 export const qwik = (options?: QwikRolldownOptions) => qwikClient(options);
@@ -255,6 +256,8 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 		},
 		async transform(code, id) {
 			const currentEnvironment = getEnvironment(this);
+			if (VITE_IMPORT_QUERY_PARAM.test(id)) return null;
+
 			const path = pathname(id);
 			if (id.startsWith(SEGMENT) || segments.has(path)) {
 				return null;

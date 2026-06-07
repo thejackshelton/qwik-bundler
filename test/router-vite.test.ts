@@ -587,6 +587,36 @@ updated_at: '2026-02-10T12:00:00Z'
 		expect(result?.code).not.toContain('ExpensiveComponent');
 	});
 
+	test('ignores markdown import queries not owned by Qwik Router', async () => {
+		const plugin = getRouterPlugin();
+		callConfigResolved(plugin, {
+			base: '/',
+			build: {},
+			plugins: [],
+			root: '/project',
+		});
+
+		const rawMdx = await callTransform(
+			plugin,
+			'# Raw MDX',
+			'/project/src/routes/docs/state/index.mdx?raw',
+		);
+		const importedMdx = await callTransform(
+			plugin,
+			'# Imported MDX',
+			'/project/src/routes/docs/state/index.mdx?import',
+		);
+		const rawMenu = await callTransform(
+			plugin,
+			'# Docs\n\n- [State](./state/index.mdx)',
+			'/project/src/routes/docs/menu.md?raw',
+		);
+
+		expect(rawMdx).toBeNull();
+		expect(importedMdx).toBeNull();
+		expect(rawMenu).toBeNull();
+	});
+
 	test('keeps legacy MDX frontmatter extraction tolerant of unified-only syntax', async () => {
 		const plugin = getRouterPlugin({
 			mdx: {

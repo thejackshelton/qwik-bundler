@@ -273,6 +273,7 @@ function qwikRouterPlugin(
 					map: null,
 				};
 			}
+			if (parseURL(id).search) return null;
 			if (isMenuRoute(id)) {
 				return {
 					code: transformMenuRoute(code, id, state),
