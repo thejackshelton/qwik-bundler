@@ -7,7 +7,12 @@ import { createRouterDevRequestHandler } from './dev/request.ts';
 import { getRouterIndexTags } from './dev/styles.ts';
 import { imagePlugin } from './image.ts';
 import { isMenuRoute, transformMenuRoute } from './menu.ts';
-import { isMdxRoute, transformMdxRoute } from './mdx/index.ts';
+import {
+	isMdxFrontmatterRoute,
+	isMdxRoute,
+	transformMdxFrontmatterRoute,
+	transformMdxRoute,
+} from './mdx/index.ts';
 import { configureRouterPreviewServer, type RouterPreviewOptions } from './preview.ts';
 import {
 	QWIK_ROUTER_SERVER_FUNCTIONS_ID,
@@ -262,6 +267,12 @@ function qwikRouterPlugin(
 		},
 
 		async transform(code, id) {
+			if (isMdxFrontmatterRoute(id)) {
+				return {
+					code: transformMdxFrontmatterRoute(code),
+					map: null,
+				};
+			}
 			if (isMenuRoute(id)) {
 				return {
 					code: transformMenuRoute(code, id, state),

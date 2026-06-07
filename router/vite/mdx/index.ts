@@ -9,10 +9,12 @@ import {
 	HEADING_TAGS,
 	type ContentHeading,
 } from './headings.ts';
-import { frontmatterExports, withFrontmatterFeature } from './frontmatter.ts';
+import { frontmatterExports, frontmatterModule, withFrontmatterFeature } from './frontmatter.ts';
 import { transformLegacyMdxRoute, usesLegacyMdxCompat } from './legacy.ts';
 import { resolveRouterMdxOptions } from './options.ts';
 import type { RouterMdxOptions, RouterMdxPlugins } from '../types.ts';
+
+const FRONTMATTER_QUERY_PARAM = 'qwik-router-frontmatter';
 
 export async function transformMdxRoute(
 	source: string,
@@ -59,6 +61,14 @@ export async function transformMdxRoute(
 export function isMdxRoute(id: string) {
 	const ext = extname(decodePath(parseURL(id).pathname)).toLowerCase();
 	return ext === '.md' || ext === '.mdx' || ext === '.markdown';
+}
+
+export function isMdxFrontmatterRoute(id: string) {
+	return isMdxRoute(id) && new URLSearchParams(parseURL(id).search).has(FRONTMATTER_QUERY_PARAM);
+}
+
+export function transformMdxFrontmatterRoute(source: string) {
+	return frontmatterModule(source);
 }
 
 function createHeadingIdsPlugin(): HastPluginDefinition {

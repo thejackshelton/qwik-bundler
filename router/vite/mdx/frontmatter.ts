@@ -41,6 +41,10 @@ export function frontmatterExports(frontmatter: Frontmatter | null | undefined) 
 		: frontmatterExport;
 }
 
+export function frontmatterModule(source: string) {
+	return `${frontmatterExports(splitFrontmatter(source).frontmatter)}\nexport default frontmatter;`;
+}
+
 function firstFrontmatterBlock(source: string) {
 	const node = firstFrontmatterNode(source);
 	const endOffset = node?.position?.end.offset;

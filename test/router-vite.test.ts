@@ -549,6 +549,44 @@ updated_at: '2026-02-10T12:00:00Z'
 		);
 	});
 
+	test('loads MDX frontmatter-only query without compiling page content', async () => {
+		const plugin = getRouterPlugin({
+			mdx: {
+				rehypePlugins: [() => () => {}],
+			},
+		});
+		const warn = vi.fn();
+		callConfigResolved(plugin, {
+			base: '/',
+			build: {},
+			plugins: [],
+			root: '/project',
+		});
+
+		const result = await callTransform(
+			plugin,
+			`---
+title: State | Components
+updated_at: '2026-02-10T12:00:00Z'
+---
+
+# State
+
+<ExpensiveComponent />
+`,
+			'/project/src/routes/docs/state/index.mdx?qwik-router-frontmatter',
+			{ warn },
+		);
+
+		expect(warn).not.toHaveBeenCalled();
+		expect(result?.code).toContain(
+			'export const frontmatter = {"title":"State | Components","updated_at":"2026-02-10T12:00:00Z"};',
+		);
+		expect(result?.code).toContain('export default frontmatter;');
+		expect(result?.code).not.toContain('function MDXContent');
+		expect(result?.code).not.toContain('ExpensiveComponent');
+	});
+
 	test('keeps legacy MDX frontmatter extraction tolerant of unified-only syntax', async () => {
 		const plugin = getRouterPlugin({
 			mdx: {
