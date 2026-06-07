@@ -5,6 +5,7 @@ import type { BundleGraphAdder, QwikManifest, QwikOptimizerStripNames } from '..
 import { createRouterDevEnvironment } from './dev/environment.ts';
 import { createRouterDevRequestHandler } from './dev/request.ts';
 import { getRouterIndexTags } from './dev/styles.ts';
+import { imagePlugin } from './image.ts';
 import { isMdxRoute, transformMdxRoute } from './mdx/index.ts';
 import { configureRouterPreviewServer, type RouterPreviewOptions } from './preview.ts';
 import {
@@ -28,6 +29,7 @@ import type {
 } from './types.ts';
 
 export { QWIK_ROUTER_SERVER_FUNCTIONS_ID, configureRouterPreviewServer, serverFunctionsPlugin };
+export { imagePlugin };
 export type {
 	BuiltRouterLayout,
 	BuiltRouterRoute,
@@ -102,7 +104,7 @@ export function qwikRouter(options: QwikRouterVitePluginOptions = {}): PluginOpt
 		moduleGlobs: () => serverFunctionModuleGlobs(state),
 	});
 
-	return [router, serverFunctions];
+	return [router, serverFunctions, ...imagePlugin(options)];
 }
 
 function qwikRouterPlugin(

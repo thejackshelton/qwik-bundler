@@ -1,5 +1,6 @@
 import type { EnvironmentModuleNode, Plugin } from 'vite';
 import type { MdxCompileOptions } from 'satteri';
+import type { OptimizeOptions as SvgmOptimizeOptions } from 'svgm-node';
 import type { BundleGraphAdder, QwikOptimizerStripNames } from '../../src/types.ts';
 import type { RouterPreviewOptions } from './preview.ts';
 
@@ -34,9 +35,24 @@ export interface QwikRouterVitePluginOptions {
 	platform?: Record<string, unknown>;
 	/** Server function virtual-module options for non-router hosts. */
 	serverFunctions?: RouterServerFunctionsOptions;
+	/** Compatibility options for router-owned `?jsx` image imports. */
+	imageOptimization?: RouterImageOptimizationOptions;
 }
 
 export type QwikCityVitePluginOptions = QwikRouterVitePluginOptions;
+
+export interface RouterImageOptimizationOptions {
+	jsxDirectives?: {
+		quality?: `${number}`;
+		format?: 'webp' | 'avif' | 'png';
+		w?: string;
+		h?: string;
+		[key: string]: string | undefined;
+	};
+	/** SVG optimization options passed to svgm-node. Defaults to `{ preset: 'safe' }`. */
+	svg?: SvgmOptimizeOptions;
+	enabled?: boolean | 'only-production';
+}
 
 /** @deprecated Use `mdx.gfm` and `mdx.autolinkHeadings` instead. */
 export interface RouterMdxPlugins {

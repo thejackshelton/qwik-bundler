@@ -26,9 +26,15 @@ importers:
       satteri:
         specifier: 0.6.3
         version: 0.6.3
+      svgm-node:
+        specifier: 0.3.8
+        version: 0.3.8
       ufo:
         specifier: 1.6.4
         version: 1.6.4
+      vite-imagetools:
+        specifier: 10.0.0
+        version: 10.0.0(rollup@4.61.0)(vite@8.0.16(@types/node@24.12.2)(esbuild@0.27.3)(jiti@2.7.0)(yaml@2.9.0))
     devDependencies:
       '@types/node':
         specifier: 24.12.2
@@ -2965,6 +2971,10 @@ packages:
   supports-color@10.2.2:
     resolution: {integrity: sha512-SS+jx45GF1QjgEXQx4NJZV9ImqmO2NPz5FNsIHrsDjh2YsHnawpan7SNQ1o8NuhrbHZy9AZhIoCUiCeaW/C80g==}
     engines: {node: '>=18'}
+
+  svgm-node@0.3.8:
+    resolution: {integrity: sha512-2QAfhC/axcL+obCEXMpeQKBNdGO1FwCoL5trzykhvb8ErE+S3b+yKDjvge68mlvYJG1oFkLVkpTPYuiZICfn8g==}
+    hasBin: true
 
   svgo@3.3.3:
     resolution: {integrity: sha512-+wn7I4p7YgJhHs38k2TNjy1vCfPIfLIJWR5MnCStsN8WuuTcBnRKcMHQLMM2ijxGZmDoZwNv8ipl5aTTen62ng==}
@@ -5954,6 +5964,8 @@ snapshots:
       inline-style-parser: 0.2.7
 
   supports-color@10.2.2: {}
+
+  svgm-node@0.3.8: {}
 
   svgo@3.3.3:
     dependencies:

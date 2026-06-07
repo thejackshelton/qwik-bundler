@@ -10,6 +10,15 @@ import {
 	qwikRouter,
 	serverFunctionsPlugin,
 } from '../router/vite/index.ts';
+import {
+	createImageJsxImportId,
+	createSvgImageJsxImportId,
+	createVirtualImageJsxId,
+	imageJsxDirectives,
+	optimizeSvg,
+	parseSvgImageJsxId,
+	parseVirtualImageJsxId,
+} from '../router/vite/image.ts';
 import { staticAdapter } from '../adapters/static/vite.ts';
 import {
 	callBuildStart,
@@ -28,6 +37,14 @@ import {
 } from './helpers.ts';
 
 describe('Qwik Router Vite integration', () => {
+	test('wires router-owned image jsx compatibility plugins', () => {
+		const plugins = qwikRouter() as Plugin[];
+
+		expect(getPlugin(plugins, 'vite-plugin-qwik-router')).toBeDefined();
+		expect(getPlugin(plugins, 'vite-plugin-qwik-router-server-functions')).toBeDefined();
+		expect(getPlugin(plugins, 'qwik-router-image-jsx')).toBeDefined();
+	});
+
 	test('provides the router-owned default client input', async () => {
 		const plugin = getRouterPlugin();
 		const config: UserConfig = {};
@@ -705,6 +722,247 @@ export const Badge = component$(() => <strong>MDX badge</strong>);
 		expect(result?.code).toContain('table');
 		expect(result?.code).toContain('href: "#hello-override"');
 	});
+
+	test('creates virtual image jsx ids without reprocessing internal metadata imports', () => {
+		const id = createVirtualImageJsxId(
+			'/project/src/media/hero.png',
+			new URLSearchParams('jsx&w=400&format=avif'),
+		);
+		const parsed = parseVirtualImageJsxId(id);
+		const internalId = createImageJsxImportId(
+			'/project/src/media/hero.png',
+			new URLSearchParams('jsx&w=400'),
+		);
+
+		expect(parsed).toMatchObject({
+			pathId: '/project/src/media/hero.png',
+			extension: '.png',
+		});
+		expect(parsed?.params.has('jsx')).toBe(true);
+		expect(parsed?.params.get('w')).toBe('400');
+		expect(parsed?.params.get('format')).toBe('avif');
+		expect(parseVirtualImageJsxId(internalId)).toBeNull();
+		expect(new URLSearchParams(internalId.split('?')[1]).has('qwik-asset-jsx')).toBe(true);
+	});
+
+	test('maps image jsx directives with user defaults and import query overrides', () => {
+		const params = imageJsxDirectives(new URLSearchParams('jsx&w=320&format=png'), {
+			imageOptimization: {
+				jsxDirectives: {
+					format: 'avif',
+					quality: '80',
+					h: '240',
+				},
+			},
+		});
+
+		expect(Object.fromEntries(params.entries())).toMatchObject({
+			format: 'png',
+			quality: '80',
+			w: '320',
+			h: '240',
+			withoutEnlargement: '',
+			as: 'jsx',
+		});
+		expect(params.has('jsx')).toBe(false);
+		expect(params.has('qwik-asset-jsx')).toBe(false);
+	});
+
+	test('resolves raster image jsx imports to virtual Qwik modules', async () => {
+		const plugin = getPlugin(qwikRouter() as Plugin[], 'qwik-router-image-jsx');
+		const resolve = vi.fn(async () => ({ id: '/project/src/media/hero.png' }));
+
+		const resolved = await callResolveId(
+			plugin,
+			'/project/src/media/hero.png?jsx&w=400',
+			'/project/src/routes/index.tsx',
+			{ resolve },
+		);
+
+		expect(resolve).toHaveBeenCalledWith(
+			'/project/src/media/hero.png',
+			'/project/src/routes/index.tsx',
+			{
+				isEntry: false,
+				skipSelf: true,
+			},
+		);
+		expect(resolved).toMatchObject({
+			id: createVirtualImageJsxId(
+				'/project/src/media/hero.png',
+				new URLSearchParams('jsx&w=400'),
+			),
+			moduleSideEffects: false,
+		});
+	});
+
+	test('generates raster image jsx modules from imagetools metadata imports', async () => {
+		const plugin = getPlugin(qwikRouter() as Plugin[], 'qwik-router-image-jsx');
+		const id = createVirtualImageJsxId(
+			'/project/src/media/hero.png',
+			new URLSearchParams('jsx&w=400'),
+		);
+
+		const loaded = await callLoad(plugin, id);
+		const transformed = await callTransform(plugin, 'export default undefined;', id);
+
+		expect(loaded).toMatchObject({
+			code: 'export default undefined;',
+			moduleSideEffects: false,
+		});
+		expect(transformed?.code).toContain(
+			JSON.stringify(
+				createImageJsxImportId(
+					'/project/src/media/hero.png',
+					new URLSearchParams('jsx&w=400'),
+				),
+			),
+		);
+		expect(transformed?.code).toContain('import toImg from "@to-img.qwik.jsx";');
+		expect(transformed?.code).toContain('export default toImg(srcSet, width, height);');
+	});
+
+	test('loads the raster image jsx helper module', async () => {
+		const plugin = getPlugin(qwikRouter() as Plugin[], 'qwik-router-image-jsx');
+		const helperId = await callResolveId(plugin, '@to-img.qwik.jsx');
+		const helper = await callLoad(plugin, String(helperId));
+
+		expect(helperId).toBe('virtual:to-img.qwik.jsx');
+		expect(helper).toContain("from '@qwik.dev/core'");
+		expect(helper).toContain("_jsxSplit('img'");
+		expect(helper).toContain('srcSet: s');
+	});
+
+	test('resolves svg image jsx imports to optimized Qwik modules', async () => {
+		const root = await tempProject();
+		const mediaDir = resolve(root, 'src/media');
+		const iconPath = resolve(mediaDir, 'icon.svg');
+		await mkdir(mediaDir, { recursive: true });
+		await writeFile(
+			iconPath,
+			`<svg viewBox="0 0 10 10" width="10" height="10"><path fill="currentColor" d="M0 0h10v10H0z"/></svg>`,
+		);
+		const plugin = getPlugin(qwikRouter() as Plugin[], 'qwik-router-image-jsx');
+		const resolveImage = vi.fn(async () => ({ id: iconPath }));
+
+		const resolved = await callResolveId(plugin, `${iconPath}?jsx`, undefined, {
+			resolve: resolveImage,
+		});
+		const resolvedId = (resolved as { id: string }).id;
+		const svg = `<svg viewBox="0 0 10 10" width="10" height="10"><path fill="currentColor" d="M0 0h10v10H0z"/></svg>`;
+		const loaded = await callLoad(plugin, resolvedId);
+		const parse = vi.fn(() => ({
+			body: [
+				{
+					declaration: {
+						type: 'Literal',
+						value: svg,
+					},
+					type: 'ExportDefaultDeclaration',
+				},
+			],
+		}));
+		const transformed = await callTransform(
+			plugin,
+			`export default ${JSON.stringify(svg)}`,
+			resolvedId,
+			{ parse },
+		);
+
+		expect(resolvedId).toBe(createSvgImageJsxImportId(iconPath, new URLSearchParams('jsx')));
+		expect(parseSvgImageJsxId(resolvedId)).toMatchObject({
+			pathId: iconPath,
+			extension: '.svg',
+		});
+		expect(loaded).toBeNull();
+		expect(parse).toHaveBeenCalledWith(`export default ${JSON.stringify(svg)}`);
+		expect(transformed?.code).toContain('export default p => <svg');
+		expect(transformed?.code).toContain('"viewBox":"0 0 10 10"');
+		expect(transformed?.code).toContain('dangerouslySetInnerHTML');
+		expect(transformed?.code).toContain('<path');
+	});
+
+	test.each([
+		{
+			name: 'basic icon',
+			svg: `<svg viewBox="0 0 10 10" width="10" height="10"><path id="shape" fill="currentColor" d="M0 0h10v10H0z"/></svg>`,
+			attrs: {
+				height: '10',
+				viewBox: '0 0 10 10',
+				width: '10',
+			},
+			innerHtml: '<path',
+		},
+		{
+			name: 'xml declaration and namespace',
+			svg: `<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><title>Logo</title><path d="M0 0h10v10H0z"/></svg>`,
+			attrs: {
+				viewBox: '0 0 10 10',
+				xmlns: 'http://www.w3.org/2000/svg',
+			},
+			innerHtml: '<title>Logo</title>',
+		},
+		{
+			name: 'doctype',
+			svg: `<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg viewBox="0 0 1 1"><path d="M0 0h1v1H0z"/></svg>`,
+			attrs: {
+				viewBox: '0 0 1 1',
+			},
+			innerHtml: '<path',
+		},
+		{
+			name: 'self-closing root',
+			svg: `<svg viewBox="0 0 1 1" aria-hidden="true"/>`,
+			attrs: {
+				'aria-hidden': 'true',
+				viewBox: '0 0 1 1',
+			},
+			innerHtml: '',
+		},
+		{
+			name: 'escaped attributes and text',
+			svg: `<svg viewBox="0 0 10 10" aria-label="A &amp; B" data-copy="Tom &quot;Q&quot;"><title>A &amp; B</title><path d="M0 0h10v10H0z"/></svg>`,
+			attrs: {
+				'aria-label': 'A & B',
+				'data-copy': 'Tom "Q"',
+				viewBox: '0 0 10 10',
+			},
+			innerHtml: '<title>A &amp; B</title>',
+		},
+		{
+			name: 'defs and clip path references',
+			svg: `<svg viewBox="0 0 24 24"><defs><clipPath id="a"><path d="M0 0h24v24H0z"/></clipPath></defs><g clip-path="url(#a)"><path d="M1 1h22v22H1z"/></g></svg>`,
+			attrs: {
+				viewBox: '0 0 24 24',
+			},
+			innerHtml: '<clipPath',
+		},
+		{
+			name: 'style element',
+			svg: `<svg viewBox="0 0 10 10"><style>.a{fill:red}</style><path class="a" d="M0 0h10v10H0z"/></svg>`,
+			attrs: {
+				viewBox: '0 0 10 10',
+			},
+			innerHtml: '<style>.a{fill:red}</style>',
+		},
+		{
+			name: 'foreignObject',
+			svg: `<svg viewBox="0 0 10 10"><foreignObject width="10" height="10"><div xmlns="http://www.w3.org/1999/xhtml">Hi</div></foreignObject></svg>`,
+			attrs: {
+				viewBox: '0 0 10 10',
+			},
+			innerHtml: '<foreignObject',
+		},
+	])(
+		'optimizes svg image jsx imports into svg components: $name',
+		({ attrs, innerHtml, svg }) => {
+			const optimized = optimizeSvg({ code: svg, path: '/project/src/media/icon.svg' });
+
+			expect(optimized.svgAttributes).toMatchObject(attrs);
+			expect(optimized.svgAttributes.dangerouslySetInnerHTML).toContain(innerHtml);
+			expect(optimized.data.startsWith('<svg')).toBe(true);
+		},
+	);
 
 	test('configures a fetchable dev SSR environment', () => {
 		const plugin = getRouterPlugin();
