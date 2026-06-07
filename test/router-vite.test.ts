@@ -232,6 +232,12 @@ describe('Qwik Router Vite integration', () => {
 		expect(code).toContain('"/src/routes/**/layout*.tsx"');
 		expect(code).toContain('"/src/routes/**/layout*.mdx"');
 		expect(code).toContain(
+			'"!/src/routes/**/*.{test,unit,spec}.{js,jsx,ts,tsx,md,mdx,markdown}"',
+		);
+		expect(code).toContain(
+			'const serverPluginModules = import.meta.glob(["/src/routes/**/plugin@*.{js,jsx,ts,tsx}","!/src/routes/**/*.{test,unit,spec}.{js,jsx,ts,tsx}"], { eager: true });',
+		);
+		expect(code).toContain(
 			'export const routes = createRoutes(routeModules, false, "/src/routes");',
 		);
 		expect(code).not.toContain('function createRoutes(');

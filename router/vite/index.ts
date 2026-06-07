@@ -78,6 +78,8 @@ const ROUTER_OPTIMIZER_STRIP_NAMES = {
 const ROUTE_EXTENSIONS = new Set(['.js', '.jsx', '.ts', '.tsx', '.md', '.mdx', '.markdown']);
 const ROUTE_BASENAMES = new Set(['index', 'layout', '404', 'error']);
 const SERVER_MODULE_EXTENSIONS = ['.js', '.jsx', '.ts', '.tsx'];
+const ROUTE_TEST_MODULES = '**/*.{test,unit,spec}.{js,jsx,ts,tsx,md,mdx,markdown}';
+const SERVER_TEST_MODULES = '**/*.{test,unit,spec}.{js,jsx,ts,tsx}';
 
 /** @deprecated Use `qwikRouter` instead. */
 export function qwikCity(options?: QwikCityVitePluginOptions): PluginOption[] {
@@ -453,9 +455,10 @@ function importBase(rootDir: string, sourceDir: string) {
 
 function routeModuleGlobs(state: RouterState) {
 	const base = routeImportBase(state);
-	return [...ROUTE_BASENAMES].flatMap((name) =>
+	const sourceGlobs = [...ROUTE_BASENAMES].flatMap((name) =>
 		[...ROUTE_EXTENSIONS].map((ext) => `${base}/**/${name}*${ext}`),
 	);
+	return [...sourceGlobs, `!${base}/${ROUTE_TEST_MODULES}`];
 }
 
 function serverFunctionModuleGlobs(state: RouterState) {
@@ -464,7 +467,8 @@ function serverFunctionModuleGlobs(state: RouterState) {
 }
 
 function serverPluginGlob(state: RouterState) {
-	return `${serverPluginImportBase(state)}/**/plugin@*.{js,jsx,ts,tsx}`;
+	const base = serverPluginImportBase(state);
+	return [`${base}/**/plugin@*.{js,jsx,ts,tsx}`, `!${base}/${SERVER_TEST_MODULES}`];
 }
 
 function importPath(filePath: string) {
