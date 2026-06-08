@@ -20,11 +20,10 @@ export function resolveRouterMdxOptions(
 }
 
 function resolveFeatures(features: Features | undefined, gfm: boolean | undefined) {
-	if (gfm === undefined) {
-		return features;
+	const resolved = { ...features };
+	resolved.math ??= false;
+	if (gfm !== undefined) {
+		resolved.gfm = gfm;
 	}
-	return {
-		...features,
-		gfm,
-	};
+	return resolved;
 }
