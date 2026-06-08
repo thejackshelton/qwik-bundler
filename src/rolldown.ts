@@ -238,7 +238,7 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 				return injectManifest(`export const manifest = ${QWIK_MANIFEST};`, currentManifest);
 			}
 			if (id === QWIK_HANDLERS_ENTRY) {
-				return `export { _chk, _rsc, _res, _run, _task, _val, _eaC, _eaT, _suC, _suT } from '${QWIK_HANDLERS}';`;
+				return `export { _chk, _rsc, _res, _run, _task, _val, _eaC, _eaT, _suC, _suT, _reR, _reC, _reT } from '${QWIK_HANDLERS}';`;
 			}
 			if (id === QWIK_PRELOADER_ENTRY) {
 				return `export { g, l, p } from '${QWIK_PRELOADER}';`;

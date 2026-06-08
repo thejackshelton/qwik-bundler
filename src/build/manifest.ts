@@ -53,9 +53,11 @@ const HANDLERS = [
 	'_reT',
 ];
 const HANDLER_SET = new Set(HANDLERS);
+const QWIK_HANDLERS_ENTRY = 'qwik:handlers';
 const PRELOADER_RE = /[/\\](core|qwik)[/\\]dist[/\\]preloader\.(|c|m)js$/;
 const CORE_RE = /[/\\](core|qwik)[/\\]dist[/\\]core(\.min|\.prod)?\.(|c|m)js$/;
 const QWIK_LOADER_RE = /[/\\](core|qwik)[/\\](dist[/\\])?qwikloader(\.debug)?\.[^/\\]*js$/;
+const QWIK_HANDLERS_RE = /[/\\](core|qwik)[/\\]handlers\.(|c|m)js$/;
 const QWIK_LIBRARY_MODULE_RE = /\.qwik\.mjs$/;
 const STYLESHEET_ASSET_RE = /\.css$/;
 const LIBRARY_QRL_SYMBOL_RE = /["']([A-Za-z_$][\w$.-]*_[A-Za-z0-9_-]{8,})["']/g;
@@ -132,9 +134,12 @@ export function createManifest(
 				}
 			}
 		}
+		const handlerEntry = isHandlerEntry(item, origins);
 		for (const name of item.exports.filter((name) => HANDLER_SET.has(name))) {
-			manifest.mapping[name] = bundleFileName;
-			manifest.symbols[name] = handlerSymbol(name);
+			if (handlerEntry || !manifest.mapping[name]) {
+				manifest.mapping[name] = bundleFileName;
+			}
+			manifest.symbols[name] ??= handlerSymbol(name);
 		}
 
 		const qwikBundle: QwikBundle = {
@@ -202,6 +207,15 @@ export function createManifest(
 	manifest.manifestHash = '';
 	manifest.manifestHash = hash(JSON.stringify(manifest));
 	return manifest;
+}
+
+function isHandlerEntry(item: QwikManifestChunk, origins: string[]) {
+	return (
+		item.facadeModuleId === QWIK_HANDLERS_ENTRY ||
+		item.moduleIds.includes(QWIK_HANDLERS_ENTRY) ||
+		origins.includes(QWIK_HANDLERS_ENTRY) ||
+		(!!item.facadeModuleId && QWIK_HANDLERS_RE.test(item.facadeModuleId))
+	);
 }
 
 function findLibraryQrlSymbols(code: string) {

@@ -231,6 +231,44 @@ describe('Qwik manifest output', () => {
 		]);
 	});
 
+	test('prefers the initialized handlers facade over the core chunk for runtime handlers', () => {
+		const manifest = createManifest(
+			{
+				'build/q-handlers.js': {
+					type: 'chunk',
+					fileName: 'build/q-handlers.js',
+					name: 'handlers',
+					code: 'import { init_handlers, _run } from "./q-core.js"; init_handlers(); export { _run };',
+					exports: ['_run', '_chk'],
+					imports: ['build/q-core.js'],
+					dynamicImports: [],
+					moduleIds: ['qwik:handlers'],
+					facadeModuleId: 'qwik:handlers',
+				},
+				'build/q-core.js': {
+					type: 'chunk',
+					fileName: 'build/q-core.js',
+					name: 'qwik-core',
+					code: 'export const _run = 1; export const _chk = 1;',
+					exports: ['_run', '_chk'],
+					imports: [],
+					dynamicImports: [],
+					moduleIds: [
+						'/workspace/app/node_modules/@qwik.dev/core/dist/core.prod.mjs',
+						'/workspace/app/node_modules/@qwik.dev/core/handlers.mjs',
+					],
+					facadeModuleId: '/workspace/app/node_modules/@qwik.dev/core/dist/core.prod.mjs',
+				},
+			} as never,
+			new Map(),
+			'/workspace/app',
+		);
+
+		expect(manifest.core).toBe('build/q-core.js');
+		expect(manifest.mapping._run).toBe('build/q-handlers.js');
+		expect(manifest.mapping._chk).toBe('build/q-handlers.js');
+	});
+
 	test('creates a manifest from a bundler-neutral output shape', () => {
 		const bundle = {
 			'build/q-entry.js': {
