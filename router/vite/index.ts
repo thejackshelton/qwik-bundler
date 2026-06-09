@@ -1,10 +1,17 @@
 import { basename, dirname, extname, join, relative, resolve } from 'pathe';
 import { decodePath, parseURL, withLeadingSlash, withTrailingSlash } from 'ufo';
+import { isCSSRequest } from 'vite';
 import type { ConfigEnv, EnvironmentOptions, PluginOption, UserConfig, ViteDevServer } from 'vite';
 import type { BundleGraphAdder, QwikManifest, QwikOptimizerStripNames } from '../../src/types.ts';
 import { createRouterDevEnvironment } from './dev/environment.ts';
 import { createRouterDevRequestHandler } from './dev/request.ts';
-import { getRouterIndexTags } from './dev/styles.ts';
+import {
+	getRouterIndexTags,
+	invalidateRouterDevStyles,
+	loadRouterDevStyles,
+	resolveRouterDevStyles,
+	routerDevTags,
+} from './dev/styles.ts';
 import { imagePlugin } from './image.ts';
 import { isMenuRoute, transformMenuRoute } from './menu.ts';
 import {
@@ -122,6 +129,7 @@ function qwikRouterPlugin(
 	let viteCommand: ConfigEnv['command'] = 'serve';
 	let devServer: ViteDevServer | null = null;
 	let deprecatedUnifiedMdxWarned = false;
+	const collectedDevStylesCss = new Set<string>();
 
 	const api: QwikRouterPluginApi = {
 		getBasePathname: () => state.base,
@@ -162,6 +170,10 @@ function qwikRouterPlugin(
 				resolve: {
 					noExternal: ROUTER_NO_EXTERNAL,
 				},
+				optimizeDeps: {
+					...config.optimizeDeps,
+					exclude: withRouterOptimizeDeps(config.optimizeDeps?.exclude),
+				},
 			} satisfies EnvironmentOptions;
 			if (options.devSsrServer !== false && !config.dev?.createEnvironment) {
 				environment.dev = {
@@ -195,6 +207,11 @@ function qwikRouterPlugin(
 			) as QwikVitePluginApiHost | undefined;
 			qwikPlugin?.api?.registerBundleGraphAdder?.(createRouteBundleGraphAdder(state));
 			qwikPlugin?.api?.registerOptimizerStripNames?.(ROUTER_OPTIMIZER_STRIP_NAMES);
+			if (viteCommand === 'serve' && options.devSsrServer !== false) {
+				for (const tag of routerDevTags(state.base)) {
+					qwikPlugin?.api?.registerDevInjection?.(tag);
+				}
+			}
 		},
 
 		configureServer(server) {
@@ -246,7 +263,7 @@ function qwikRouterPlugin(
 			if (id === QWIK_ROUTER_SW_REGISTER_ID) {
 				return id;
 			}
-			return null;
+			return resolveRouterDevStyles(id);
 		},
 
 		async load(id) {
@@ -263,10 +280,17 @@ function qwikRouterPlugin(
 			if (id.endsWith(QWIK_ROUTER_SW_REGISTER_ID)) {
 				return 'export default function QwikRouterServiceWorker() { return null; }';
 			}
-			return null;
+			return loadRouterDevStyles(id, devServer);
 		},
 
 		async transform(code, id) {
+			if (devServer && isCSSRequest(id) && !collectedDevStylesCss.has(id)) {
+				// A CSS module seen for the first time grows the dev stylesheet's collected
+				// set, which Vite cannot track as a dependency. Drop the cached stylesheet
+				// so the next page load recomputes it.
+				collectedDevStylesCss.add(id);
+				invalidateRouterDevStyles(devServer);
+			}
 			if (isMdxFrontmatterRoute(id)) {
 				return {
 					code: transformMdxFrontmatterRoute(code),
@@ -310,6 +334,12 @@ function qwikRouterPlugin(
 			};
 		},
 	};
+}
+
+function withRouterOptimizeDeps(existing: string[] | undefined) {
+	const exclude = new Set(existing);
+	ROUTER_NO_EXTERNAL.forEach((dep) => exclude.add(dep));
+	return [...exclude];
 }
 
 function routerViteConfig(options: QwikRouterVitePluginOptions): UserConfig {

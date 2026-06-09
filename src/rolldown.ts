@@ -21,6 +21,7 @@ import {
 } from './hmr/optimizer.ts';
 import {
 	createManifest,
+	devTagsManifest,
 	injectManifest,
 	Q_MANIFEST_FILE,
 	QWIK_MANIFEST,
@@ -288,7 +289,11 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 				return fallback;
 			}
 
-			return { code: injectManifest(next, manifest), map };
+			let serverManifest = manifest;
+			if (!serverManifest && dev.isEnabled() && options.devInjections?.length) {
+				serverManifest = devTagsManifest(options.devInjections);
+			}
+			return { code: injectManifest(next, serverManifest), map };
 		},
 		generateBundle: {
 			order: 'post',

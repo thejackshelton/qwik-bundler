@@ -99,7 +99,11 @@ export function qwikViteExternal(configDefaults: (config: UserConfig, env: Confi
 			}
 
 			const noExternal = withQwikRuntimeDeps(config.resolve?.noExternal);
-			return noExternal ? { resolve: { noExternal } } : undefined;
+			if (noExternal) {
+				(config.resolve ??= {}).noExternal = noExternal;
+			}
+			const optimizeDeps = (config.optimizeDeps ??= {});
+			optimizeDeps.exclude = withQwikOptimizeDeps(optimizeDeps.exclude);
 		},
 		async resolveId(source, importer, options) {
 			if (!isServerEnvironment(this) || !isBareId(source)) {

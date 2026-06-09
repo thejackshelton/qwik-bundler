@@ -13,6 +13,11 @@ export interface QwikDevServer {
 export interface QwikRolldownOptions {
 	/** Enable development-mode QRL segment behavior. */
 	dev?: boolean;
+	/**
+	 * Head/body tags injected through the dev server manifest so server-rendered HTML carries its
+	 * own dev tags in any runtime, including workerd and Deno.
+	 */
+	devInjections?: GlobalInjections[];
 	/** Dev server callbacks used to transform parent modules on demand. */
 	devServer?: QwikDevServer;
 	/** Optimizer entry strategy for grouping generated QRL segments. */

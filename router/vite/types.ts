@@ -1,7 +1,11 @@
 import type { EnvironmentModuleNode, Plugin } from 'vite';
 import type { MdxCompileOptions } from 'satteri';
 import type { OptimizeOptions as SvgmOptimizeOptions } from 'svgm-node';
-import type { BundleGraphAdder, QwikOptimizerStripNames } from '../../src/types.ts';
+import type {
+	BundleGraphAdder,
+	GlobalInjections,
+	QwikOptimizerStripNames,
+} from '../../src/types.ts';
 import type { RouterPreviewOptions } from './preview.ts';
 
 export interface QwikRouterVitePluginOptions {
@@ -140,6 +144,7 @@ export type RouterBuildOptions = {
 export type QwikVitePluginApiHost = Plugin & {
 	api?: {
 		registerBundleGraphAdder?: (adder: BundleGraphAdder) => void;
+		registerDevInjection?: (injection: GlobalInjections) => void;
 		registerOptimizerStripNames?: (names: QwikOptimizerStripNames) => void;
 	};
 };

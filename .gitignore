@@ -7,16 +7,17 @@ coverage/
 fixtures/*/lib/
 fixtures/*/server/
 fixtures/*/.output/
+fixtures/*/.wrangler/
+tmp/
 .opencode
 .codex/
 HMR_FIX_SPEC.md
 docs/goals/
+AGENTS.md
+AGENTS.md.bak
 
 
 # START Ruler Generated Files
-/.codex/config.toml
-/.codex/config.toml.bak
-AGENTS.md
-/AGENTS.md
-/AGENTS.md.bak
+/CLAUDE.md
+/CLAUDE.md.bak
 # END Ruler Generated Files

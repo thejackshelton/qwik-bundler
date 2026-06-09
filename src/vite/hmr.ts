@@ -13,7 +13,7 @@ import { fetchableDevEnvironment, qwikEnvironment } from './environment.ts';
 export const QWIK_HMR_BRIDGE_ID = 'virtual:qwik-hmr-bridge';
 
 const RESOLVED_QWIK_HMR_BRIDGE_ID = `\0${QWIK_HMR_BRIDGE_ID}`;
-const QWIK_HMR_BRIDGE_PATH = `/@id/${QWIK_HMR_BRIDGE_ID}`;
+export const QWIK_HMR_BRIDGE_PATH = `/@id/${QWIK_HMR_BRIDGE_ID}`;
 
 interface ViteHmrOptions {
 	base: string;

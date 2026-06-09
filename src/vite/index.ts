@@ -16,12 +16,14 @@ import { plugin as qwikRolldown } from '../rolldown.ts';
 import { qwikViteExternal } from '../qwik-external.ts';
 import type {
 	BundleGraphAdder,
+	GlobalInjections,
 	PreloadGraphEntriesAdder,
 	QwikEnvironment,
 	QwikManifest,
 	QwikOptimizerStripNames,
 	QwikRolldownOptions,
 } from '../types.ts';
+import { createDevTags } from './dev-tags.ts';
 import { qwikEnvironment, transformQwikRequest, viteEnvironmentName } from './environment.ts';
 import { createViteHmr } from './hmr.ts';
 
@@ -64,6 +66,8 @@ export function qwik(options: VitePluginOptions = {}): Plugin[] {
 		invalidateDevSegments: (parent: string, environment?: QwikEnvironment) =>
 			qwikPlugin.api.invalidateDevSegments(parent, environment),
 	};
+	const devTags = createDevTags();
+	rolldownOptions.devInjections = devTags.tags;
 
 	// TODO: Remove this Qwik library noExternal workaround after https://github.com/QwikDev/qwik-evolution/discussions/318.
 	const external = qwikViteExternal(configDefaults);
@@ -79,6 +83,7 @@ export function qwik(options: VitePluginOptions = {}): Plugin[] {
 			...(basePlugin.api as QwikPluginApi),
 			getManifest: () => manifest,
 			registerBundleGraphAdder: (adder: BundleGraphAdder) => bundleGraphAdders.add(adder),
+			registerDevInjection: (injection: GlobalInjections) => devTags.register(injection),
 			registerPreloadGraphEntries: (adder: PreloadGraphEntriesAdder) =>
 				bundleGraphAdders.add(createPreloadGraphAdder(adder)),
 		},
@@ -90,6 +95,9 @@ export function qwik(options: VitePluginOptions = {}): Plugin[] {
 			rolldownOptions.dev = serve;
 			rolldownOptions.rootDir = resolvedConfig.root;
 			rolldownOptions.publicPath = (fileName) => joinURL(resolvedConfig.base, fileName);
+			if (serve) {
+				devTags.registerViteTags(resolvedConfig.base, hmrOptions.enabled);
+			}
 		},
 		configEnvironment(name, config) {
 			const externalConfig = external.configEnvironment?.call(this, name, config) ?? {};
@@ -221,6 +229,7 @@ type QwikPluginApi = {
 	invalidateDevSegments: (parent: string, environment?: QwikEnvironment) => string[];
 	getManifest?: () => QwikManifest | null;
 	registerBundleGraphAdder?: (adder: BundleGraphAdder) => void;
+	registerDevInjection?: (injection: GlobalInjections) => void;
 	registerPreloadGraphEntries?: (adder: PreloadGraphEntriesAdder) => void;
 	registerOptimizerStripNames?: (names: QwikOptimizerStripNames) => void;
 };

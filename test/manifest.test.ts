@@ -838,6 +838,49 @@ describe('Qwik manifest output', () => {
 		expect(warn).not.toHaveBeenCalled();
 	});
 
+	test('injects a dev server manifest carrying dev injections', async () => {
+		const plugin = qwikServer({
+			dev: true,
+			devInjections: [
+				{
+					tag: 'script',
+					location: 'head',
+					attributes: { type: 'module', src: '/@vite/client' },
+				},
+			],
+		});
+
+		callBuildStart(plugin, { cwd: '/workspace/dev-server' });
+		const result = await callTransform(
+			plugin,
+			`export const manifest = ${QWIK_MANIFEST};`,
+			'/workspace/dev-server/node_modules/@qwik.dev/core/dist/core.mjs',
+		);
+		if (!result || typeof result === 'string' || !('code' in result)) {
+			throw new Error('Expected transformed code');
+		}
+
+		expect(result.code).toContain('"manifestHash":"dev"');
+		expect(result.code).toContain('"src":"/@vite/client"');
+		expect(result.code).not.toContain(QWIK_MANIFEST);
+	});
+
+	test('keeps the dev manifest placeholder without dev injections', async () => {
+		const plugin = qwikServer({ dev: true });
+
+		callBuildStart(plugin, { cwd: '/workspace/dev-server' });
+		const result = await callTransform(
+			plugin,
+			`export const manifest = ${QWIK_MANIFEST};`,
+			'/workspace/dev-server/node_modules/@qwik.dev/core/dist/core.mjs',
+		);
+		if (!result || typeof result === 'string' || !('code' in result)) {
+			throw new Error('Expected transformed code');
+		}
+
+		expect(result.code).toContain(QWIK_MANIFEST);
+	});
+
 	test('injects only the server manifest subset for server builds', async () => {
 		const manifest = {
 			manifestHash: 'abc',

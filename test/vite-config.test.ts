@@ -67,8 +67,12 @@ describe('Vite config integration', () => {
 				},
 			},
 		});
-		expect(callConfigEnvironment(plugin, 'vite_workerd_fixture', workerConfig)).toEqual({
+		callConfigEnvironment(plugin, 'vite_workerd_fixture', workerConfig);
+		expect(workerConfig).toMatchObject({
 			resolve: { noExternal: ['@qwik.dev/core', '@builder.io/qwik'] },
+			optimizeDeps: {
+				exclude: expect.arrayContaining(['@qwik.dev/core', '@builder.io/qwik']),
+			},
 		});
 	});
 
@@ -104,14 +108,23 @@ describe('Vite config integration', () => {
 		const environmentConfig: EnvironmentOptions = {
 			resolve: { noExternal: ['existing'] },
 		};
-		const environmentResult = callConfigEnvironment(plugin, 'ssr', environmentConfig);
+		callConfigEnvironment(plugin, 'ssr', environmentConfig);
 
-		expect(environmentResult).toEqual({
+		expect(environmentConfig).toMatchObject({
 			resolve: { noExternal: ['existing', '@qwik.dev/core', '@builder.io/qwik'] },
+			optimizeDeps: {
+				exclude: expect.arrayContaining(['@qwik.dev/core', '@builder.io/qwik']),
+			},
 		});
 
 		const noExternalAllConfig: EnvironmentOptions = { resolve: { noExternal: true } };
-		expect(callConfigEnvironment(plugin, 'ssr', noExternalAllConfig)).toBeUndefined();
+		callConfigEnvironment(plugin, 'ssr', noExternalAllConfig);
+		expect(noExternalAllConfig).toMatchObject({
+			resolve: { noExternal: true },
+			optimizeDeps: {
+				exclude: expect.arrayContaining(['@qwik.dev/core', '@builder.io/qwik']),
+			},
+		});
 	});
 
 	test('excludes Qwik runtime from dev dependency optimization', async () => {

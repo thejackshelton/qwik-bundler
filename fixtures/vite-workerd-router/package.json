@@ -1,0 +1,25 @@
+{
+	"name": "@fixtures/vite-workerd-router",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"qwik": "qwik",
+		"dev": "vite",
+		"build": "qwik build",
+		"build.client": "vite build",
+		"build.preview": "vite build --ssr src/entry.preview.tsx --outDir server",
+		"preview": "qwik build preview && vite preview --open"
+	},
+	"dependencies": {
+		"@qwik.dev/core": "2.0.0-beta.36",
+		"@qwik.dev/router": "2.0.0-beta.36"
+	},
+	"devDependencies": {
+		"@cloudflare/vite-plugin": "^1.17.0",
+		"@types/node": "^24.10.1",
+		"qwik-bundler": "workspace:*",
+		"typescript": "^5.9.3",
+		"vite": "^8.0.16",
+		"wrangler": "^4.50.0"
+	}
+}

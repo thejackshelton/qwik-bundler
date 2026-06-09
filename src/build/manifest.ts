@@ -233,6 +233,15 @@ function handlerSymbol(symbol: string): QwikSymbol {
 	return { origin: 'Qwik core', displayName: symbol, hash: symbol };
 }
 
+/**
+ * Qwik SSR renders `manifest.injections` into <head>, which is how dev tags reach server-rendered
+ * HTML in any runtime. Dev has no build manifest, so this returns the same stub manifest Qwik
+ * core creates for dev renders, with the dev tags attached as injections.
+ */
+export function devTagsManifest(devTags: GlobalInjections[]): ServerQwikManifest {
+	return { manifestHash: 'dev', mapping: {}, injections: devTags };
+}
+
 export function injectManifest(code: string, manifest: QwikManifest | ServerQwikManifest | null) {
 	let value = QWIK_MANIFEST;
 	if (manifest?.manifestHash) {

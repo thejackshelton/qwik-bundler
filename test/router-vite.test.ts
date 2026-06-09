@@ -28,6 +28,7 @@ import {
 	callConfigResolved,
 	callConfigureServer,
 	callGenerateBundle,
+	callHotUpdate,
 	callLoad,
 	callResolveId,
 	callTransform,
@@ -1153,6 +1154,9 @@ title: Legacy Details
 					'zod',
 				]),
 			},
+			optimizeDeps: {
+				exclude: expect.arrayContaining(['@qwik.dev/router', QWIK_ROUTER_CONFIG_ID]),
+			},
 		});
 		expect(result.dev?.createEnvironment).toEqual(expect.any(Function));
 		expect(callConfigEnvironment(worker, 'ssr', {})).toEqual({});
@@ -1189,6 +1193,7 @@ title: Legacy Details
 		});
 
 		expect(result.resolve?.noExternal).toContain('@qwik.dev/router');
+		expect(result.optimizeDeps?.exclude).toContain('@qwik.dev/router');
 		expect(result.dev?.createEnvironment).toBeUndefined();
 	});
 
@@ -1332,7 +1337,7 @@ title: Legacy Details
 		expect(warn).toHaveBeenCalledOnce();
 	});
 
-	test('dispatches dev SSR through a fetchable server environment', async () => {
+	test('streams dispatched dev SSR responses without rewriting them', async () => {
 		const plugin = getRouterPlugin();
 		await callConfig(plugin, {}, { command: 'serve', mode: 'development' });
 		callConfigResolved(plugin, {
@@ -1342,42 +1347,29 @@ title: Legacy Details
 			root: '/app',
 		});
 
+		const html =
+			'<html><head><title>App</title><script type="module">const u="/x";import(u)</script></head><body>ok</body></html>';
 		const dispatchFetch = vi.fn(
 			async () =>
-				new Response(
-					'<html><head><title>App</title><script type="module">const u="/x";import(u)</script></head><body>ok</body></html>',
-					{
-						headers: { 'content-type': 'text/html; charset=utf-8' },
-					},
-				),
+				new Response(html, {
+					headers: { 'content-type': 'text/html; charset=utf-8' },
+				}),
 		);
 		const server = createMockDevServer({
 			ssr: createMockEnvironment({ consumer: 'server', dispatchFetch }),
-		});
-		server.transformIndexHtml.mockImplementation(async (_url, html: string) => {
-			expect(html).not.toContain('import(u)');
-			return html.replace(
-				'<head>',
-				'<head><script type="module" src="/@vite/client"></script>',
-			);
 		});
 
 		const install = callConfigureServer(plugin, server) as () => void;
 		install();
 
-		const middleware = server.middlewares.use.mock.calls[0]?.[0];
+		const middleware = server.middlewares.use.mock.calls.at(-1)?.[0];
 		const req = createMockRequest('/');
 		const res = createMockResponse();
 		await middleware(req, res, vi.fn());
 
 		expect(dispatchFetch).toHaveBeenCalledWith(expect.any(Request));
-		expect(server.transformIndexHtml).toHaveBeenCalledWith(
-			'/',
-			'<html><head></head><body></body></html>',
-		);
-		expect(res.body).toContain('<script type="module" src="/@vite/client"></script>');
-		expect(res.body).toContain('<title>App</title>');
-		expect(res.body).toContain('import(u)');
+		expect(server.transformIndexHtml).not.toHaveBeenCalled();
+		expect(res.body).toBe(html);
 	});
 
 	test('does not fall back to a runnable server environment', async () => {
@@ -1409,7 +1401,7 @@ title: Legacy Details
 		const install = callConfigureServer(plugin, server) as () => void;
 		install();
 
-		const middleware = server.middlewares.use.mock.calls[0]?.[0];
+		const middleware = server.middlewares.use.mock.calls.at(-1)?.[0];
 		const req = createMockRequest('/');
 		const res = createMockResponse();
 		const next = vi.fn();
@@ -1455,6 +1447,115 @@ title: Legacy Details
 			'/src/styles/global.css?t=10',
 			'/src/components/button.css?t=20',
 		]);
+	});
+
+	test('registers the dev stylesheet injection with the qwik plugin', async () => {
+		const plugin = getRouterPlugin();
+		await callConfig(plugin, {}, { command: 'serve', mode: 'development' });
+
+		const registerDevInjection = vi.fn();
+		callConfigResolved(plugin, {
+			base: '/',
+			build: {},
+			plugins: [{ name: 'vite-plugin-qwik', api: { registerDevInjection } }],
+			root: '/app',
+		});
+
+		expect(registerDevInjection).toHaveBeenCalledTimes(1);
+		expect(registerDevInjection).toHaveBeenCalledWith({
+			tag: 'link',
+			location: 'head',
+			attributes: {
+				rel: 'stylesheet',
+				href: '/@id/virtual:qwik-router/dev-styles.css',
+			},
+		});
+	});
+
+	test('serves the dev stylesheet virtual module with collected CSS imports', async () => {
+		const plugin = getRouterPlugin();
+		await callConfig(plugin, {}, { command: 'serve', mode: 'development' });
+		callConfigResolved(plugin, {
+			base: '/',
+			build: {},
+			plugins: [],
+			root: '/app',
+		});
+
+		const root = createModule('/src/root.tsx');
+		const globalCss = createModule('/src/global.css', 'css', 10);
+		linkModules(root, globalCss);
+		const server = createMockDevServer({
+			ssr: createMockEnvironment({
+				consumer: 'server',
+				modules: [root, globalCss],
+			}),
+		});
+		callConfigureServer(plugin, server);
+
+		const resolved = await callResolveId(plugin, 'virtual:qwik-router/dev-styles.css');
+		expect(resolved).toBe('\0virtual:qwik-router/dev-styles.css');
+		// Vite marks stylesheet requests with ?direct; the query must survive resolution.
+		expect(await callResolveId(plugin, 'virtual:qwik-router/dev-styles.css?direct')).toBe(
+			'\0virtual:qwik-router/dev-styles.css?direct',
+		);
+		const code = await callLoad(plugin, '\0virtual:qwik-router/dev-styles.css?direct');
+		expect(code).toBe('@import "/src/global.css";\n');
+	});
+
+	test('invalidates the dev stylesheet when modules change', async () => {
+		const plugin = getRouterPlugin();
+		await callConfig(plugin, {}, { command: 'serve', mode: 'development' });
+		callConfigResolved(plugin, {
+			base: '/',
+			build: {},
+			plugins: [],
+			root: '/app',
+		});
+
+		const virtualModule = { id: '\0virtual:qwik-router/dev-styles.css' };
+		const invalidateModule = vi.fn();
+		const server = createMockDevServer({
+			client: createMockEnvironment({ consumer: 'client' }),
+		});
+		server.environments.client.moduleGraph.getModuleById = (id: string) =>
+			id === virtualModule.id ? virtualModule : undefined;
+		server.environments.client.moduleGraph.invalidateModule = invalidateModule;
+		callConfigureServer(plugin, server);
+
+		callHotUpdate(plugin, { file: '/src/new.css' }, createViteHookContext('client'));
+
+		expect(invalidateModule).toHaveBeenCalledWith(virtualModule);
+	});
+
+	test('does not register the dev stylesheet injection for builds', async () => {
+		const plugin = getRouterPlugin();
+		await callConfig(plugin, {}, { command: 'build', mode: 'production' });
+
+		const registerDevInjection = vi.fn();
+		callConfigResolved(plugin, {
+			base: '/',
+			build: {},
+			plugins: [{ name: 'vite-plugin-qwik', api: { registerDevInjection } }],
+			root: '/app',
+		});
+
+		expect(registerDevInjection).not.toHaveBeenCalled();
+	});
+
+	test('does not register the dev stylesheet injection without the dev SSR server', async () => {
+		const plugin = getRouterPlugin({ devSsrServer: false });
+		await callConfig(plugin, {}, { command: 'serve', mode: 'development' });
+
+		const registerDevInjection = vi.fn();
+		callConfigResolved(plugin, {
+			base: '/',
+			build: {},
+			plugins: [{ name: 'vite-plugin-qwik', api: { registerDevInjection } }],
+			root: '/app',
+		});
+
+		expect(registerDevInjection).not.toHaveBeenCalled();
 	});
 });
 
@@ -1528,8 +1629,14 @@ function createMockResponse() {
 		headers: new Map<string, unknown>(),
 		statusCode: 200,
 		end(value?: unknown) {
+			if (value !== undefined) {
+				this.write(value);
+			}
+		},
+		write(value: unknown) {
 			this.body +=
 				value instanceof Uint8Array ? new TextDecoder().decode(value) : String(value ?? '');
+			return true;
 		},
 		getHeader(name: string) {
 			return this.headers.get(name.toLowerCase());

@@ -1,5 +1,6 @@
 import { createOptimizer } from '@qwik.dev/optimizer';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { QWIK_MANIFEST } from '../src/build/manifest';
 import type { QwikManifest } from '../src/types';
 import { qwik } from '../src/vite/index';
 import {
@@ -316,6 +317,130 @@ describe('Vite plugin hooks', () => {
 		expect(resolve).toHaveBeenCalledWith('./home', '/workspace/app/src/root.tsx', {
 			skipSelf: true,
 		});
+	});
+
+	test('injects Vite dev tags through the dev server manifest', async () => {
+		const plugin = getQwikPlugin();
+
+		callConfigResolved(plugin, {
+			base: '/',
+			command: 'serve',
+			root: '/workspace/app',
+			build: { rolldownOptions: {}, rollupOptions: {} },
+		});
+
+		const result = await callTransform(
+			plugin,
+			`export const manifest = ${QWIK_MANIFEST};`,
+			'/workspace/app/node_modules/@qwik.dev/core/dist/core.mjs',
+			createViteHookContext('server'),
+		);
+		if (!result || typeof result === 'string' || !('code' in result)) {
+			throw new Error('Expected transformed code');
+		}
+
+		expect(result.code).toContain('"manifestHash":"dev"');
+		expect(result.code).toContain('"src":"/@vite/client"');
+		expect(result.code).toContain('"src":"/@id/virtual:qwik-hmr-bridge"');
+	});
+
+	test('prefixes dev tag urls with the Vite base', async () => {
+		const plugin = getQwikPlugin();
+
+		callConfigResolved(plugin, {
+			base: '/docs/',
+			command: 'serve',
+			root: '/workspace/app',
+			build: { rolldownOptions: {}, rollupOptions: {} },
+		});
+
+		const result = await callTransform(
+			plugin,
+			`export const manifest = ${QWIK_MANIFEST};`,
+			'/workspace/app/node_modules/@qwik.dev/core/dist/core.mjs',
+			createViteHookContext('server'),
+		);
+		if (!result || typeof result === 'string' || !('code' in result)) {
+			throw new Error('Expected transformed code');
+		}
+
+		expect(result.code).toContain('"src":"/docs/@vite/client"');
+		expect(result.code).toContain('"src":"/docs/@id/virtual:qwik-hmr-bridge"');
+	});
+
+	test('omits the HMR bridge dev tag when HMR is disabled', async () => {
+		const plugin = getPlugin(qwik({ hmr: false }), 'vite-plugin-qwik');
+
+		callConfigResolved(plugin, {
+			base: '/',
+			command: 'serve',
+			root: '/workspace/app',
+			build: { rolldownOptions: {}, rollupOptions: {} },
+		});
+
+		const result = await callTransform(
+			plugin,
+			`export const manifest = ${QWIK_MANIFEST};`,
+			'/workspace/app/node_modules/@qwik.dev/core/dist/core.mjs',
+			createViteHookContext('server'),
+		);
+		if (!result || typeof result === 'string' || !('code' in result)) {
+			throw new Error('Expected transformed code');
+		}
+
+		expect(result.code).toContain('"src":"/@vite/client"');
+		expect(result.code).not.toContain('virtual:qwik-hmr-bridge');
+	});
+
+	test('renders dev injections registered through the plugin api', async () => {
+		const plugin = getQwikPlugin();
+
+		callConfigResolved(plugin, {
+			base: '/',
+			command: 'serve',
+			root: '/workspace/app',
+			build: { rolldownOptions: {}, rollupOptions: {} },
+		});
+		plugin.api?.registerDevInjection?.({
+			tag: 'link',
+			location: 'head',
+			attributes: { rel: 'stylesheet', href: '/@qwik-router/dev-styles.css' },
+		});
+
+		const result = await callTransform(
+			plugin,
+			`export const manifest = ${QWIK_MANIFEST};`,
+			'/workspace/app/node_modules/@qwik.dev/core/dist/core.mjs',
+			createViteHookContext('server'),
+		);
+		if (!result || typeof result === 'string' || !('code' in result)) {
+			throw new Error('Expected transformed code');
+		}
+
+		expect(result.code).toContain('"href":"/@qwik-router/dev-styles.css"');
+	});
+
+	test('does not inject dev tags for build transforms', async () => {
+		const plugin = getQwikPlugin();
+
+		callConfigResolved(plugin, {
+			base: '/',
+			command: 'build',
+			root: '/workspace/app',
+			build: { rolldownOptions: {}, rollupOptions: {} },
+		});
+
+		const result = await callTransform(
+			plugin,
+			`export const manifest = ${QWIK_MANIFEST};`,
+			'/workspace/app/node_modules/@qwik.dev/core/dist/core.mjs',
+			createViteHookContext('server'),
+		);
+		if (!result || typeof result === 'string' || !('code' in result)) {
+			throw new Error('Expected transformed code');
+		}
+
+		expect(result.code).toContain(QWIK_MANIFEST);
 	});
 });
 

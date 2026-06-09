@@ -28,7 +28,7 @@ export function createRouterDevRequestHandler(
 
 		try {
 			const response = await environment.dispatchFetch(toFetchRequest(req));
-			await sendResponse(server, req, res, response);
+			await sendResponse(res, response);
 		} catch (error) {
 			if (error instanceof Error) {
 				server.ssrFixStacktrace(error);
@@ -91,21 +91,11 @@ function headerValue(value: string | string[] | undefined) {
 	return value;
 }
 
-async function sendResponse(
-	server: ViteDevServer,
-	req: ConnectRequest,
-	res: ConnectResponse,
-	response: Response,
-) {
+async function sendResponse(res: ConnectResponse, response: Response) {
 	res.statusCode = response.status;
-	const isHtml = response.headers.get('content-type')?.includes('text/html') ?? false;
 	const setCookies = getSetCookieHeaders(response.headers);
 	response.headers.forEach((value, name) => {
-		const lowerName = name.toLowerCase();
-		if (
-			(isHtml && lowerName === 'content-length') ||
-			(setCookies.length > 0 && lowerName === 'set-cookie')
-		) {
+		if (setCookies.length > 0 && name.toLowerCase() === 'set-cookie') {
 			return;
 		}
 		res.setHeader(name, value);
@@ -114,50 +104,16 @@ async function sendResponse(
 		res.setHeader('set-cookie', setCookies);
 	}
 
-	if (!isHtml) {
-		res.end(new Uint8Array(await response.arrayBuffer()));
+	if (!response.body) {
+		res.end();
 		return;
 	}
-
-	const html = await response.text();
-	const transformed = await addDevHtmlTags(server, req.url ?? '/', html);
-	res.removeHeader?.('content-length');
-	res.end(transformed);
+	for await (const chunk of response.body) {
+		res.write(chunk);
+	}
+	res.end();
 }
 
 function getSetCookieHeaders(headers: Headers) {
 	return (headers as Headers & { getSetCookie?: () => string[] }).getSetCookie?.() ?? [];
-}
-
-async function addDevHtmlTags(server: ViteDevServer, url: string, html: string) {
-	const htmlWithDevTags = await server.transformIndexHtml(
-		url,
-		'<html><head></head><body></body></html>',
-	);
-	const devTags = getHeadHtml(htmlWithDevTags);
-	if (!devTags.trim()) {
-		return html;
-	}
-	return insertIntoHead(html, devTags);
-}
-
-function getHeadHtml(html: string) {
-	const openTag = /<head[^>]*>/i.exec(html);
-	const closeTag = /<\/head>/i.exec(html);
-	if (!openTag || closeTag?.index === undefined) {
-		return '';
-	}
-	const start = openTag.index + openTag[0].length;
-	if (closeTag.index <= start) {
-		return '';
-	}
-	return html.slice(start, closeTag.index);
-}
-
-function insertIntoHead(html: string, headHtml: string) {
-	const closeTag = /<\/head>/i.exec(html);
-	if (!closeTag) {
-		return `${headHtml}${html}`;
-	}
-	return `${html.slice(0, closeTag.index)}${headHtml}${html.slice(closeTag.index)}`;
 }
