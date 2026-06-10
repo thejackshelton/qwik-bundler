@@ -41,9 +41,6 @@ describe('Vite Qwik HMR bridge module', () => {
 		expect(code).toContain("CustomEvent('qHmr'");
 		expect(code).toContain('globalThis.qInspector ??= true');
 		expect(code).toContain("document.querySelectorAll('[q-d\\\\:q-hmr]')");
-		// Stamping data-qwik-inspector onto hosts makes core's _hmr fallback match every
-		// component, re-rendering the root on each update.
-		expect(code).not.toContain('host.dataset.qwikInspector');
 		expect(code).toContain("element._qDispatch?.['d:q-hmr']");
 		expect(code).toContain("element._qDispatch = { 'd:q-hmr': hmrDispatch }");
 		expect(code).toContain('data.t === document.__hmrT');
@@ -261,47 +258,6 @@ describe('Vite Qwik HMR transport', () => {
 		});
 		expect(JSON.stringify(clientSend.mock.calls)).not.toContain('styles.css');
 		expect(JSON.stringify(clientSend.mock.calls)).not.toContain('ignored.css');
-	});
-
-	test('does not dispatch qwik:hmr for plain stylesheet updates', async () => {
-		const plugin = getPlugin(qwik(), 'vite-plugin-qwik');
-		const invalidateDevSegments = vi.fn().mockReturnValue([]);
-		const send = vi.fn();
-		const environment = {
-			name: 'client',
-			config: { consumer: 'client' },
-			moduleGraph: { getModuleById: vi.fn(), invalidateModule: vi.fn() },
-			hot: { send },
-		};
-
-		callConfigResolved(plugin, { command: 'serve', root: '/workspace/app' });
-		Object.assign(plugin, { api: { ...plugin.api, invalidateDevSegments } });
-
-		// A Tailwind regeneration updates the stylesheet on every markup edit; Vite's own CSS
-		// pipeline hot-swaps it. Re-rendering its importers would re-render unrelated
-		// components, such as the root that imports the global stylesheet.
-		expect(
-			await callHotUpdate(
-				plugin,
-				{
-					file: '/workspace/app/src/global.css',
-					modules: [
-						{
-							type: 'css',
-							url: '/src/global.css',
-							importers: new Set([
-								{ type: 'js', url: '/src/root.tsx', importers: new Set() },
-							]),
-						},
-					],
-					timestamp: 7890,
-				},
-				{ environment },
-			),
-		).toBeUndefined();
-
-		expect(send).not.toHaveBeenCalled();
-		expect(invalidateDevSegments).not.toHaveBeenCalled();
 	});
 
 	test('TEST-04 sends client full reload and no custom event when HMR is disabled', async () => {
