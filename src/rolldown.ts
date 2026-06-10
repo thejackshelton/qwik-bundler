@@ -1,12 +1,8 @@
-import {
-	createOptimizer as createSwcOptimizer,
-	type Diagnostic,
-	type EntryStrategy,
-	type SegmentAnalysis,
-	type TransformModule,
-	type TransformModuleInput,
-	type TransformModulesOptions,
-	type TransformOutput,
+import type {
+	Diagnostic,
+	EntryStrategy,
+	SegmentAnalysis,
+	TransformModule,
 } from '@qwik.dev/optimizer';
 import { dirname, join } from 'pathe';
 import type { Plugin, RolldownError, TransformPluginContext } from 'rolldown';
@@ -21,6 +17,11 @@ import {
 	makeConstPropsDiffable,
 	mergeOptimizerStripNames,
 } from './hmr/optimizer.ts';
+import {
+	createQwikOptimizer,
+	type QwikTransformInput,
+	type QwikTransformOptions,
+} from './optimizer.ts';
 import {
 	createManifest,
 	injectManifest,
@@ -74,44 +75,6 @@ const QWIK_IMPORTS =
 	/\b(?:import|export)\s+(?:[^'";]*?\s+from\s*)?['"](@qwik\.dev\/core(?:\/[^'"]*)?|@builder\.io\/qwik(?:\/[^'"]*)?)['"]/;
 const manifests = new Map<string, QwikManifest>();
 
-type QwikTransformInput = TransformModuleInput & {
-	// Pre-parsed AST from the host bundler (Rolldown's `meta.ast`). The TS
-	// optimizer uses it to skip its internal parse; SWC ignores it.
-	program?: unknown;
-};
-
-interface QwikTransformOptions extends Omit<TransformModulesOptions, 'input'> {
-	input: QwikTransformInput[];
-}
-
-// Bundler-owned contract for an optimizer backend — the only optimizer
-// surface this plugin consumes. The SWC optimizer satisfies it as-is; the
-// TS optimizer is adapted in `createTsOptimizer`.
-interface QwikOptimizer {
-	transformModules(options: QwikTransformOptions): Promise<TransformOutput>;
-}
-
-function createTsOptimizer(
-	optimizerOptions: QwikRolldownOptions['optimizerOptions'],
-): Promise<QwikOptimizer> {
-	return import('qwik-optimizer-ts').then(
-		// The TS optimizer's NAPI-parity surface accepts raw-string options
-		// (branding internally) and returns SWC-shaped output, so it meets
-		// the contract directly. The single-step cast bridges one stale
-		// declaration: SWC's published `SegmentAnalysis.ctxKind` omits
-		// 'jSXProp' even though the Rust optimizer emits it at runtime; the
-		// TS optimizer's parity type is honest and therefore wider.
-		(mod) => mod.createOptimizer(optimizerOptions) as Promise<QwikOptimizer>,
-		(err) => {
-			throw new Error(
-				`qwik({ experimental: ['tsOptimizer'] }) failed to load \`qwik-optimizer-ts\`. ` +
-					`See "TypeScript Optimizer (Experimental)" in qwik-bundler's README for setup.`,
-				{ cause: err },
-			);
-		},
-	);
-}
-
 export const qwik = (options?: QwikRolldownOptions) => qwikClient(options);
 export const qwikClient = (options: QwikRolldownOptions = {}) => plugin('client', options);
 export const qwikServer = (options: QwikRolldownOptions = {}) => plugin('server', options);
@@ -133,10 +96,7 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 		name = `qwik:rolldown:${environment}`;
 	}
 
-	// Instantiate the optimizer eagerly based on the experimental flag.
-	const optimizer: Promise<QwikOptimizer> = options.experimental?.includes('tsOptimizer')
-		? createTsOptimizer(options.optimizerOptions)
-		: createSwcOptimizer(options.optimizerOptions);
+	const optimizer = createQwikOptimizer(options);
 
 	function getEnvironment(context: unknown) {
 		if (typeof environment === 'function') {
