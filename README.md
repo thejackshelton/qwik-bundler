@@ -61,7 +61,7 @@ export default {
 };
 ```
 
-`qwik-optimizer-ts` is **not** declared in `qwik-bundler`'s `package.json` and is **not** installed by default. The bundler loads it lazily via `import('qwik-optimizer-ts')` at runtime — only when the `tsOptimizer` flag fires — so consumers who stick with the SWC default never need it.
+`qwik-optimizer-ts` is declared as an **optional peer dependency** of `qwik-bundler` and is **not** installed by default. The bundler loads it lazily via `import('qwik-optimizer-ts')` at runtime — only when the `tsOptimizer` flag fires — so consumers who stick with the SWC default never need it.
 
 Install it explicitly when opting in. Since the package isn't published to npm yet, the install points at a local checkout of [`TS-Optimizer`](https://github.com/thejackshelton/TS-Optimizer):
 

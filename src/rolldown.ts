@@ -95,31 +95,13 @@ function createTsOptimizer(
 	optimizerOptions: QwikRolldownOptions['optimizerOptions'],
 ): Promise<QwikOptimizer> {
 	return import('qwik-optimizer-ts').then(
-		async (mod) => {
-			const tsOptimizer = await mod.createOptimizer(optimizerOptions);
-			return {
-				async transformModules(transformOptions: QwikTransformOptions) {
-					const output = await tsOptimizer.transformModules({
-						...transformOptions,
-						srcDir: mod.mkFilePath(transformOptions.srcDir),
-						input: transformOptions.input.map(({ program, ...input }) => ({
-							...input,
-							path: mod.mkFilePath(input.path),
-							code: mod.mkSourceText(input.code),
-							...(program !== undefined
-								? { program: program as import('qwik-optimizer-ts').Program }
-								: {}),
-						})),
-					});
-					// The TS optimizer narrows the same output shapes (readonly
-					// arrays, `kind`-discriminated modules, branded strings), so
-					// its output is runtime-compatible with the SWC shapes this
-					// plugin reads but not structurally assignable. Single
-					// validated-FFI cast at the seam.
-					return output as unknown as TransformOutput;
-				},
-			};
-		},
+		// The TS optimizer's NAPI-parity surface accepts raw-string options
+		// (branding internally) and returns SWC-shaped output, so it meets
+		// the contract directly. The single-step cast bridges one stale
+		// declaration: SWC's published `SegmentAnalysis.ctxKind` omits
+		// 'jSXProp' even though the Rust optimizer emits it at runtime; the
+		// TS optimizer's parity type is honest and therefore wider.
+		(mod) => mod.createOptimizer(optimizerOptions) as Promise<QwikOptimizer>,
 		(err) => {
 			throw new Error(
 				`qwik({ experimental: ['tsOptimizer'] }) failed to load \`qwik-optimizer-ts\`. ` +
