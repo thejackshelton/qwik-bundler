@@ -48,23 +48,6 @@ export function loadRouterDevStyles(id: string, server: ViteDevServer | undefine
 		.join('');
 }
 
-/**
- * Vite caches the virtual stylesheet and invalidates it when one of its current imports changes,
- * but the real input to `loadRouterDevStyles` is the module graph itself: when a CSS module is
- * transformed for the first time the collected set grows, and the cached stylesheet is missing
- * it. The router plugin calls this on each first-seen CSS module so the next page load
- * recomputes the stylesheet.
- */
-export function invalidateRouterDevStyles(server: ViteDevServer) {
-	const moduleGraph = server.environments.client?.moduleGraph;
-	for (const id of [RESOLVED_ROUTER_DEV_STYLES_ID, `${RESOLVED_ROUTER_DEV_STYLES_ID}?direct`]) {
-		const styles = moduleGraph?.getModuleById(id);
-		if (styles) {
-			moduleGraph.invalidateModule(styles);
-		}
-	}
-}
-
 function styleHref(href: string, timestamp: number) {
 	if (!timestamp) {
 		return href;

@@ -28,7 +28,6 @@ import {
 	callConfigResolved,
 	callConfigureServer,
 	callGenerateBundle,
-	callHotUpdate,
 	callLoad,
 	callResolveId,
 	callTransform,
@@ -1501,31 +1500,6 @@ title: Legacy Details
 		);
 		const code = await callLoad(plugin, '\0virtual:qwik-router/dev-styles.css?direct');
 		expect(code).toBe('@import "/src/global.css";\n');
-	});
-
-	test('invalidates the dev stylesheet when modules change', async () => {
-		const plugin = getRouterPlugin();
-		await callConfig(plugin, {}, { command: 'serve', mode: 'development' });
-		callConfigResolved(plugin, {
-			base: '/',
-			build: {},
-			plugins: [],
-			root: '/app',
-		});
-
-		const virtualModule = { id: '\0virtual:qwik-router/dev-styles.css' };
-		const invalidateModule = vi.fn();
-		const server = createMockDevServer({
-			client: createMockEnvironment({ consumer: 'client' }),
-		});
-		server.environments.client.moduleGraph.getModuleById = (id: string) =>
-			id === virtualModule.id ? virtualModule : undefined;
-		server.environments.client.moduleGraph.invalidateModule = invalidateModule;
-		callConfigureServer(plugin, server);
-
-		callHotUpdate(plugin, { file: '/src/new.css' }, createViteHookContext('client'));
-
-		expect(invalidateModule).toHaveBeenCalledWith(virtualModule);
 	});
 
 	test('does not register the dev stylesheet injection for builds', async () => {

@@ -1,13 +1,11 @@
 import { basename, dirname, extname, join, relative, resolve } from 'pathe';
 import { decodePath, parseURL, withLeadingSlash, withTrailingSlash } from 'ufo';
-import { isCSSRequest } from 'vite';
 import type { ConfigEnv, EnvironmentOptions, PluginOption, UserConfig, ViteDevServer } from 'vite';
 import type { BundleGraphAdder, QwikManifest, QwikOptimizerStripNames } from '../../src/types.ts';
 import { createRouterDevEnvironment } from './dev/environment.ts';
 import { createRouterDevRequestHandler } from './dev/request.ts';
 import {
 	getRouterIndexTags,
-	invalidateRouterDevStyles,
 	loadRouterDevStyles,
 	resolveRouterDevStyles,
 	routerDevTags,
@@ -129,7 +127,6 @@ function qwikRouterPlugin(
 	let viteCommand: ConfigEnv['command'] = 'serve';
 	let devServer: ViteDevServer | null = null;
 	let deprecatedUnifiedMdxWarned = false;
-	const collectedDevStylesCss = new Set<string>();
 
 	const api: QwikRouterPluginApi = {
 		getBasePathname: () => state.base,
@@ -284,13 +281,6 @@ function qwikRouterPlugin(
 		},
 
 		async transform(code, id) {
-			if (devServer && isCSSRequest(id) && !collectedDevStylesCss.has(id)) {
-				// A CSS module seen for the first time grows the dev stylesheet's collected
-				// set, which Vite cannot track as a dependency. Drop the cached stylesheet
-				// so the next page load recomputes it.
-				collectedDevStylesCss.add(id);
-				invalidateRouterDevStyles(devServer);
-			}
 			if (isMdxFrontmatterRoute(id)) {
 				return {
 					code: transformMdxFrontmatterRoute(code),
