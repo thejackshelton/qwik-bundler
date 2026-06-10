@@ -6,7 +6,7 @@ export default defineConfig({
 	},
 	pack: {
 		deps: {
-			// `qwik-optimizer-ts` is opt-in via the `optimizer: 'ts'` flag.
+			// `qwik-optimizer-ts` is opt-in via `experimental: ['tsOptimizer']`.
 			// Mark it external so it stays as a runtime dynamic import that
 			// consumers must install separately, rather than being inlined
 			// into qwik-bundler's published bundle (which would also drag in
