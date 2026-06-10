@@ -260,12 +260,6 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 			const replaced = replaceExperimental(fixed, currentEnvironment, options.experimental);
 			const nextCode = replaced ?? fixed;
 			const optimize = shouldOptimize(nextCode, path);
-			// `meta.ast` is the host's pre-parsed AST. Threading it into the
-			// optimizer eliminates a redundant parse when the TS optimizer is
-			// selected. SWC ignores the field (it re-parses internally), so
-			// passing it through is safe for both backends. Only forward when
-			// the source wasn't rewritten upstream (replaceExperimental /
-			// fixPureAnnotations would invalidate the AST positions).
 			const astStable = replaced == null && fixed === code;
 			const ast = astStable ? meta?.ast : undefined;
 			const transformed = optimize
@@ -332,9 +326,6 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 		currentEnvironment: QwikEnvironment,
 		ast?: unknown,
 	) {
-		// `ast` is the host's pre-parsed Program (`meta.ast` from Rolldown's
-		// transform hook). The TS optimizer accepts it and skips its internal
-		// parse; SWC ignores the field and re-parses internally.
 		const input: QwikTransformInput = ast
 			? { ...dev.optimizerInput(code, id), program: ast }
 			: dev.optimizerInput(code, id);
