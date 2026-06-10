@@ -6,6 +6,7 @@ import {
 	type TransformModule,
 	type TransformModuleInput,
 	type TransformModulesOptions,
+	type TransformOutput,
 } from '@qwik.dev/optimizer';
 import { dirname, join } from 'pathe';
 import type { Plugin, RolldownError, TransformPluginContext } from 'rolldown';
@@ -73,6 +74,62 @@ const QWIK_IMPORTS =
 	/\b(?:import|export)\s+(?:[^'";]*?\s+from\s*)?['"](@qwik\.dev\/core(?:\/[^'"]*)?|@builder\.io\/qwik(?:\/[^'"]*)?)['"]/;
 const manifests = new Map<string, QwikManifest>();
 
+type QwikTransformInput = TransformModuleInput & {
+	// Pre-parsed AST from the host bundler (Rolldown's `meta.ast`). The TS
+	// optimizer uses it to skip its internal parse; SWC ignores it.
+	program?: unknown;
+};
+
+interface QwikTransformOptions extends Omit<TransformModulesOptions, 'input'> {
+	input: QwikTransformInput[];
+}
+
+// Bundler-owned contract for an optimizer backend — the only optimizer
+// surface this plugin consumes. The SWC optimizer satisfies it as-is; the
+// TS optimizer is adapted in `createTsOptimizer`.
+interface QwikOptimizer {
+	transformModules(options: QwikTransformOptions): Promise<TransformOutput>;
+}
+
+function createTsOptimizer(
+	optimizerOptions: QwikRolldownOptions['optimizerOptions'],
+): Promise<QwikOptimizer> {
+	return import('qwik-optimizer-ts').then(
+		async (mod) => {
+			const tsOptimizer = await mod.createOptimizer(optimizerOptions);
+			return {
+				async transformModules(transformOptions: QwikTransformOptions) {
+					const output = await tsOptimizer.transformModules({
+						...transformOptions,
+						srcDir: mod.mkFilePath(transformOptions.srcDir),
+						input: transformOptions.input.map(({ program, ...input }) => ({
+							...input,
+							path: mod.mkFilePath(input.path),
+							code: mod.mkSourceText(input.code),
+							...(program !== undefined
+								? { program: program as import('qwik-optimizer-ts').Program }
+								: {}),
+						})),
+					});
+					// The TS optimizer narrows the same output shapes (readonly
+					// arrays, `kind`-discriminated modules, branded strings), so
+					// its output is runtime-compatible with the SWC shapes this
+					// plugin reads but not structurally assignable. Single
+					// validated-FFI cast at the seam.
+					return output as unknown as TransformOutput;
+				},
+			};
+		},
+		(err) => {
+			throw new Error(
+				`qwik({ experimental: ['tsOptimizer'] }) failed to load \`qwik-optimizer-ts\`. ` +
+					`See "TypeScript Optimizer (Experimental)" in qwik-bundler's README for setup.`,
+				{ cause: err },
+			);
+		},
+	);
+}
+
 export const qwik = (options?: QwikRolldownOptions) => qwikClient(options);
 export const qwikClient = (options: QwikRolldownOptions = {}) => plugin('client', options);
 export const qwikServer = (options: QwikRolldownOptions = {}) => plugin('server', options);
@@ -95,36 +152,9 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 	}
 
 	// Instantiate the optimizer eagerly based on the experimental flag.
-	// Both backends produce a structurally-identical `Optimizer` (SWC's
-	// interface is the shared contract — qwik-optimizer-ts mirrors it).
-	// The single cast inside the TS branch bridges the cross-package
-	// nominal-type divergence at one localised spot.
-	type OptimizerInstance = Awaited<ReturnType<typeof createSwcOptimizer>>;
-	let optimizer: Promise<OptimizerInstance>;
-	if (options.experimental?.includes('tsOptimizer')) {
-		optimizer = import('qwik-optimizer-ts').then(
-			(mod) => mod.createOptimizer(options.optimizerOptions) as Promise<OptimizerInstance>,
-			(err) => {
-				const msg = err instanceof Error ? err.message : String(err);
-				const looksLikeMissingDist =
-					msg.includes('/qwik-optimizer-ts/index.js') ||
-					msg.includes("Cannot find package 'qwik-optimizer-ts'");
-				const hint = looksLikeMissingDist
-					? `\nLikely cause: qwik-optimizer-ts is installed but its dist/ wasn't built. ` +
-						`Run \`pnpm build\` inside the linked TS-Optimizer checkout and re-install.`
-					: '';
-				throw new Error(
-					`qwik({ experimental: ['tsOptimizer'] }) requires \`qwik-optimizer-ts\` to be installed. ` +
-						`See the "TypeScript Optimizer (Experimental)" section of qwik-bundler's README ` +
-						`for the setup steps (the package isn't on npm yet — install points at a local ` +
-						`TS-Optimizer checkout).${hint}\n` +
-						`Underlying error: ${msg}`,
-				);
-			},
-		);
-	} else {
-		optimizer = createSwcOptimizer(options.optimizerOptions);
-	}
+	const optimizer: Promise<QwikOptimizer> = options.experimental?.includes('tsOptimizer')
+		? createTsOptimizer(options.optimizerOptions)
+		: createSwcOptimizer(options.optimizerOptions);
 
 	function getEnvironment(context: unknown) {
 		if (typeof environment === 'function') {
@@ -361,15 +391,11 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 		ast?: unknown,
 	) {
 		// `ast` is the host's pre-parsed Program (`meta.ast` from Rolldown's
-		// transform hook). Forwarded into `TransformModuleInput.program`; the
-		// TS optimizer accepts it and skips its internal parse. SWC ignores
-		// the field and re-parses internally, so the hand-off is a no-op for
-		// the default backend.
-		// `program` is an extension over SWC's `TransformModuleInput`; the cast
-		// admits the optional field. SWC ignores it; the TS optimizer reads it.
-		const input = (
-			ast ? { ...dev.optimizerInput(code, id), program: ast } : dev.optimizerInput(code, id)
-		) as TransformModuleInput;
+		// transform hook). The TS optimizer accepts it and skips its internal
+		// parse; SWC ignores the field and re-parses internally.
+		const input: QwikTransformInput = ast
+			? { ...dev.optimizerInput(code, id), program: ast }
+			: dev.optimizerInput(code, id);
 		const transformOptions = {
 			input: [input],
 			entryStrategy: entryStrategy(currentEnvironment, options.entryStrategy),
@@ -390,7 +416,7 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 							? 'dev'
 							: 'prod',
 			isServer: currentEnvironment === 'server',
-		} satisfies TransformModulesOptions;
+		} satisfies QwikTransformOptions;
 
 		applyOptimizerStripNames(transformOptions, currentEnvironment, optimizerStripNames);
 

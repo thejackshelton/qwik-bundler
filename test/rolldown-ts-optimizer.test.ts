@@ -22,6 +22,9 @@ vi.mock('@qwik.dev/optimizer', () => ({
 
 vi.mock('qwik-optimizer-ts', () => ({
 	createOptimizer: tsMock.createOptimizer,
+	// Brand constructors are identity functions at runtime.
+	mkFilePath: (value: string) => value,
+	mkSourceText: (value: string) => value,
 }));
 
 function resetMock(mock: typeof swcMock) {
