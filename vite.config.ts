@@ -6,11 +6,7 @@ export default defineConfig({
 	},
 	pack: {
 		deps: {
-			// `qwik-ts-optimizer` is opt-in via `experimental: ['tsOptimizer']`.
-			// Mark it external so it stays as a runtime dynamic import that
-			// consumers must install separately, rather than being inlined
-			// into qwik-bundler's published bundle (which would also drag in
-			// every transitive optimizer dep — oxc-walker, oxc-parser, etc.).
+			// qwik-ts-optimizer is an opt-in peer (experimental: ['tsOptimizer']) — keep it external.
 			neverBundle: ['satteri', 'qwik-ts-optimizer'],
 		},
 		entry: {
