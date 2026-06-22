@@ -10,6 +10,7 @@ const EXPERIMENTAL_FEATURES = [
 	'enableRequestRewrite',
 	'webWorker',
 	'insights',
+	'tsOptimizer',
 ] as const;
 
 export function comptimeConfig(input: InputOptions, experimental: string[] = [], dev = false) {

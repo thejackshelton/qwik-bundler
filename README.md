@@ -49,6 +49,32 @@ pnpm --dir fixtures/rolldown-h3 start
 
 Open the printed local URL and check that Qwik interactivity still works.
 
+## TypeScript Optimizer (Experimental)
+
+The plugin can run against either the SWC napi optimizer (`@qwik.dev/optimizer`, default) or the TypeScript optimizer rewrite (`qwik-ts-optimizer`). The selection lives behind an experimental feature flag:
+
+```ts
+import { qwik } from 'qwik-bundler/rolldown';
+
+export default {
+	plugins: [qwik({ experimental: ['tsOptimizer'] })],
+};
+```
+
+[`qwik-ts-optimizer`](https://www.npmjs.com/package/qwik-ts-optimizer) is declared as an **optional peer dependency** of `qwik-bundler` and is **not** installed by default. The bundler loads it lazily via `import('qwik-ts-optimizer')` at runtime — only when the `tsOptimizer` flag fires — so consumers who stick with the SWC default never need it.
+
+Install it explicitly when opting in:
+
+```sh
+pnpm add -D qwik-ts-optimizer
+```
+
+It requires Node `>=22` (the optimizer's `oxc-parser` raw-transfer path throws on Node 20).
+
+When `tsOptimizer` is in `experimental`, Rolldown's `meta.ast` (the host's pre-parsed OXC `Program`) is forwarded into the optimizer's `TransformModuleInput.program` field. The TS optimizer detects it and skips its internal parse — one parse per module instead of two. SWC ignores the field and re-parses internally, so the threading is a no-op for the default backend.
+
+Behaviour is bit-identical to current `main` when `tsOptimizer` is absent from `experimental`.
+
 ## Useful Files
 
 - `src/rolldown.ts`: optimizer adapter, segment modules, output defaults, manifest emission

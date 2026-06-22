@@ -27,6 +27,7 @@
 		"test:hmr-remove-handler": "node scripts/with-lock.mjs hmr-smoke \"pnpm build && node scripts/smoke-vite-nitro-remove-handler-hmr.mjs\"",
 		"test:hmr-nitro": "node scripts/with-lock.mjs hmr-smoke \"pnpm build && node scripts/smoke-vite-nitro-hmr.mjs\"",
 		"test:workerd": "pnpm build && pnpm --dir fixtures/vite-workerd build && node scripts/smoke-vite-workerd-hmr.mjs",
+		"test:ts-optimizer": "node scripts/with-lock.mjs ts-optimizer-smoke \"pnpm build && node scripts/smoke-vite-qwik-router-tsoptimizer.mjs\"",
 		"test:watch": "vp test watch",
 		"check": "vp check",
 		"prepare": "vp config"
@@ -48,6 +49,7 @@
 		"@types/node": "24.12.2",
 		"bumpp": "10.4.1",
 		"playwright": "1.59.1",
+		"qwik-ts-optimizer": "^0.0.1",
 		"rolldown": "1.0.2",
 		"typescript": "5.9.3",
 		"vite": "8.0.16",
@@ -55,10 +57,14 @@
 		"vitest": "4.1.5"
 	},
 	"peerDependencies": {
+		"qwik-ts-optimizer": "^0.0.1",
 		"rolldown": "1.0.2",
 		"vite": "8.0.16"
 	},
 	"peerDependenciesMeta": {
+		"qwik-ts-optimizer": {
+			"optional": true
+		},
 		"rolldown": {
 			"optional": true
 		},

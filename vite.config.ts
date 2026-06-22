@@ -6,7 +6,8 @@ export default defineConfig({
 	},
 	pack: {
 		deps: {
-			neverBundle: ['satteri'],
+			// qwik-ts-optimizer is an opt-in peer (experimental: ['tsOptimizer']).
+			neverBundle: ['satteri', 'qwik-ts-optimizer'],
 		},
 		entry: {
 			rolldown: './src/rolldown.ts',

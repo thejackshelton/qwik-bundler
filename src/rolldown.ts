@@ -1,10 +1,8 @@
-import {
-	createOptimizer,
-	type Diagnostic,
-	type EntryStrategy,
-	type SegmentAnalysis,
-	type TransformModule,
-	type TransformModulesOptions,
+import type {
+	Diagnostic,
+	EntryStrategy,
+	SegmentAnalysis,
+	TransformModule,
 } from '@qwik.dev/optimizer';
 import { dirname, join } from 'pathe';
 import type { Plugin, RolldownError, TransformPluginContext } from 'rolldown';
@@ -19,6 +17,11 @@ import {
 	makeConstPropsDiffable,
 	mergeOptimizerStripNames,
 } from './hmr/optimizer.ts';
+import {
+	createQwikOptimizer,
+	type QwikTransformInput,
+	type QwikTransformOptions,
+} from './optimizer.ts';
 import {
 	createManifest,
 	devTagsManifest,
@@ -88,7 +91,6 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 	// TODO: Remove this Qwik library noExternal workaround after https://github.com/QwikDev/qwik-evolution/discussions/318.
 	const external = qwikExternal();
 	let manifest: QwikManifest | ServerQwikManifest | null = null;
-	let optimizer: ReturnType<typeof createOptimizer> | undefined;
 	let root = options.rootDir;
 	let name = 'qwik:rolldown';
 
@@ -96,13 +98,7 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 		name = `qwik:rolldown:${environment}`;
 	}
 
-	function getOptimizer() {
-		if (!optimizer) {
-			optimizer = createOptimizer(options.optimizerOptions);
-		}
-
-		return optimizer;
-	}
+	const optimizer = createQwikOptimizer(options);
 
 	function getEnvironment(context: unknown) {
 		if (typeof environment === 'function') {
@@ -255,7 +251,7 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 
 			return segment.code;
 		},
-		async transform(code, id) {
+		async transform(code, id, meta) {
 			const currentEnvironment = getEnvironment(this);
 			if (VITE_IMPORT_QUERY_PARAM.test(id)) return null;
 
@@ -268,8 +264,10 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 			const replaced = replaceExperimental(fixed, currentEnvironment, options.experimental);
 			const nextCode = replaced ?? fixed;
 			const optimize = shouldOptimize(nextCode, path);
+			const astStable = replaced == null && fixed === code;
+			const ast = astStable ? meta?.ast : undefined;
 			const transformed = optimize
-				? await transform(nextCode, path, this, currentEnvironment)
+				? await transform(nextCode, path, this, currentEnvironment, ast)
 				: null;
 			const fallback =
 				transformed ?? (replaced || fixed !== code ? { code: nextCode, map: null } : null);
@@ -334,9 +332,13 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 		id: string,
 		context: TransformContext,
 		currentEnvironment: QwikEnvironment,
+		ast?: unknown,
 	) {
+		const input: QwikTransformInput = ast
+			? { ...dev.optimizerInput(code, id), program: ast }
+			: dev.optimizerInput(code, id);
 		const transformOptions = {
-			input: [dev.optimizerInput(code, id)],
+			input: [input],
 			entryStrategy: entryStrategy(currentEnvironment, options.entryStrategy),
 			minify: 'simplify',
 			sourceMaps: dev.isEnabled(),
@@ -355,11 +357,11 @@ export function plugin(environment: Environment, options: QwikRolldownOptions = 
 							? 'dev'
 							: 'prod',
 			isServer: currentEnvironment === 'server',
-		} satisfies TransformModulesOptions;
+		} satisfies QwikTransformOptions;
 
 		applyOptimizerStripNames(transformOptions, currentEnvironment, optimizerStripNames);
 
-		const result = await (await getOptimizer()).transformModules(transformOptions);
+		const result = await (await optimizer).transformModules(transformOptions);
 		reportDiagnostics(result.diagnostics, id, context);
 
 		for (const module of result.modules) {
