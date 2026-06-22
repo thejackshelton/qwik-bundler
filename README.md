@@ -79,6 +79,12 @@ pnpm add -D qwik-optimizer-ts@file:/absolute/path/to/TS-Optimizer
 
 Once `qwik-optimizer-ts` is published to npm the second step collapses to `pnpm add -D qwik-optimizer-ts`.
 
+Contributors to `qwik-bundler` itself don't need the package: installs, typechecks, and tests all pass without it (a minimal ambient declaration in `types/qwik-optimizer-ts.d.ts` covers the dynamic import, and the test suite mocks the module). To run the TS optimizer for real against a local checkout, link it without touching `package.json`:
+
+```sh
+pnpm link ../TS-Optimizer
+```
+
 **If you see `Cannot find package '.../qwik-optimizer-ts/index.js'`** — that means the linked `TS-Optimizer` checkout isn't built. `pnpm build` in the `TS-Optimizer` directory produces the `dist/` that the package's `main`/`exports` map points at; without it Node defaults to `index.js` (which doesn't exist).
 
 When `tsOptimizer` is in `experimental`, Rolldown's `meta.ast` (the host's pre-parsed OXC `Program`) is forwarded into the optimizer's `TransformModuleInput.program` field. The TS optimizer detects it and skips its internal parse — one parse per module instead of two. SWC ignores the field and re-parses internally, so the threading is a no-op for the default backend.

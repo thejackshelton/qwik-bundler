@@ -2,3 +2,11 @@ packages:
     - .
     - fixtures/*
     - fixtures/rolldown-library-consumer/rolldown-library
+
+# qwik-optimizer-ts is an unpublished optional peer; auto-install would try
+# (and fail) to fetch it from the registry. Contributors working on the TS
+# optimizer integration resolve it locally via `pnpm link ../TS-Optimizer`.
+autoInstallPeers: false
+peerDependencyRules:
+    ignoreMissing:
+        - qwik-optimizer-ts
