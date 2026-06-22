@@ -1,14 +1,7 @@
-// Interactive smoke for the experimental TypeScript optimizer (`qwik-ts-optimizer`).
-//
-// Boots the vite-qwik-router fixture in dev SSR with `experimental: ['tsOptimizer']`
-// (toggled via QWIK_TS_OPTIMIZER), drives it in a real browser, and asserts the
-// interactive path works end-to-end against the published optimizer:
-//   - the routeLoader$ greeting renders,
-//   - the counter's lazy onClick QRL (extracted by the optimizer) resumes and
-//     increments on click,
-//   - the server$ RPC round-trips (POST 200 + server-side side effect).
-//
-// Run via `pnpm test:ts-optimizer` (which builds first and holds the fixture lock).
+// Interactive smoke for the `qwik-ts-optimizer` backend: boots the
+// vite-qwik-router fixture in dev SSR with `experimental: ['tsOptimizer']`
+// (toggled via QWIK_TS_OPTIMIZER) and drives the rendered output in a real
+// browser — counter resumability + server$ RPC. Run via `pnpm test:ts-optimizer`.
 import { dirname, resolve } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
@@ -23,8 +16,8 @@ const fixtureRoot = resolve(repoRoot, 'fixtures/vite-qwik-router');
 const configFile = resolve(fixtureRoot, 'vite.config.ts');
 const waitTimeout = 20_000;
 
-// server$ runs in-process under the vite SSR dev server, so its side-effect log
-// ('HI') lands on this process's stdout — patch to detect it.
+// server$ runs in-process under the SSR dev server, so its 'HI' side-effect log
+// lands on this process's stdout — intercept to detect it.
 let serverSawHI = false;
 const origLog = console.log;
 console.log = (...args) => {
@@ -61,12 +54,10 @@ try {
 	const page = await browser.newPage();
 	await page.goto(url, { waitUntil: 'networkidle', timeout: waitTimeout });
 
-	// routeLoader$ greeting
 	await page.locator('h1').waitFor({ state: 'visible', timeout: waitTimeout });
 	const h1 = (await page.locator('h1').textContent())?.trim();
 	check(h1 === 'Hello from Qwik Router', `routeLoader$ greeting renders ("${h1}")`);
 
-	// Counter: the optimizer-extracted onClick QRL must load + run on click
 	const counter = page.locator('button').nth(0);
 	check((await counter.textContent())?.trim() === '0', 'counter initial value is 0');
 
@@ -78,7 +69,6 @@ try {
 	await page.locator('button').nth(0).filter({ hasText: '2' }).waitFor({ timeout: waitTimeout });
 	check(true, 'counter increments 1 → 2 on second click');
 
-	// server$ RPC: clicking "Test server" fires a POST round-trip
 	const respPromise = page
 		.waitForResponse((r) => r.request().method() === 'POST', { timeout: waitTimeout })
 		.catch(() => null);
