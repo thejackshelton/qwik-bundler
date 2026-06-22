@@ -1,19 +1,19 @@
 // Interactive smoke for the `qwik-ts-optimizer` backend: boots the
 // vite-qwik-router fixture in dev SSR with `experimental: ['tsOptimizer']`
-// (toggled via QWIK_TS_OPTIMIZER) and drives the rendered output in a real
-// browser — counter resumability + server$ RPC. Run via `pnpm test:ts-optimizer`.
+// supplied inline (the fixture itself stays on the default SWC optimizer) and
+// drives the rendered output in a real browser — counter resumability +
+// server$ RPC. Run via `pnpm test:ts-optimizer`.
 import { dirname, resolve } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 import { createServer } from 'vite';
+import { qwikRouter } from 'qwik-bundler/router/vite';
+import { qwik } from 'qwik-bundler/vite';
 import { acquireLock } from './lib/lock.mjs';
-
-process.env.QWIK_TS_OPTIMIZER = '1';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const fixtureRoot = resolve(repoRoot, 'fixtures/vite-qwik-router');
-const configFile = resolve(fixtureRoot, 'vite.config.ts');
 const waitTimeout = 20_000;
 
 // server$ runs in-process under the SSR dev server, so its 'HI' side-effect log
@@ -40,8 +40,9 @@ try {
 
 	server = await createServer({
 		root: fixtureRoot,
-		configFile,
+		configFile: false,
 		mode: 'ssr',
+		plugins: [qwikRouter(), qwik({ experimental: ['tsOptimizer'] })],
 		server: { host: '127.0.0.1', port: 0 },
 		logLevel: 'warn',
 	});

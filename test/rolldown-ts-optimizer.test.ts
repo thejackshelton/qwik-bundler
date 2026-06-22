@@ -1,7 +1,3 @@
-// Tests for the `tsOptimizer` experimental feature flag that swaps the
-// SWC napi optimizer for `qwik-ts-optimizer` and threads Rolldown's
-// `meta.ast` into the optimizer call.
-
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { qwik } from '../src/rolldown';
 import { callBuildStart, callTransform } from './helpers';
@@ -114,8 +110,6 @@ describe('tsOptimizer experimental feature', () => {
 	});
 
 	test('forwards meta.ast into the SWC path as well — SWC ignores extra fields', async () => {
-		// SWC re-parses internally so the field is a harmless no-op there.
-		// Threading it from the same call site keeps the dispatch uniform.
 		const fakeAst = { type: 'Program', body: [], sourceType: 'module' };
 		const plugin = qwik();
 		callBuildStart(plugin, { cwd: '/workspace/app' });
