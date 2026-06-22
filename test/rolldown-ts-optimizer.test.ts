@@ -1,5 +1,5 @@
 // Tests for the `tsOptimizer` experimental feature flag that swaps the
-// SWC napi optimizer for `qwik-optimizer-ts` and threads Rolldown's
+// SWC napi optimizer for `qwik-ts-optimizer` and threads Rolldown's
 // `meta.ast` into the optimizer call.
 
 import { beforeEach, describe, expect, test, vi } from 'vitest';
@@ -20,7 +20,7 @@ vi.mock('@qwik.dev/optimizer', () => ({
 	createOptimizer: swcMock.createOptimizer,
 }));
 
-vi.mock('qwik-optimizer-ts', () => ({
+vi.mock('qwik-ts-optimizer', () => ({
 	createOptimizer: tsMock.createOptimizer,
 }));
 
@@ -74,7 +74,7 @@ describe('tsOptimizer experimental feature', () => {
 		expect(tsMock.createOptimizer).not.toHaveBeenCalled();
 	});
 
-	test('swaps to qwik-optimizer-ts when experimental includes tsOptimizer', async () => {
+	test('swaps to qwik-ts-optimizer when experimental includes tsOptimizer', async () => {
 		const plugin = qwik({ experimental: ['tsOptimizer'] });
 		callBuildStart(plugin, { cwd: '/workspace/app' });
 		await callTransform(plugin, FIXTURE, '/workspace/app/src/root.tsx');

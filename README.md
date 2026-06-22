@@ -51,7 +51,7 @@ Open the printed local URL and check that Qwik interactivity still works.
 
 ## TypeScript Optimizer (Experimental)
 
-The plugin can run against either the SWC napi optimizer (`@qwik.dev/optimizer`, default) or the TypeScript optimizer rewrite (`qwik-optimizer-ts`). The selection lives behind an experimental feature flag:
+The plugin can run against either the SWC napi optimizer (`@qwik.dev/optimizer`, default) or the TypeScript optimizer rewrite (`qwik-ts-optimizer`). The selection lives behind an experimental feature flag:
 
 ```ts
 import { qwik } from 'qwik-bundler/rolldown';
@@ -61,31 +61,15 @@ export default {
 };
 ```
 
-`qwik-optimizer-ts` is declared as an **optional peer dependency** of `qwik-bundler` and is **not** installed by default. The bundler loads it lazily via `import('qwik-optimizer-ts')` at runtime — only when the `tsOptimizer` flag fires — so consumers who stick with the SWC default never need it.
+[`qwik-ts-optimizer`](https://www.npmjs.com/package/qwik-ts-optimizer) is declared as an **optional peer dependency** of `qwik-bundler` and is **not** installed by default. The bundler loads it lazily via `import('qwik-ts-optimizer')` at runtime — only when the `tsOptimizer` flag fires — so consumers who stick with the SWC default never need it.
 
-Install it explicitly when opting in. Since the package isn't published to npm yet, the install points at a local checkout of [`TS-Optimizer`](https://github.com/thejackshelton/TS-Optimizer):
-
-```sh
-# 1. Check out and build TS-Optimizer somewhere
-git clone https://github.com/thejackshelton/TS-Optimizer.git
-cd TS-Optimizer
-pnpm install
-pnpm build         # produces dist/ — required, the file: install reads through to dist/index.js
-
-# 2. From your qwik-bundler-consuming project, link the local build
-cd /path/to/your/app
-pnpm add -D qwik-optimizer-ts@file:/absolute/path/to/TS-Optimizer
-```
-
-Once `qwik-optimizer-ts` is published to npm the second step collapses to `pnpm add -D qwik-optimizer-ts`.
-
-Contributors to `qwik-bundler` itself don't need the package: installs, typechecks, and tests all pass without it (a minimal ambient declaration in `types/qwik-optimizer-ts.d.ts` covers the dynamic import, and the test suite mocks the module). To run the TS optimizer for real against a local checkout, link it without touching `package.json`:
+Install it explicitly when opting in:
 
 ```sh
-pnpm link ../TS-Optimizer
+pnpm add -D qwik-ts-optimizer
 ```
 
-**If you see `Cannot find package '.../qwik-optimizer-ts/index.js'`** — that means the linked `TS-Optimizer` checkout isn't built. `pnpm build` in the `TS-Optimizer` directory produces the `dist/` that the package's `main`/`exports` map points at; without it Node defaults to `index.js` (which doesn't exist).
+It requires Node `>=22` (the optimizer's `oxc-parser` raw-transfer path throws on Node 20).
 
 When `tsOptimizer` is in `experimental`, Rolldown's `meta.ast` (the host's pre-parsed OXC `Program`) is forwarded into the optimizer's `TransformModuleInput.program` field. The TS optimizer detects it and skips its internal parse — one parse per module instead of two. SWC ignores the field and re-parses internally, so the threading is a no-op for the default backend.
 

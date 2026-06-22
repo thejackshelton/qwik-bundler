@@ -27,11 +27,11 @@ export function createQwikOptimizer(options: QwikRolldownOptions): Promise<QwikO
 function createTsOptimizer(
 	optimizerOptions: QwikRolldownOptions['optimizerOptions'],
 ): Promise<QwikOptimizer> {
-	return import('qwik-optimizer-ts').then(
+	return import('qwik-ts-optimizer').then(
 		(mod) => mod.createOptimizer(optimizerOptions) as Promise<QwikOptimizer>,
 		(err) => {
 			throw new Error(
-				`qwik({ experimental: ['tsOptimizer'] }) failed to load \`qwik-optimizer-ts\`. ` +
+				`qwik({ experimental: ['tsOptimizer'] }) failed to load \`qwik-ts-optimizer\`. ` +
 					`See "TypeScript Optimizer (Experimental)" in qwik-bundler's README for setup.`,
 				{ cause: err },
 			);
