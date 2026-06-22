@@ -1,8 +1,3 @@
-// Interactive smoke for the `qwik-ts-optimizer` backend: boots the
-// vite-qwik-router fixture in dev SSR with `experimental: ['tsOptimizer']`
-// supplied inline (the fixture itself stays on the default SWC optimizer) and
-// drives the rendered output in a real browser — counter resumability +
-// server$ RPC. Run via `pnpm test:ts-optimizer`.
 import { dirname, resolve } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
@@ -16,8 +11,6 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const fixtureRoot = resolve(repoRoot, 'fixtures/vite-qwik-router');
 const waitTimeout = 20_000;
 
-// server$ runs in-process under the SSR dev server, so its 'HI' side-effect log
-// lands on this process's stdout — intercept to detect it.
 let serverSawHI = false;
 const origLog = console.log;
 console.log = (...args) => {
