@@ -6,7 +6,7 @@ export default defineConfig({
 	},
 	pack: {
 		deps: {
-			// qwik-ts-optimizer is an opt-in peer (experimental: ['tsOptimizer']) — keep it external.
+			// qwik-ts-optimizer is an opt-in peer (experimental: ['tsOptimizer']).
 			neverBundle: ['satteri', 'qwik-ts-optimizer'],
 		},
 		entry: {
